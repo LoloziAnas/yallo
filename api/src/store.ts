@@ -1,7 +1,7 @@
 // In-memory state for the mock API: the shared demo seed plus the rules every app's actions go through.
 import {
-  ACTIVE_STATUSES, COURIERS, DEMO_ELAPSED_SEC, DEMO_START_MIN, MERCHANTS, ORDERS, TICKETS, ZONES, canTransition,
-  type ApiOrder, type LiveState, type OpenTicketBody, type OrderStatus, type PlaceOrderBody, type Ticket, type TicketPriority,
+  ACTIVE_STATUSES, COURIERS, DEMO_ELAPSED_SEC, DEMO_START_MIN, MERCHANTS, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition,
+  type ApiCourier, type ApiOrder, type LiveState, type OpenTicketBody, type OrderStatus, type PlaceOrderBody, type Ticket, type TicketPriority,
   type TicketSource, type ZoneName,
 } from '@yallo/shared';
 
@@ -13,6 +13,8 @@ export class ActionError extends Error {
 /** Orders placed through the API are moved along by a stand-in merchant: accepted, then ready. */
 export const AUTO_ACCEPT_SEC = 20;
 export const AUTO_READY_SEC = 60;
+/** A courier with no app attached is played by a stand-in that accepts offers after this long. */
+export const STAND_IN_ACCEPT_SEC = 3;
 /** How far a moving courier travels per tick, in map percent. */
 const COURIER_STEP = 0.35;
 const COMPENSATION_DH = 10;
@@ -40,7 +42,7 @@ function seed(): LiveState {
   return {
     t: 0,
     merchants: clone(MERCHANTS),
-    couriers: COURIERS.map(c => ({ ...clone(c), suspended: false })),
+    couriers: COURIERS.map(c => ({ ...clone(c), suspended: false, app: false })),
     orders: ORDERS.map(o => ({ ...clone(o), elapsedSec: DEMO_ELAPSED_SEC[o.id] ?? 0 })),
     tickets: clone(TICKETS),
   };
@@ -51,6 +53,8 @@ export class Store {
   /** Ids of orders placed through the API, which the stand-in merchant advances. */
   private auto = new Set<string>();
   private listeners = new Set<(s: LiveState) => void>();
+  /** Open courier-app connections per courier id. */
+  private apps = new Map<string, number>();
 
   get state(): LiveState { return this.s; }
 
@@ -95,6 +99,7 @@ export class Store {
   reset() {
     this.s = seed();
     this.auto.clear();
+    for (const c of this.s.couriers) c.app = (this.apps.get(c.id) ?? 0) > 0;
     this.changed();
   }
 
@@ -109,6 +114,12 @@ export class Store {
         if (o.status === 'pending' && o.elapsedSec >= AUTO_ACCEPT_SEC) o.status = 'preparing';
         else if (o.status === 'preparing' && o.elapsedSec >= AUTO_READY_SEC) o.status = 'ready';
       }
+    }
+    for (const o of s.orders) {
+      if (!o.offer) continue;
+      const c = this.courier(o.offer.courierId);
+      if (!c.app && s.t >= o.offer.offeredAt + STAND_IN_ACCEPT_SEC) this.assign(o, c);
+      else if (s.t >= o.offer.expiresAt) this.endOffer(o, 'expired');
     }
     for (const c of s.couriers) {
       if (c.status !== 'busy') continue;
@@ -161,16 +172,94 @@ export class Store {
     return order;
   }
 
-  /** Gives an active order to an available courier. A ready order moves to `picking`. */
-  assignCourier(orderId: string, courierId: string) {
-    const o = this.order(orderId), c = this.courier(courierId);
+  /** Marks a courier app as attached (a live-feed socket subscribed as that courier). Returns a detach function. */
+  attachApp(courierId: string) {
+    if (!this.s.couriers.some(c => c.id === courierId)) return () => {};
+    this.apps.set(courierId, (this.apps.get(courierId) ?? 0) + 1);
+    this.courier(courierId).app = true;
+    this.changed();
+    return () => {
+      const n = (this.apps.get(courierId) ?? 1) - 1;
+      if (n > 0) this.apps.set(courierId, n);
+      else this.apps.delete(courierId);
+      const c = this.s.couriers.find(c => c.id === courierId);
+      if (c) c.app = n > 0;
+      this.changed();
+    };
+  }
+
+  /** Checks a courier can take this order now, whether offered or assigned directly. */
+  private checkAvailable(o: ApiOrder, c: ApiCourier) {
     if (!isActive(o.status)) throw new ActionError(o.id + ' is ' + o.status + ' and can no longer be assigned', 409);
     if (c.suspended) throw new ActionError(c.name + ' is suspended', 409);
     if (o.courierId !== c.id && c.status !== 'idle') throw new ActionError(c.name + ' is not available (' + c.status + ')', 409);
+  }
+
+  private assign(o: ApiOrder, c: ApiCourier) {
     if (o.courierId !== c.id) this.release(o.courierId);
     o.courierId = c.id;
     c.status = 'busy';
     if (o.status === 'ready') o.status = 'picking';
+    delete o.offer;
+    delete o.lastOffer;
+  }
+
+  private endOffer(o: ApiOrder, outcome: 'declined' | 'expired' | 'withdrawn') {
+    if (!o.offer) return;
+    o.lastOffer = { courierId: o.offer.courierId, outcome, at: this.s.t };
+    delete o.offer;
+  }
+
+  /** The order a courier is currently being offered, if any. */
+  private pendingOfferFor(courierId: string) {
+    return this.s.orders.find(o => o.offer?.courierId === courierId);
+  }
+
+  /** Gives an active order to an available courier straight away. A ready order moves to `picking`. */
+  assignCourier(orderId: string, courierId: string) {
+    const o = this.order(orderId), c = this.courier(courierId);
+    this.checkAvailable(o, c);
+    const held = this.pendingOfferFor(c.id);
+    if (held && held !== o) throw new ActionError(c.name + ' is considering an offer for ' + held.id, 409);
+    this.assign(o, c);
+    this.changed();
+  }
+
+  /** Offers an order to a courier, who has OFFER_SEC seconds to accept. A new offer replaces a pending one. */
+  offerOrder(orderId: string, courierId: string) {
+    const o = this.order(orderId), c = this.courier(courierId);
+    this.checkAvailable(o, c);
+    if (o.status === 'delivering') throw new ActionError(o.id + ' is already picked up', 409);
+    if (o.courierId === c.id) throw new ActionError(c.name + ' already has ' + o.id, 409);
+    const held = this.pendingOfferFor(c.id);
+    if (held && held !== o) throw new ActionError(c.name + ' is considering an offer for ' + held.id, 409);
+    this.endOffer(o, 'withdrawn');
+    o.offer = { courierId: c.id, offeredAt: this.s.t, expiresAt: this.s.t + OFFER_SEC };
+    this.changed();
+  }
+
+  withdrawOffer(orderId: string) {
+    const o = this.order(orderId);
+    if (!o.offer) throw new ActionError(o.id + ' has no pending offer', 409);
+    this.endOffer(o, 'withdrawn');
+    this.changed();
+  }
+
+  private matchingOffer(orderId: string, courierId: string) {
+    const o = this.order(orderId);
+    if (o.offer?.courierId !== courierId) throw new ActionError('No pending offer of ' + o.id + ' to ' + courierId, 409);
+    return o;
+  }
+
+  acceptOffer(orderId: string, courierId: string) {
+    const o = this.matchingOffer(orderId, courierId), c = this.courier(courierId);
+    this.checkAvailable(o, c);
+    this.assign(o, c);
+    this.changed();
+  }
+
+  declineOffer(orderId: string, courierId: string) {
+    this.endOffer(this.matchingOffer(orderId, courierId), 'declined');
     this.changed();
   }
 
@@ -206,6 +295,7 @@ export class Store {
     if (!reason?.trim()) throw new ActionError('A cancellation reason is required');
     o.status = 'cancelled';
     o.cancelReason = reason.trim();
+    this.endOffer(o, 'withdrawn');
     if (compensateCourier && o.courierId) o.courierCompensation = COMPENSATION_DH;
     this.auto.delete(o.id);
     this.release(o.courierId);
@@ -230,6 +320,8 @@ export class Store {
 
   setCourierSuspended(courierId: string, suspended: boolean) {
     this.courier(courierId).suspended = !!suspended;
+    const held = suspended ? this.pendingOfferFor(courierId) : undefined;
+    if (held) this.endOffer(held, 'withdrawn');
     this.changed();
   }
 
@@ -238,6 +330,8 @@ export class Store {
     if (status !== 'idle' && status !== 'off') throw new ActionError("status must be 'idle' or 'off'");
     if (c.status === 'busy') throw new ActionError(c.name + ' is on a delivery', 409);
     c.status = status;
+    const held = status === 'off' ? this.pendingOfferFor(c.id) : undefined;
+    if (held) this.endOffer(held, 'declined');
     this.changed();
   }
 

@@ -10,11 +10,23 @@ export type ApiOrder = Order & {
   cancelReason?: string;
   /** Trip fee in DH paid to the courier when ops cancels with compensation. */
   courierCompensation?: number;
+  /** A job offered to a courier who hasn't answered yet. Times are demo-clock seconds (compare with `LiveState.t`). */
+  offer?: { courierId: string; offeredAt: number; expiresAt: number };
+  /** How the most recent offer ended without an assignment, so ops can see it. */
+  lastOffer?: { courierId: string; outcome: 'declined' | 'expired' | 'withdrawn'; at: number };
 };
+
+/** How long a courier has to answer an offer, matching the courier app's countdown. */
+export const OFFER_SEC = 15;
 
 export type ApiCourier = Courier & {
   /** Set by ops. A suspended courier is never offered for assignment. */
   suspended: boolean;
+  /**
+   * True while a courier app is subscribed as this courier. Couriers without an app are played by a
+   * stand-in that accepts offers after a few seconds.
+   */
+  app: boolean;
 };
 
 /** Everything the apps share. The server pushes the whole snapshot on every change and every tick. */
@@ -95,10 +107,12 @@ export function createYalloClient(baseUrl: string) {
 
     /**
      * Streams live snapshots. Reconnects after a drop. Returns a function that stops listening.
-     * `onStatus` reports whether the socket is currently connected.
+     * `onStatus` reports whether the socket is currently connected. A courier app passes
+     * `{ courierId }` so the server knows a real app is answering that courier's offers.
      */
-    subscribe(onState: (s: LiveState) => void, onStatus?: (connected: boolean) => void) {
-      const wsUrl = (baseUrl || (typeof location !== 'undefined' ? location.origin : '')).replace(/^http/, 'ws') + '/api/live';
+    subscribe(onState: (s: LiveState) => void, onStatus?: (connected: boolean) => void, opts: { courierId?: string } = {}) {
+      const query = opts.courierId ? '?courier=' + encodeURIComponent(opts.courierId) : '';
+      const wsUrl = (baseUrl || (typeof location !== 'undefined' ? location.origin : '')).replace(/^http/, 'ws') + '/api/live' + query;
       let ws: WebSocket | null = null;
       let stopped = false;
       let retry: ReturnType<typeof setTimeout> | undefined;
@@ -123,7 +137,15 @@ export function createYalloClient(baseUrl: string) {
     },
 
     placeOrder: (body: PlaceOrderBody) => post<ApiOrder>('/orders', body),
+    /** Assigns straight away, skipping the offer. */
     assignCourier: (orderId: string, courierId: string) => post(`/orders/${orderPath(orderId)}/assign`, { courierId }),
+    /** Ops offers a job to a courier, who has OFFER_SEC seconds to accept. */
+    offerOrder: (orderId: string, courierId: string) => post(`/orders/${orderPath(orderId)}/offer`, { courierId }),
+    /** Ops takes a pending offer back. */
+    withdrawOffer: (orderId: string) => post(`/orders/${orderPath(orderId)}/offer/withdraw`),
+    /** The courier accepts: the offer becomes the assignment. */
+    acceptOffer: (orderId: string, courierId: string) => post(`/orders/${orderPath(orderId)}/offer/accept`, { courierId }),
+    declineOffer: (orderId: string, courierId: string) => post(`/orders/${orderPath(orderId)}/offer/decline`, { courierId }),
     /** The courier drops the order (e.g. reassigned): it goes back to the queue without a courier. */
     unassignCourier: (orderId: string) => post(`/orders/${orderPath(orderId)}/unassign`),
     setOrderStatus: (orderId: string, status: OrderStatus) => post(`/orders/${orderPath(orderId)}/status`, { status }),

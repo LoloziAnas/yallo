@@ -2,7 +2,8 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import { createYalloClient, type LiveState, type YalloClient } from '@yallo/shared';
-import { AUTO_ACCEPT_SEC, AUTO_READY_SEC, Store } from '../src/store';
+import { OFFER_SEC } from '@yallo/shared';
+import { AUTO_ACCEPT_SEC, AUTO_READY_SEC, STAND_IN_ACCEPT_SEC, Store } from '../src/store';
 import { createApi } from '../src/server';
 
 const order = (s: Store, id: string) => s.state.orders.find(o => o.id === id)!;
@@ -113,6 +114,82 @@ describe('Store', () => {
   });
 });
 
+describe('Job offers', () => {
+  let s: Store;
+  beforeEach(() => { s = new Store(); });
+
+  test('an offer holds the order without assigning it', () => {
+    s.offerOrder('#48214', 'c2');
+    const o = order(s, '#48214');
+    assert.deepEqual(o.offer, { courierId: 'c2', offeredAt: 0, expiresAt: OFFER_SEC });
+    assert.equal(o.courierId, null);
+    assert.equal(o.status, 'ready');
+    assert.equal(courier(s, 'c2').status, 'idle');
+  });
+
+  test('a stand-in courier (no app attached) accepts after a few seconds', () => {
+    s.offerOrder('#48214', 'c2');
+    tick(s, STAND_IN_ACCEPT_SEC - 1);
+    assert.equal(order(s, '#48214').courierId, null);
+    tick(s, 1);
+    const o = order(s, '#48214');
+    assert.deepEqual([o.courierId, o.status, o.offer], ['c2', 'picking', undefined]);
+    assert.equal(courier(s, 'c2').status, 'busy');
+  });
+
+  test('a courier with an app answers for itself, and an unanswered offer expires', () => {
+    const detach = s.attachApp('c2');
+    assert.equal(courier(s, 'c2').app, true);
+    s.offerOrder('#48214', 'c2');
+    tick(s, OFFER_SEC - 1);
+    assert.ok(order(s, '#48214').offer, 'no stand-in accept while the app is attached');
+    tick(s, 1);
+    assert.deepEqual(order(s, '#48214').lastOffer, { courierId: 'c2', outcome: 'expired', at: OFFER_SEC });
+    detach();
+    assert.equal(courier(s, 'c2').app, false);
+  });
+
+  test('accept turns the offer into the assignment; decline returns the order to the queue', () => {
+    s.attachApp('c2'); s.attachApp('c3');
+    s.offerOrder('#48214', 'c2');
+    s.acceptOffer('#48214', 'c2');
+    assert.equal(order(s, '#48214').courierId, 'c2');
+    s.offerOrder('#48215', 'c3');
+    s.declineOffer('#48215', 'c3');
+    assert.equal(order(s, '#48215').offer, undefined);
+    assert.equal(order(s, '#48215').lastOffer!.outcome, 'declined');
+    assert.throws(() => s.acceptOffer('#48215', 'c3'), /No pending offer/);
+  });
+
+  test('a courier holds one offer at a time, and busy or picked-up cases are refused', () => {
+    s.attachApp('c2');
+    s.offerOrder('#48214', 'c2');
+    assert.throws(() => s.offerOrder('#48215', 'c2'), /considering an offer for #48214/);
+    assert.throws(() => s.assignCourier('#48215', 'c2'), /considering an offer/);
+    assert.throws(() => s.offerOrder('#48215', 'c1'), /not available/);
+    assert.throws(() => s.offerOrder('#48211', 'c3'), /already picked up/);
+  });
+
+  test('re-offering, withdrawing, cancelling, suspending or going offline ends the pending offer', () => {
+    s.attachApp('c2'); s.attachApp('c3');
+    s.offerOrder('#48214', 'c2');
+    s.offerOrder('#48214', 'c3');
+    assert.equal(order(s, '#48214').offer!.courierId, 'c3');
+    assert.deepEqual(order(s, '#48214').lastOffer, { courierId: 'c2', outcome: 'withdrawn', at: 0 });
+    s.withdrawOffer('#48214');
+    assert.equal(order(s, '#48214').offer, undefined);
+    s.offerOrder('#48215', 'c2');
+    s.cancelOrder('#48215', 'Customer request', false);
+    assert.equal(order(s, '#48215').offer, undefined);
+    s.offerOrder('#48218', 'c2');
+    s.setCourierSuspended('c2', true);
+    assert.equal(order(s, '#48218').offer, undefined);
+    s.offerOrder('#48218', 'c3');
+    s.setCourierAvailability('c3', 'off');
+    assert.equal(order(s, '#48218').lastOffer!.outcome, 'declined');
+  });
+});
+
 describe('Support tickets', () => {
   let s: Store;
   beforeEach(() => { s = new Store(); });
@@ -195,6 +272,18 @@ describe('HTTP and live feed', () => {
     assert.equal(s.tickets[0].id, tk.id);
     assert.equal(s.tickets[0].messages.length, 2);
     await assert.rejects(client.resolveTicket('T-1'), /No ticket T-1/);
+  });
+
+  test('subscribing as a courier marks its app attached until the socket closes', async () => {
+    let up!: () => void;
+    const connected = new Promise<void>(r => { up = r; });
+    const stop = client.subscribe(() => {}, ok => ok && up(), { courierId: 'c1' });
+    await connected;
+    await new Promise(r => setTimeout(r, 50));
+    assert.equal(api.store.state.couriers.find(c => c.id === 'c1')!.app, true);
+    stop();
+    await new Promise(r => setTimeout(r, 100));
+    assert.equal(api.store.state.couriers.find(c => c.id === 'c1')!.app, false);
   });
 
   test('pushes the state to subscribers when it changes', async () => {

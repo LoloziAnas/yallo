@@ -49,13 +49,17 @@ export function useBackOffice({ startPage } = {}) {
     if (ACTIVE.includes(o.st) && e > 35 * 60) return 'Over 35 min SLA by ' + Math.floor(e / 60 - 35) + ' min';
     return null;
   };
-  const assign = (oid, cid) => {
+  // Ops offers the job; the courier (or a stand-in for couriers without the app) accepts or declines.
+  const offer = (oid, cid) => {
     const c = s.couriers.find(c => c.id === cid);
-    act(api.assignCourier(oid, cid), c.name + ' assigned to ' + oid, { assignOpen:false });
+    act(api.offerOrder(oid, cid), oid + ' offered to ' + c.name, { assignOpen:false });
   };
 
   const set = o => () => setState(o), W = s.w || 1440;
   const CBY = {}; s.couriers.forEach(c => CBY[c.id] = c);
+  const courierLabel = (o, none) => CBY[o.courier] ? CBY[o.courier].name : o.offer ? 'Offered · ' + CBY[o.offer.courier].name + ' · ' + mmss(o.offer.left) : none;
+  const courierFg = o => o.courier ? 'var(--color-text)' : o.offer ? 'var(--color-neutral-800)' : 'var(--color-accent-700)';
+  const offeredTo = new Set(s.orders.filter(o => o.offer).map(o => o.offer.courier));
   const openOrder = id => () => setState({ drawer:{ type:'order', id }, assignOpen:false });
   const openCourier = id => () => setState({ drawer:{ type:'courier', id } });
   const go = page => () => setState({ page, drawer:page === 'live' ? s.drawer : null, modal:null });
@@ -103,7 +107,7 @@ export function useBackOffice({ startPage } = {}) {
   const selId = s.drawer && s.drawer.type === 'order' ? s.drawer.id : null;
   const queue = qList.slice().sort((a, b) => (lateInfo(b) ? 1 : 0) - (lateInfo(a) ? 1 : 0) || el(b) - el(a)).map(o => {
     const late = lateInfo(o), c = CBY[o.courier];
-    return { id:o.id, m:o.m, cz:o.c.split(' ')[0] + ' · ' + o.cz, st:STATUS[o.st], timer:mmss(el(o)), tFg:late ? 'var(--color-accent-700)' : 'var(--color-neutral-700)', courierLabel:c ? c.name : 'Unassigned', cFg:c ? 'var(--color-text)' : 'var(--color-accent-700)', total:o.total, pay:o.pay,
+    return { id:o.id, m:o.m, cz:o.c.split(' ')[0] + ' · ' + o.cz, st:STATUS[o.st], timer:mmss(el(o)), tFg:late ? 'var(--color-accent-700)' : 'var(--color-neutral-700)', courierLabel:courierLabel(o, 'Unassigned'), cFg:courierFg(o), total:o.total, pay:o.pay,
       sh:o.id === selId ? '0 0 0 2px var(--color-accent)' : late ? '0 0 0 1.5px var(--color-accent-300)' : 'var(--shadow-sm)', onClick:openOrder(o.id) };
   });
   const zoneLabels = Object.keys(ZONES).map(name => ({ name, x:ZONES[name][0] + '%', y:(ZONES[name][1] + 9) + '%' }));
@@ -126,7 +130,7 @@ export function useBackOffice({ startPage } = {}) {
   const oFilters = OF.map(([k, label]) => ({ label, n:s.orders.filter(o => match(o, k)).length, onClick:set({ oFilter:k }), ...chip(s.oFilter === k) }));
   const q = s.oq.trim().toLowerCase();
   const rows = s.orders.filter(o => match(o, s.oFilter) && (!q || [o.id, o.m, o.c, o.cz, CBY[o.courier] ? CBY[o.courier].name : ''].join(' ').toLowerCase().includes(q)));
-  const orderRows = rows.map(o => { const c = CBY[o.courier], late = lateInfo(o); return { ...o, st:late ? { ...STATUS[o.st], label:STATUS[o.st].label + ' · late', bg:'var(--color-accent)', fg:'#fff', dot:'#fff' } : STATUS[o.st], courierLabel:c ? c.name : ACTIVE.includes(o.st) ? 'Unassigned' : '—', cFg:c ? 'var(--color-text)' : 'var(--color-accent-700)', bg:o.id === selId ? 'var(--color-accent-100)' : 'var(--color-card)', onClick:openOrder(o.id) }; });
+  const orderRows = rows.map(o => { const late = lateInfo(o); return { ...o, st:late ? { ...STATUS[o.st], label:STATUS[o.st].label + ' · late', bg:'var(--color-accent)', fg:'#fff', dot:'#fff' } : STATUS[o.st], courierLabel:courierLabel(o, ACTIVE.includes(o.st) ? 'Unassigned' : '—'), cFg:courierFg(o), bg:o.id === selId ? 'var(--color-accent-100)' : 'var(--color-card)', onClick:openOrder(o.id) }; });
 
   // couriers
   const cTabs = [['fleet','Fleet',s.couriers.length],['apps','Applications',pendingApps]].map(([k, label, n]) => ({ label, n, onClick:set({ cTab:k }), ...pill(s.cTab === k), cBg:k === 'apps' ? 'var(--color-accent)' : 'var(--color-neutral-300)', cFg:k === 'apps' ? '#fff' : 'var(--color-neutral-800)' }));
@@ -197,14 +201,16 @@ export function useBackOffice({ startPage } = {}) {
     const [hh, mm] = o.placed.split(':').map(Number); const tAt = off => { const t = hh * 60 + mm + off; return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
     const offs = [0, 1, 9, 13, 26];
     od = { ...o, st:STATUS[o.st], timer:mmss(el(o)), late:!!late, lateMsg:late, maddr:m.addr, caddr:o.cz + ', Marrakech · ' + (o.pay === 'Cash' ? 'collect ' + o.total + ' DH' : 'paid online'),
-      hasCourier:!!c, noCourier:!c && o.st !== 'cancelled', courier:c && c.name, cIni:c && ini(c.name), cVeh:c && c.veh, cPhone:c && c.phone, cEta:c ? (o.st === 'picking' ? 'At store in 3 min' : o.st === 'delivering' ? 'Drop-off in 6 min' : 'Done') : '', openCourier:c ? openCourier(c.id) : null,
+      hasCourier:!!c, noCourier:!c && !o.offer && o.st !== 'cancelled', courier:c && c.name, cIni:c && ini(c.name), cVeh:c && c.veh, cPhone:c && c.phone, cEta:c ? (o.st === 'picking' ? 'At store in 3 min' : o.st === 'delivering' ? 'Drop-off in 6 min' : 'Done') : '', openCourier:c ? openCourier(c.id) : null,
+      hasOffer:!!o.offer, offerName:o.offer && CBY[o.offer.courier].name, offerLeft:o.offer && mmss(o.offer.left),
+      offerNote:!o.offer && !c && o.lastOffer && o.lastOffer.outcome !== 'withdrawn' ? CBY[o.lastOffer.courierId].name + (o.lastOffer.outcome === 'declined' ? ' declined the offer' : ' didn\'t answer the offer') : null,
       canAssign:ACTIVE.includes(o.st), cantCancel:!ACTIVE.includes(o.st), refunded:!!o.refund, refundAmt:o.refund,
       items:o.items.map(([q, n, pp]) => ({ q, n, p:q * pp })),
       timeline:(o.st === 'cancelled' ? [['Placed',o.placed],['Cancelled · ' + (o.cancelReason || 'Merchant closed'),tAt(6)]] : steps).map((st, i, arr) => {
         const doneStep = o.st === 'cancelled' ? true : i <= idx, cur = o.st !== 'cancelled' && i === idx && o.st !== 'delivered';
         return { label:st[0], t:doneStep ? (st[1] || tAt(offs[i])) : '—', dot:cur ? 'var(--color-accent)' : doneStep ? 'var(--color-accent-2-500)' : 'var(--color-neutral-300)', ring:cur ? '0 0 0 4px var(--color-accent-200)' : 'none', line:i === arr.length - 1 ? 'transparent' : doneStep && !cur ? 'var(--color-accent-2-300)' : 'var(--color-neutral-200)', fg:doneStep ? 'var(--color-text)' : 'var(--color-neutral-600)', fw:cur ? 700 : 500 };
       }) };
-    nearest = s.couriers.filter(x => x.st === 'idle' && !s.suspended[x.id]).map(x => { const d = Math.hypot(x.x - m.x, x.y - m.y) * 0.09; return { ...x, d, dist:d.toFixed(1), eta:Math.max(2, Math.round(d * 3.2)), onClick:() => assign(o.id, x.id) }; }).sort((a, b) => a.d - b.d).slice(0, 4);
+    nearest = s.couriers.filter(x => x.st === 'idle' && !s.suspended[x.id] && !offeredTo.has(x.id)).map(x => { const d = Math.hypot(x.x - m.x, x.y - m.y) * 0.09; return { ...x, d, dist:d.toFixed(1), eta:Math.max(2, Math.round(d * 3.2)), onClick:() => offer(o.id, x.id) }; }).sort((a, b) => a.d - b.d).slice(0, 4);
   }
   let cd = { rows:[] };
   if (dCourierObj) {
@@ -246,9 +252,9 @@ export function useBackOffice({ startPage } = {}) {
     payKpis, payRows, payColName:isC ? 'Courier' : 'Merchant', payColN:isC ? 'Deliv.' : 'Orders', payColAdj:isC ? 'Cash held' : 'Commission',
     selCount:selKeys.length, noSel:!selKeys.length, approveSel:set({ modal:'payout' }),
     toggleAll:() => setState(() => { const d = {}; if (!allOn) selectable.forEach(r => d[r.key] = true); return { paySel:d }; }), allMark:allOn ? '✓' : '', allBg:allOn ? 'var(--color-accent)' : 'var(--color-card)', allBd:allOn ? 'var(--color-accent)' : 'var(--color-neutral-400)',
-    hasDrawer:!!(dOrderObj || dCourierObj), dOrder:!!dOrderObj, dCourier:!!dCourierObj, od, cd, nearest, showAssign:!!dOrderObj && s.assignOpen && ACTIVE.includes(dOrderObj.st),
+    hasDrawer:!!(dOrderObj || dCourierObj), dOrder:!!dOrderObj, dCourier:!!dCourierObj, od, cd, nearest, showAssign:!!dOrderObj && s.assignOpen && ACTIVE.includes(dOrderObj.st) && dOrderObj.st !== 'delivering',
     assignLabel:s.assignOpen ? 'Hide' : dOrderObj && dOrderObj.courier ? 'Reassign' : 'Assign courier', toggleAssign:set({ assignOpen:!s.assignOpen }),
-    closeDrawer:set({ drawer:null }), callMerchant:() => toast('Calling ' + (dOrderObj && dOrderObj.m) + '…'), callCustomer:() => toast('Calling ' + (dOrderObj && dOrderObj.c) + '…'),
+    closeDrawer:set({ drawer:null }), withdrawOffer:() => act(api.withdrawOffer(dOrderObj.id), 'Offer withdrawn'), callMerchant:() => toast('Calling ' + (dOrderObj && dOrderObj.m) + '…'), callCustomer:() => toast('Calling ' + (dOrderObj && dOrderObj.c) + '…'),
     openRefund:() => setState({ modal:'refund', reason:null, refundMode:'full', refundAmt:String(dOrderObj.total) }), openCancel:set({ modal:'cancel', reason:null, comp:true }),
     msgCourier:() => toast('Message sent to ' + (dCourierObj && dCourierObj.name)),
     suspendLabel:dCourierObj && s.suspended[dCourierObj.id] ? 'Reactivate' : 'Suspend',

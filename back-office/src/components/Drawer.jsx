@@ -48,12 +48,21 @@ function OrderDetail({ v }) {
               <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent-2-700)' }}>{od.cEta}</span>
             </button>
           )}
+          {od.hasOffer && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 14, background: 'var(--color-saffron-100)' }}>
+              <span className="dot" style={{ background: 'var(--color-saffron)' }} />
+              <span style={{ flex: 1, fontSize: 13 }}><strong>Offered to {od.offerName}</strong><span className="muted"> · waiting for an answer</span></span>
+              <span className="num" style={{ fontSize: 12, fontWeight: 700 }}>{od.offerLeft}</span>
+              <button className="btn btn-ghost" onClick={v.withdrawOffer} style={{ fontSize: 12, padding: '2px 8px' }}>Withdraw</button>
+            </div>
+          )}
+          {od.offerNote && <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-accent-700)' }}>{od.offerNote}</div>}
           {od.noCourier && (
             <div style={{ padding: '10px 12px', borderRadius: 14, border: '1.5px dashed var(--color-accent-300)', fontSize: 13, color: 'var(--color-accent-800)', fontWeight: 600 }}>No courier assigned yet</div>
           )}
           {v.showAssign && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 8, borderRadius: 14, background: 'var(--color-surface)' }}>
-              <div className="muted" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', padding: '2px 4px' }}>Nearest available</div>
+              <div className="muted" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', padding: '2px 4px' }}>Offer to nearest available</div>
               {v.nearest.map(nc => (
                 <button key={nc.id} onClick={nc.onClick} className="btn-reset hov-lift-sm" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 12, background: 'var(--color-card)' }}>
                   <span className="dot" style={{ background: 'var(--color-accent-2-500)' }} />

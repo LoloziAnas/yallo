@@ -13,6 +13,10 @@ const ROUTES: [string, RegExp, Handler][] = [
   ['GET', /^\/api\/state$/, s => s.state],
   ['POST', /^\/api\/orders$/, (s, _, b) => s.placeOrder(b)],
   ['POST', /^\/api\/orders\/(\d+)\/assign$/, (s, [id], b) => (s.assignCourier(id, String(b?.courierId)), s.state)],
+  ['POST', /^\/api\/orders\/(\d+)\/offer$/, (s, [id], b) => (s.offerOrder(id, String(b?.courierId)), s.state)],
+  ['POST', /^\/api\/orders\/(\d+)\/offer\/withdraw$/, (s, [id]) => (s.withdrawOffer(id), s.state)],
+  ['POST', /^\/api\/orders\/(\d+)\/offer\/accept$/, (s, [id], b) => (s.acceptOffer(id, String(b?.courierId)), s.state)],
+  ['POST', /^\/api\/orders\/(\d+)\/offer\/decline$/, (s, [id], b) => (s.declineOffer(id, String(b?.courierId)), s.state)],
   ['POST', /^\/api\/orders\/(\d+)\/unassign$/, (s, [id]) => (s.unassignCourier(id), s.state)],
   ['POST', /^\/api\/orders\/(\d+)\/status$/, (s, [id], b) => (s.setOrderStatus(id, b?.status), s.state)],
   ['POST', /^\/api\/orders\/(\d+)\/cancel$/, (s, [id], b) => (s.cancelOrder(id, b?.reason, !!b?.compensateCourier), s.state)],
@@ -77,8 +81,14 @@ export function createApi({ tickMs = 1000, store = new Store() } = {}) {
 
   const wss = new WebSocketServer({ noServer: true });
   http.on('upgrade', (req, socket, head) => {
-    if ((req.url ?? '').split('?')[0] !== '/api/live') { socket.destroy(); return; }
-    wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws, req));
+    const url = new URL(req.url ?? '/', 'http://localhost');
+    if (url.pathname !== '/api/live') { socket.destroy(); return; }
+    wss.handleUpgrade(req, socket, head, ws => {
+      // A courier app subscribes with ?courier=<id>, so the server knows that courier answers its own offers.
+      const courierId = url.searchParams.get('courier');
+      if (courierId) ws.once('close', store.attachApp(courierId));
+      wss.emit('connection', ws, req);
+    });
   });
 
   const frame = () => JSON.stringify({ type: 'state', state: store.state } satisfies LiveMessage);

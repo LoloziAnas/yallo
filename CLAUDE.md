@@ -58,7 +58,11 @@ or calling `POST /api/reset`, restores the demo seed.
   `{ error }` with a 4xx when refused:
   - `/api/orders` places an order (body `PlaceOrderBody`) and returns the new order. A stand-in
     merchant accepts it after 20 s and has it ready at 60 s.
-  - `/api/orders/:n/assign {courierId}`, `/unassign`, `/status {status}`, `/cancel {reason, compensateCourier}`,
+  - Job offers: `/api/orders/:n/offer {courierId}` (ops), `/offer/accept {courierId}` and `/offer/decline {courierId}`
+    (courier), `/offer/withdraw` (ops). A pending offer is `order.offer = { courierId, offeredAt, expiresAt }` in demo
+    seconds, and it expires after `OFFER_SEC` (15). A courier app subscribes with `subscribe(…, { courierId })`, which
+    sets `courier.app`. Couriers without an app are played by a stand-in that accepts after 3 s.
+  - `/api/orders/:n/assign {courierId}` assigns directly, skipping the offer. Also `/unassign`, `/status {status}`, `/cancel {reason, compensateCourier}`,
     `/refund {amount, reason}`. `:n` is the order number without "#".
   - `/api/tickets` opens a ticket (body `OpenTicketBody`) and returns it. `/api/tickets/:id/messages {from: 'requester'|'ops', author, text}`
     adds a message (a requester message reopens a resolved ticket). Also `/resolve` and `/escalate`.
