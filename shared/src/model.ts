@@ -101,6 +101,10 @@ export type Order = {
   fee: number;
   /** Total charged in DH, fee included. */
   total: number;
+  /** DH paid to the courier for this job, tip excluded. Not the customer's delivery `fee`. */
+  courierPay?: number;
+  /** Customer's tip for the courier, in DH. */
+  tip?: number;
   pay: PayMethod;
   /** Local time the order was placed, "HH:MM". */
   placedAt: string;

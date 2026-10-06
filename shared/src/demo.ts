@@ -41,7 +41,7 @@ export const COURIERS: Courier[] = [
 
 export const ORDERS: Order[] = [
   { id: "#48213", merchantId: "m1", customerName: "Youssef Benali", zone: "Guéliz", dropoff: { x: 38, y: 22 }, status: "picking", courierId: "c1",
-    items: [{ qty: 2, name: "Tajine poulet citron", price: 38 }, { qty: 1, name: "Couscous aux sept légumes", price: 35 }, { qty: 2, name: "Thé à la menthe", price: 9 }], fee: 15, total: 146, pay: "cash", placedAt: "18:21" },
+    items: [{ qty: 2, name: "Tajine poulet citron", price: 38 }, { qty: 1, name: "Couscous aux sept légumes", price: 35 }, { qty: 2, name: "Thé à la menthe", price: 9 }], fee: 15, total: 146, pay: "cash", placedAt: "18:21", courierPay: 30, tip: 5 },
   { id: "#48214", merchantId: "m2", customerName: "Leila Mansouri", zone: "Hivernage", dropoff: { x: 60, y: 52 }, status: "ready", courierId: null,
     items: [{ qty: 2, name: "Classic burger", price: 42 }, { qty: 1, name: "Fries", price: 19 }], fee: 15, total: 118, pay: "card", placedAt: "18:24" },
   { id: "#48215", merchantId: "m5", customerName: "Hassan Ait Ali", zone: "Médina", dropoff: { x: 78, y: 34 }, status: "ready", courierId: null,
