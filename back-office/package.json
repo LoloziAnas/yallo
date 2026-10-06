@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "api": "npm --prefix ../api start",
     "build": "vite build",
     "preview": "vite preview"
   },

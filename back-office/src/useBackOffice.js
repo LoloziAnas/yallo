@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
+import { createYalloClient } from '@yallo/shared';
 import { IC } from './icons.jsx';
-import { ZONES, MERCH, MBY, COURIERS0, ORDERS0, STATUS, ACTIVE, APPS0, DOCDEF, TICKETS0, PAY_C, PAY_M } from './data.js';
+import { ZONES, MERCH, MBY, COURIERS0, ORDERS0, STATUS, ACTIVE, APPS0, DOCDEF, TICKETS0, PAY_C, PAY_M, fromLive } from './data.js';
+
+// Same origin: Vite proxies /api to the mock API (see vite.config.js).
+const api = createYalloClient('');
 
 const fmt = n => Math.round(n).toLocaleString('en-US');
 const mmss = s => { s = Math.max(0, Math.floor(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
@@ -12,22 +16,9 @@ const initialState = startPage => ({
   page:startPage ?? 'live', city:'Marrakech', t:0, orders:ORDERS0, couriers:COURIERS0, merchants:MERCH.map(m => ({ ...m })),
   drawer:startPage && startPage !== 'live' ? null : { type:'order', id:'#48214' }, assignOpen:true, qTab:'action', layers:{ couriers:true, merchants:true },
   oFilter:'all', oq:'', gq:'', cTab:'fleet', apps:APPS0, appSel:'a1', tickets:TICKETS0.map(t => ({ ...t, msgs:t.msgs.slice(), resolved:false })), tSel:'T-9011', tFilter:'open', draft:'',
-  payTab:'couriers', paySel:{}, payDone:{}, modal:null, reason:null, refundMode:'full', refundAmt:'', comp:true, toast:null, suspended:{},
+  payTab:'couriers', paySel:{}, payDone:{}, modal:null, reason:null, refundMode:'full', refundAmt:'', comp:true, toast:null, suspended:{}, connected:false,
   w:typeof window === 'undefined' ? 1440 : window.innerWidth
 });
-
-// Simulation clock: busy couriers drift toward their store or drop-off, timers count up, toasts expire.
-function tick(s) {
-  const couriers = s.couriers.map(c => {
-    if (c.st !== 'busy') return c;
-    const o = s.orders.find(o => o.courier === c.id && ACTIVE.includes(o.st));
-    if (!o) return c;
-    const m = MBY[o.m]; const tx = o.st === 'picking' ? m.x : o.ux, ty = o.st === 'picking' ? m.y : o.uy;
-    const dx = tx - c.x, dy = ty - c.y, d = Math.hypot(dx, dy); if (d < .3) return c;
-    const step = Math.min(d, .35); return { ...c, x:c.x + dx / d * step, y:c.y + dy / d * step };
-  });
-  return { t:s.t + 1, couriers, toast:s.toast && s.toast.until < Date.now() ? null : s.toast };
-}
 
 // All back-office state plus the derived view model each screen renders from.
 export function useBackOffice({ startPage } = {}) {
@@ -35,26 +26,32 @@ export function useBackOffice({ startPage } = {}) {
   const setState = useCallback(u => setS(prev => ({ ...prev, ...(typeof u === 'function' ? u(prev) : u) })), []);
 
   useEffect(() => {
-    const iv = setInterval(() => setState(tick), 1000);
+    // Orders, couriers, merchants and the demo clock come from the API's live feed.
+    const stop = api.subscribe(live => setState(fromLive(live)), connected => setState({ connected }));
     const onR = () => setState({ w:window.innerWidth });
     window.addEventListener('resize', onR);
-    return () => { clearInterval(iv); window.removeEventListener('resize', onR); };
+    return () => { stop(); window.removeEventListener('resize', onR); };
   }, [setState]);
 
-  const toast = text => setState({ toast:{ text, until:Date.now() + 2600 } });
-  const el = o => ACTIVE.includes(o.st) ? o.el + s.t : o.el;
+  const toast = text => {
+    const until = Date.now() + 2600;
+    setState({ toast:{ text, until } });
+    setTimeout(() => setState(st => st.toast && st.toast.until === until ? { toast:null } : {}), 2600);
+  };
+  // Sends an action to the API, applies the state it returns, then confirms or shows why it was refused.
+  const act = (request, done, patch) => request
+    .then(live => { setState({ ...fromLive(live), ...patch }); if (done) toast(done); })
+    .catch(err => toast(err.message));
+  const el = o => o.el;
   const lateInfo = o => {
     const e = el(o);
     if (o.st === 'ready' && !o.courier && e > 8 * 60) return 'Ready without courier for ' + Math.floor(e / 60 - 4) + ' min';
     if (ACTIVE.includes(o.st) && e > 35 * 60) return 'Over 35 min SLA by ' + Math.floor(e / 60 - 35) + ' min';
     return null;
   };
-  const setOrder = (id, patch) => setState(st => ({ orders:st.orders.map(o => o.id === id ? { ...o, ...patch } : o) }));
   const assign = (oid, cid) => {
-    const c = s.couriers.find(c => c.id === cid), o = s.orders.find(o => o.id === oid);
-    setState({ orders:s.orders.map(x => x.id === oid ? { ...x, courier:cid, st:x.st === 'ready' ? 'picking' : x.st } : x),
-      couriers:s.couriers.map(x => x.id === cid ? { ...x, st:'busy' } : x.id === o.courier ? { ...x, st:'idle' } : x), assignOpen:false });
-    toast(c.name + ' assigned to ' + oid);
+    const c = s.couriers.find(c => c.id === cid);
+    act(api.assignCourier(oid, cid), c.name + ' assigned to ' + oid, { assignOpen:false });
   };
 
   const set = o => () => setState(o), W = s.w || 1440;
@@ -146,7 +143,7 @@ export function useBackOffice({ startPage } = {}) {
 
   // merchants
   const merchantRows = s.merchants.map(m => ({ ...m, prepFg:m.prep > 20 ? 'var(--color-accent-700)' : 'var(--color-text)', stLabel:m.open ? 'Open' : 'Paused', stBg:m.open ? 'var(--color-accent-2-100)' : 'var(--color-neutral-200)', stFg:m.open ? 'var(--color-accent-2-700)' : 'var(--color-neutral-700)', trk:m.open ? 'var(--color-accent-2-500)' : 'var(--color-neutral-400)', knob:m.open ? '18px' : '2px',
-    toggle:() => { setState(st => ({ merchants:st.merchants.map(x => x.id === m.id ? { ...x, open:!x.open } : x) })); toast(m.name + (m.open ? ' paused' : ' reopened')); } }));
+    toggle:() => act(api.setMerchantOpen(m.id, !m.open), m.name + (m.open ? ' paused' : ' reopened')) }));
 
   // support
   const TF = [['open','Open',openT.length],['urgent','Urgent',openT.filter(t => t.prio === 'Urgent' || t.prio === 'High').length],['resolved','Resolved',s.tickets.filter(t => t.resolved).length],['all','All',s.tickets.length]];
@@ -221,16 +218,17 @@ export function useBackOffice({ startPage } = {}) {
   const reasons = (RS[s.modal] || []).map(label => ({ label, onClick:set({ reason:label }), ...chip(s.reason === label) }));
   const MD = {
     cancel:{ title:'Cancel order ' + (dOrderObj ? dOrderObj.id : ''), sub:'The customer is refunded automatically and notified by SMS.', isCancel:true, confirm:'Cancel order', onConfirm:() => {
-      const o = dOrderObj; setState(st => ({ modal:null, orders:st.orders.map(x => x.id === o.id ? { ...x, st:'cancelled', cancelReason:st.reason } : x), couriers:st.couriers.map(x => x.id === o.courier ? { ...x, st:'idle' } : x) })); toast(o.id + ' cancelled' + (s.comp && o.courier ? ' · courier compensated' : '')); } },
+      const o = dOrderObj; act(api.cancelOrder(o.id, s.reason, s.comp), o.id + ' cancelled' + (s.comp && o.courier ? ' · courier compensated' : ''), { modal:null }); } },
     refund:{ title:'Refund ' + (dOrderObj ? dOrderObj.id : ''), sub:dOrderObj ? 'Paid ' + dOrderObj.total + ' DH · ' + (dOrderObj.pay === 'Cash' ? 'cash refund goes to Yallo wallet' : 'back to card in 3–5 days') : '', isRefund:true, confirm:'Issue refund', onConfirm:() => {
-      const amt = s.refundMode === 'full' ? dOrderObj.total : Math.min(dOrderObj.total, Number(s.refundAmt) || 0); setOrder(dOrderObj.id, { refund:amt }); setState({ modal:null }); toast(amt + ' DH refunded on ' + dOrderObj.id); } },
+      const amt = s.refundMode === 'full' ? dOrderObj.total : Math.min(dOrderObj.total, Number(s.refundAmt) || 0);
+      act(api.refundOrder(dOrderObj.id, amt, s.reason), amt + ' DH refunded on ' + dOrderObj.id, { modal:null }); } },
     reject:{ title:'Reject ' + (appCur ? appCur.name : ''), sub:'The applicant gets an SMS with the reason and can re-apply in 30 days.', confirm:'Reject application', onConfirm:() => removeApp(appCur.name + ' rejected') },
     payout:{ title:'Approve ' + selKeys.length + ' payouts', sub:fmt(selTotal) + ' DH will be sent by bank transfer on Mon 5 Oct.', confirm:'Approve payouts', onConfirm:() => { setState(st => { const d = { ...st.payDone }; selKeys.forEach(k => d[k] = true); return { payDone:d, paySel:{}, modal:null }; }); toast(selKeys.length + ' payouts approved'); } }
   };
   const md = MD[s.modal] ? { isRefund:false, isCancel:false, ...MD[s.modal], reasons, disabled:(s.modal === 'cancel' || s.modal === 'refund' || s.modal === 'reject') && !s.reason } : { reasons:[] };
 
   return {
-    ic:IC, p, nav, cities, liveText:W < 1100 ? 'LIVE' : 'LIVE · ' + clock,
+    ic:IC, p, nav, cities, liveOk:s.connected, liveText:!s.connected ? 'OFFLINE · reconnecting' : W < 1100 ? 'LIVE' : 'LIVE · ' + clock,
     liveCols:(() => { const d = !!(selId || (s.drawer && s.drawer.type === 'courier')); if (W < 1240 && d) return '0px minmax(0,1fr) 340px'; return (W < 1240 ? '280px' : '340px') + ' minmax(0,1fr) ' + (d ? '400px' : '0px'); })(),
     drawerW:W < 1240 ? '340px' : '400px', supWide:W >= 1280, supNarrow:W < 1280, supCols:W >= 1280 ? '300px minmax(0,1fr) 280px' : (W < 1100 ? '240px' : '280px') + ' minmax(0,1fr)', pageTitle:TITLES[s.page][0], pageSub:TITLES[s.page][1], clock, openTickets:openT.length, goSupport:go('support'), goMerchants:go('merchants'),
     gq:s.gq, onGq:e => setState({ gq:e.target.value }), onGqKey:e => { if (e.key === 'Enter') { const v = s.gq.trim(); const o = s.orders.find(o => o.id.replace('#', '') === v.replace('#', '')); if (o) setState({ page:'orders', oq:'', oFilter:'all', drawer:{ type:'order', id:o.id } }); else setState({ page:'orders', oq:v, oFilter:'all' }); } },
@@ -254,7 +252,7 @@ export function useBackOffice({ startPage } = {}) {
     openRefund:() => setState({ modal:'refund', reason:null, refundMode:'full', refundAmt:String(dOrderObj.total) }), openCancel:set({ modal:'cancel', reason:null, comp:true }),
     msgCourier:() => toast('Message sent to ' + (dCourierObj && dCourierObj.name)),
     suspendLabel:dCourierObj && s.suspended[dCourierObj.id] ? 'Reactivate' : 'Suspend',
-    toggleSuspend:() => { const id = dCourierObj.id; setState(st => ({ suspended:{ ...st.suspended, [id]:!st.suspended[id] } })); toast(dCourierObj.name + (s.suspended[id] ? ' reactivated' : ' suspended')); },
+    toggleSuspend:() => { const id = dCourierObj.id; act(api.setCourierSuspended(id, !s.suspended[id]), dCourierObj.name + (s.suspended[id] ? ' reactivated' : ' suspended')); },
     hasModal:!!MD[s.modal], md, closeModal:set({ modal:null }),
     refundModes:[['full','Full refund'],['partial','Partial']].map(([k, label]) => ({ label, onClick:() => setState({ refundMode:k, refundAmt:k === 'full' && dOrderObj ? String(dOrderObj.total) : s.refundAmt }), ...pill(s.refundMode === k) })),
     refundFull:s.refundMode === 'full', refundAmt:s.refundAmt, onRefundAmt:e => setState({ refundAmt:e.target.value.replace(/[^0-9]/g, '') }),

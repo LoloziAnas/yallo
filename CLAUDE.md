@@ -8,7 +8,8 @@ Delivery platform for Marrakech. Several Claude sessions work here in parallel, 
 | `app/` | Customer web prototype | React + Vite | customer |
 | `mobile/` | Customer mobile app | Expo SDK 57 | customer |
 | `courier/` | Courier mobile app | Expo SDK 57 | courier |
-| `shared/` | `@yallo/shared`: domain model, order lifecycle, design tokens, demo seed | plain TypeScript | back office |
+| `shared/` | `@yallo/shared`: domain model, order lifecycle, design tokens, demo seed, API client | plain TypeScript | back office |
+| `api/` | Mock API: the shared live state for all apps | Node + `ws`, run with `tsx` | back office |
 
 ## Rules for parallel sessions
 
@@ -28,6 +29,7 @@ Delivery platform for Marrakech. Several Claude sessions work here in parallel, 
 - `Order`, `Merchant`, `Courier`, `OrderItem`, `ZoneName`, `PayMethod`: entity types.
 - `colors`, `space`, `radius`, `shadow`, `fonts`: Zanqa tokens (web apps also have `zanqa.css`).
 - `ZONES`, `MERCHANTS`, `COURIERS`, `ORDERS`: the Marrakech demo seed (Tue 6 Oct 2026, ~18:34).
+- `createYalloClient(baseUrl)`, `LiveState`, `ApiOrder`, `ApiCourier`, `PlaceOrderBody`: the mock API contract.
 
 Depend on it with `"@yallo/shared": "file:../shared"` (run `npm install ../shared` in your app).
 It ships TypeScript source with no build step. Vite handles it as is. Expo/Metro needs the parent
@@ -42,3 +44,23 @@ module.exports = config;
 ```
 
 Typecheck the package with `cd shared && npm run typecheck`.
+
+## Mock API
+
+One in-memory server holds the orders, couriers and merchants every app shares. Start it with
+`cd api && npm start` (port 5190, listening on all interfaces), and test with `npm test`. Restarting it,
+or calling `POST /api/reset`, restores the demo seed.
+
+- The live feed is `ws://HOST:5190/api/live`. Each message is `{ type: 'state', state: LiveState }`, pushed on
+  every change and every second (the demo clock: timers and courier movement run on the server).
+- `GET /api/state` returns the current snapshot. Actions are `POST`s that return the new state, or
+  `{ error }` with a 4xx when refused:
+  - `/api/orders` places an order (body `PlaceOrderBody`) and returns the new order. A stand-in
+    merchant accepts it after 20 s and has it ready at 60 s.
+  - `/api/orders/:n/assign {courierId}`, `/unassign`, `/status {status}`, `/cancel {reason, compensateCourier}`,
+    `/refund {amount, reason}`. `:n` is the order number without "#".
+  - `/api/merchants/:id/open {open}`, `/api/couriers/:id/suspend {suspended}`,
+    `/api/couriers/:id/availability {status: 'idle'|'off'}`, `/api/reset`.
+- Use `createYalloClient(url)` rather than calling these by hand. The back office uses `''`, because Vite
+  proxies `/api`. On a phone, use the dev machine's LAN IP, not `localhost`.
+- Support tickets, courier applications and payouts are still local to the back office.

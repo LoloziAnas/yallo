@@ -76,3 +76,12 @@ export const ORDERS: Order[] = [
 
 export const merchantById: Record<string, Merchant> = Object.fromEntries(MERCHANTS.map(m => [m.id, m]));
 export const courierById: Record<string, Courier> = Object.fromEntries(COURIERS.map(c => [c.id, c]));
+
+/** Seconds since each active seed order was placed, at the demo's start (18:34:00). */
+export const DEMO_ELAPSED_SEC: Record<string, number> = {
+  '#48213': 852, '#48214': 700, '#48215': 545, '#48216': 330, '#48211': 1428, '#48209': 1630,
+  '#48210': 2283, '#48217': 110, '#48212': 1290, '#48218': 380, '#48219': 160,
+};
+
+/** Demo wall clock at t = 0, in minutes after midnight (18:34). */
+export const DEMO_START_MIN = 18 * 60 + 34;

@@ -11,10 +11,10 @@ export default function Header({ v }) {
         <span>{v.ic.search}</span>
         <input value={v.gq} onChange={v.onGq} onKeyDown={v.onGqKey} placeholder="Search order #, courier, merchant…" />
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 12px', borderRadius: 999, background: 'var(--color-accent-2-100)', color: 'var(--color-accent-2-700)', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>
+      <div title={v.liveOk ? 'Connected to the Yallo API' : 'Cannot reach the Yallo API. Is it running?'} style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 12px', borderRadius: 999, background: v.liveOk ? 'var(--color-accent-2-100)' : 'var(--color-accent-100)', color: v.liveOk ? 'var(--color-accent-2-700)' : 'var(--color-accent-800)', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>
         <span style={{ position: 'relative', width: 8, height: 8, display: 'grid', placeItems: 'center' }}>
-          <span style={{ ...pulseDot, position: 'absolute', animation: 'bpulse 1.6s ease-out infinite' }} />
-          <span style={{ ...pulseDot, position: 'relative' }} />
+          {v.liveOk && <span style={{ ...pulseDot, position: 'absolute', animation: 'bpulse 1.6s ease-out infinite' }} />}
+          <span style={{ ...pulseDot, position: 'relative', background: v.liveOk ? pulseDot.background : 'var(--color-accent)' }} />
         </span>
         {v.liveText}
       </div>
