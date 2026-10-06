@@ -110,6 +110,19 @@ describe('Store', () => {
     assert.throws(() => s.placeOrder({ ...base, fee: 'free' as never }), /fee must be/);
   });
 
+  test('a courier assigned early heads to the store, and ready food goes straight to picking', () => {
+    const o = s.placeOrder({ merchantId: 'm2', customerName: 'Amal', zone: 'Hivernage', pay: 'card', items: [{ qty: 1, name: 'Fries', price: 19 }] });
+    tick(s, AUTO_ACCEPT_SEC);
+    s.assignCourier(o.id, 'c5');
+    const start = { ...courier(s, 'c5').pos };
+    tick(s, 2);
+    assert.notDeepEqual(courier(s, 'c5').pos, start, 'moves while the food is prepared');
+    tick(s, AUTO_READY_SEC - AUTO_ACCEPT_SEC);
+    assert.equal(order(s, o.id).status, 'picking');
+    s.setOrderStatus('#48216', 'ready');
+    assert.equal(order(s, '#48216').status, 'ready', 'no courier: waits at ready');
+  });
+
   test('rejects bad orders', () => {
     const ok = { merchantId: 'm2', customerName: 'Amal', zone: 'Hivernage' as const, pay: 'card' as const, items: [{ qty: 1, name: 'Fries', price: 19 }] };
     assert.throws(() => s.placeOrder({ ...ok, merchantId: 'nope' }), /No merchant/);

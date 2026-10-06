@@ -21,6 +21,8 @@ const COMPENSATION_DH = 10;
 const DEFAULT_FEE = 15;
 
 const isActive = (s: OrderStatus) => ACTIVE_STATUSES.includes(s);
+/** Food that's ready goes to `picking` when a courier is already assigned, otherwise waits at `ready`. */
+const readyStatus = (o: ApiOrder): OrderStatus => (o.courierId ? 'picking' : 'ready');
 const clone = <T>(v: T): T => structuredClone(v);
 const SOURCES: TicketSource[] = ['customer', 'courier', 'merchant'];
 const PRIORITIES: TicketPriority[] = ['urgent', 'high', 'normal', 'low'];
@@ -112,7 +114,7 @@ export class Store {
       o.elapsedSec += 1;
       if (this.auto.has(o.id)) {
         if (o.status === 'pending' && o.elapsedSec >= AUTO_ACCEPT_SEC) o.status = 'preparing';
-        else if (o.status === 'preparing' && o.elapsedSec >= AUTO_READY_SEC) o.status = 'ready';
+        else if (o.status === 'preparing' && o.elapsedSec >= AUTO_READY_SEC) o.status = readyStatus(o);
       }
     }
     for (const o of s.orders) {
@@ -125,7 +127,8 @@ export class Store {
       if (c.status !== 'busy') continue;
       const o = s.orders.find(o => o.courierId === c.id && isActive(o.status));
       if (!o) continue;
-      const target = o.status === 'picking' ? this.merchant(o.merchantId).pos : o.dropoff;
+      // Until pickup the courier heads to the store, even while the food is still being prepared.
+      const target = o.status === 'delivering' ? o.dropoff : this.merchant(o.merchantId).pos;
       const dx = target.x - c.pos.x, dy = target.y - c.pos.y, d = Math.hypot(dx, dy);
       if (d < 0.3) continue;
       const step = Math.min(d, COURIER_STEP);
@@ -296,7 +299,7 @@ export class Store {
     if ((status === 'picking' || status === 'delivering' || status === 'delivered') && !o.courierId) {
       throw new ActionError(o.id + ' has no courier yet', 409);
     }
-    o.status = status;
+    o.status = status === 'ready' ? readyStatus(o) : status;
     this.auto.delete(o.id);
     if (status === 'delivered') this.release(o.courierId);
     this.changed();
