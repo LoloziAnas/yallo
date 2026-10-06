@@ -127,7 +127,9 @@ try {
     const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
     pages.courier = await phone.newPage();
     if (CUSTOMER_MODE === 'ui') {
-      const customerPhone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+      // "Use my location" asks the browser; grant it and stand in Guéliz, or onboarding detours to the address form.
+      const customerPhone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2,
+        permissions: ['geolocation'], geolocation: { latitude: 31.634, longitude: -8.0105 } });
       pages.customer = await customerPhone.newPage();
     }
     for (const [app, p] of Object.entries(pages)) p.on('pageerror', e => errors.push(`${app}: ${e.message}`));
