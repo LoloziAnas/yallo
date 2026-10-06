@@ -1,0 +1,11 @@
+/* App-level rules from the design's <helmet> plus its style-hover/style-active states.
+   The design runtime applies those states with !important over inline styles. */
+body { margin: 0; background: var(--color-bg); }
+a { color: var(--color-accent-700); }
+a:hover { color: var(--color-accent-800); }
+
+.hv-accent-text:hover { color: var(--color-accent-700) !important; }
+.hv-accent-border:hover { border-color: var(--color-accent) !important; }
+.hv-accent-bg:hover { background: var(--color-accent-100) !important; }
+.hv-accent-chip:hover { border-color: var(--color-accent) !important; color: var(--color-accent-700) !important; }
+.act-press:active { transform: scale(.96) !important; }

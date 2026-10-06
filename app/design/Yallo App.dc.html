@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="zanqa-ds/styles.css">
+<style>body{margin:0;background:var(--color-bg)} a{color:var(--color-accent-700)} a:hover{color:var(--color-accent-800)}</style>
+</helmet>
+<div ref="{{ rootRef }}" style="min-height:{{ rootMinH }};display:flex;justify-content:center;align-items:flex-start;gap:48px;padding:{{ rootPad }};flex-wrap:wrap;background:var(--color-surface);font-family:var(--font-body);color:var(--color-text)">
+<sc-if value="{{ showIndex }}" hint-placeholder-val="{{ true }}">
+<aside style="width:260px;display:flex;flex-direction:column;gap:20px;padding-top:24px">
+<div>
+<div style="font-family:var(--font-heading);font-weight:600;font-size:48px;letter-spacing:.05em;line-height:1">YALLO</div>
+<div style="font-size:13px;color:var(--color-neutral-700);margin-top:8px;text-wrap:pretty">Food &amp; local delivery for Morocco — interactive prototype. Tap through the phone, or jump to any screen.</div>
+</div>
+<div style="display:flex;flex-direction:column;border-top:1px solid var(--color-divider)">
+<sc-for list="{{ index }}" as="x" hint-placeholder-count="13"><button onClick="{{ x.go }}" style="display:flex;gap:12px;align-items:baseline;padding:9px 0;border:0;border-bottom:1px solid var(--color-divider);background:none;cursor:pointer;text-align:start;font:inherit;font-size:14px;color:{{ x.fg }};font-weight:{{ x.fw }}" style-hover="color:var(--color-accent-700)"><span style="font:500 11px ui-monospace,Menlo,monospace;color:var(--color-neutral-600)">{{ x.n }}</span>{{ x.label }}</button></sc-for>
+</div>
+<div class="field"><label>Language · اللغة</label>
+<div class="seg"><sc-for list="{{ langs }}" as="l"><label class="seg-opt"><input type="radio" name="lang-side" checked="{{ l.on }}" onChange="{{ l.pick }}">{{ l.label }}</label></sc-for></div>
+</div>
+<button class="btn btn-secondary" onClick="{{ reset }}" style="align-self:flex-start;height:40px;padding:0 16px">Reset demo</button>
+<div style="font-size:12px;color:var(--color-neutral-600);line-height:1.5">Promo codes: MARHABA (−30%), LIVRAISON (free delivery). Any 4 digits work as the SMS code.</div>
+</aside>
+</sc-if>
+<div style="flex:none;width:414px;height:868px;padding:12px;background:var(--color-neutral-900);border-radius:58px;box-shadow:var(--shadow-lg)">
+<div dir="{{ dir }}" style="position:relative;width:390px;height:844px;border-radius:46px;overflow:hidden;background:var(--color-bg);display:flex;flex-direction:column">
+<div dir="ltr" style="flex:none;height:47px;display:flex;align-items:center;justify-content:space-between;padding:0 30px 0 34px;font-weight:600;font-size:15px;position:relative">
+<span>{{ clockNow }}</span>
+<span style="position:absolute;left:50%;top:11px;transform:translateX(-50%);width:120px;height:34px;border-radius:20px;background:var(--color-neutral-900)"></span>
+<span style="display:flex;align-items:center;gap:6px"><span style="display:flex;align-items:flex-end;gap:2px;height:11px"><i style="width:3px;height:4px;background:currentColor"></i><i style="width:3px;height:6px;background:currentColor"></i><i style="width:3px;height:8px;background:currentColor"></i><i style="width:3px;height:11px;background:currentColor"></i></span><span style="width:24px;height:12px;border:1px solid currentColor;padding:1px;display:flex"><i style="width:70%;background:currentColor"></i></span></span>
+</div>
+<div style="position:relative;flex:1;min-height:0">
+<sc-if value="{{ is.onb }}" hint-placeholder-val="{{ true }}">
+<div style="position:absolute;inset:0;display:flex;flex-direction:column;padding:4px 20px 34px">
+<div style="display:flex;align-items:center;justify-content:space-between;height:48px">
+<div style="font-family:var(--font-heading);font-weight:600;font-size:26px;letter-spacing:.06em">YALLO</div>
+<div class="seg"><sc-for list="{{ langs }}" as="l"><label class="seg-opt" style="padding:6px 12px;font-size:13px"><input type="radio" name="lang-onb" checked="{{ l.on }}" onChange="{{ l.pick }}">{{ l.short }}</label></sc-for></div>
+</div>
+<div class="zcard" style="margin-top:14px;height:330px;flex:none;border-radius:28px">
+
+<sc-if value="{{ onb0 }}" hint-placeholder-val="{{ true }}">
+<div style="position:absolute;inset:0;display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(3,1fr);gap:1px;background:var(--color-divider)">
+<sc-for list="{{ onbCats }}" as="c" hint-placeholder-count="6"><div style="background:var(--color-bg);display:flex;flex-direction:column;justify-content:space-between;padding:12px;color:var(--color-accent)"><span>{{ c.icon }}</span><span style="font:500 10px ui-monospace,Menlo,monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--color-accent-800)">{{ c.label }}</span></div></sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ onb1 }}">
+<div style="position:absolute;inset:0;display:grid;grid-template-columns:1.4fr 1fr;gap:1px;background:var(--color-divider)">
+<div style="background:var(--color-bg);display:flex;flex-direction:column;justify-content:flex-end;padding:16px"><span style="font-family:var(--font-heading);font-weight:600;font-size:120px;line-height:.85;color:var(--color-accent)">30</span><span style="font:500 10px ui-monospace,Menlo,monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--color-accent-800);margin-top:8px">min · avg. to your door</span></div>
+<div style="display:grid;grid-template-rows:1fr 1fr;gap:1px">
+<div style="background:var(--color-bg);display:grid;place-items:center;color:var(--color-accent)">{{ ic.cartL }}</div>
+<div style="background:var(--color-bg);display:grid;place-items:center;color:var(--color-accent)">{{ ic.pillL }}</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ onb2 }}">
+<svg viewBox="0 0 350 330" width="100%" height="100%" style="position:absolute;inset:0">
+<path d="M0 110H350M0 220H350M90 0V330M230 0V330M0 300L350 30" style="stroke:var(--color-divider);stroke-width:14;fill:none"></path>
+<circle cx="175" cy="165" r="70" style="fill:var(--color-accent-100);stroke:var(--color-accent);stroke-dasharray:4 5"></circle>
+<circle cx="175" cy="165" r="8" style="fill:var(--color-accent)"></circle>
+<circle cx="175" cy="165" r="18" style="fill:none;stroke:var(--color-accent)"></circle>
+<text x="16" y="322" style="font:500 10px ui-monospace,Menlo,monospace;fill:var(--color-accent-800);letter-spacing:.06em">GUÉLIZ · MARRAKECH</text>
+</svg>
+</sc-if>
+</div>
+<div style="margin-top:26px;flex:1">
+<div style="display:flex;gap:6px;margin-bottom:16px"><sc-for list="{{ onbDots }}" as="d" hint-placeholder-count="3"><span style="height:6px;border-radius:3px;width:{{ d.w }};background:{{ d.bg }};transition:all .3s"></span></sc-for></div>
+<h1 style="font-size:40px;line-height:1.02;margin:0 0 10px;text-wrap:balance">{{ onbTitle }}</h1>
+<p style="font-size:16px;color:var(--color-neutral-700);margin:0;text-wrap:pretty">{{ onbBody }}</p>
+</div>
+<sc-if value="{{ onbNotLast }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;gap:12px;align-items:center">
+<button class="btn btn-ghost" onClick="{{ onbSkip }}" style="height:52px;padding:0 16px;font-size:17px;color:var(--color-neutral-700)">{{ t.skip }}</button>
+<button class="btn btn-primary" onClick="{{ onbNext }}" style="flex:1;height:54px;font-size:18px">{{ t.next }} {{ ic.arrow }}</button>
+</div>
+</sc-if>
+<sc-if value="{{ onbLast }}">
+<div style="display:flex;flex-direction:column;gap:10px">
+<button class="btn btn-primary" onClick="{{ allowLoc }}" style="height:54px;font-size:18px">{{ ic.nav }} {{ t.allow }}</button>
+<button class="btn btn-secondary" onClick="{{ manualAddr }}" style="height:52px;font-size:17px">{{ t.manual }}</button>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ is.auth }}">
+<div style="position:absolute;inset:0;display:flex;flex-direction:column;padding:4px 20px 34px">
+<button class="btn btn-ghost btn-icon" onClick="{{ authBack }}" style="width:44px;height:44px;color:var(--color-text);margin-inline-start:-10px">{{ ic.back }}</button>
+<sc-if value="{{ authPhone }}">
+<div style="display:flex;flex-direction:column;flex:1">
+<h1 style="font-size:38px;margin:16px 0 6px;text-wrap:balance">{{ t.signIn }}</h1>
+<p style="color:var(--color-neutral-700);margin:0 0 24px;font-size:15px">{{ t.phoneHint }}</p>
+<div class="field"><label>{{ t.phone }}</label>
+<div dir="ltr" style="display:flex;gap:8px"><div class="input" style="width:84px;flex:none;display:flex;align-items:center;justify-content:center;min-height:52px;font-size:17px;font-weight:500">+212</div><input class="input" inputMode="numeric" placeholder="6 61 23 45 67" value="{{ phoneNum }}" onChange="{{ onPhone }}" style="min-height:52px;font-size:18px;letter-spacing:.04em"></div>
+</div>
+<button class="btn btn-primary" disabled="{{ phoneInvalid }}" onClick="{{ sendOtp }}" style="height:54px;font-size:18px;margin-top:16px;width:100%">{{ t.continue }}</button>
+<div style="display:flex;align-items:center;gap:12px;margin:22px 0;color:var(--color-neutral-600);font-size:13px"><span style="flex:1;height:1px;background:var(--color-divider)"></span>{{ t.or }}<span style="flex:1;height:1px;background:var(--color-divider)"></span></div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<button class="btn btn-secondary" onClick="{{ socialLogin }}" style="height:52px;font-size:16px">{{ t.google }}</button>
+<button class="btn btn-secondary" onClick="{{ socialLogin }}" style="height:52px;font-size:16px">{{ t.apple }}</button>
+</div>
+<div style="flex:1"></div>
+<button class="btn btn-ghost" onClick="{{ guest }}" style="height:48px;font-size:16px;align-self:center">{{ t.guest }}</button>
+<p style="font-size:12px;color:var(--color-neutral-600);text-align:center;margin:8px 0 0">{{ t.terms }}</p>
+</div>
+</sc-if>
+<sc-if value="{{ authOtp }}">
+<div style="display:flex;flex-direction:column;flex:1">
+<h1 style="font-size:38px;margin:16px 0 6px">{{ t.otpT }}</h1>
+<p style="color:var(--color-neutral-700);margin:0 0 28px;font-size:15px">{{ t.otpSent }} <span dir="ltr" style="font-weight:600;color:var(--color-text)">{{ phoneFmt }}</span></p>
+<input class="input" dir="ltr" autoFocus inputMode="numeric" maxLength="4" placeholder="• • • •" value="{{ otp }}" onChange="{{ onOtp }}" style="min-height:72px;font-family:var(--font-heading);font-size:40px;letter-spacing:.6em;text-align:center">
+<button class="btn btn-ghost" onClick="{{ resend }}" style="align-self:flex-start;margin-top:14px;font-size:15px">{{ t.resend }}</button>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ is.home }}">
+<div style="position:absolute;inset:0;display:flex;flex-direction:column">
+<div style="padding:2px 16px 12px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--color-divider)">
+<div style="display:flex;align-items:center;gap:8px">
+<button onClick="{{ openAddr }}" style="flex:1;min-width:0;display:flex;align-items:center;gap:10px;background:none;border:0;padding:4px 0;cursor:pointer;text-align:start;color:inherit;font:inherit">
+<span style="color:var(--color-accent)">{{ ic.pin }}</span>
+<span style="min-width:0;display:flex;flex-direction:column"><span style="font-size:12px;color:var(--color-neutral-700)">{{ t.deliverTo }}</span><span style="display:flex;align-items:center;gap:4px;font-family:var(--font-heading);font-weight:600;font-size:19px;white-space:nowrap;overflow:hidden">{{ addrShort }} {{ ic.downS }}</span></span>
+</button>
+<button class="btn btn-secondary btn-icon" onClick="{{ goCart }}" aria-label="Cart" style="width:44px;height:44px;position:relative">{{ ic.bag }}<sc-if value="{{ cartCount }}"><span style="position:absolute;top:-8px;inset-inline-end:-8px;min-width:20px;height:20px;padding:0 5px;background:var(--color-accent);color:#fff;border-radius:999px;font:600 12px/20px var(--font-body);text-align:center">{{ cartCount }}</span></sc-if></button>
+</div>
+<button onClick="{{ goSearch }}" style="display:flex;align-items:center;gap:10px;height:50px;padding:0 16px;border:0;border-radius:999px;box-shadow:var(--shadow-sm);background:var(--color-card);cursor:pointer;color:var(--color-neutral-700);font:inherit;font-size:15px;text-align:start" style-hover="border-color:var(--color-accent)">{{ ic.search }} {{ t.searchPh }}</button>
+</div>
+<div style="flex:1;overflow-y:auto;scrollbar-width:none">
+<sc-if value="{{ homeError }}">
+<div style="padding:72px 32px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px">
+<div class="zcard" style="width:96px;height:96px;display:grid;place-items:center;color:var(--color-accent)">{{ ic.wifiOffL }}</div>
+<h2 style="font-size:30px;margin:14px 0 0">{{ t.errT }}</h2>
+<p style="color:var(--color-neutral-700);margin:0;max-width:260px">{{ t.errB }}</p>
+<button class="btn btn-primary" onClick="{{ retry }}" style="height:50px;padding:0 28px;margin-top:10px;font-size:16px">{{ ic.rotateS }} {{ t.retry }}</button>
+</div>
+</sc-if>
+<sc-if value="{{ homeLoadingV }}">
+<div style="padding:20px 16px;display:flex;flex-direction:column;gap:16px">
+<div style="height:140px;background:var(--color-neutral-200)"></div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px"><div style="height:84px;background:var(--color-neutral-200)"></div><div style="height:84px;background:var(--color-neutral-200)"></div><div style="height:84px;background:var(--color-neutral-200)"></div><div style="height:84px;background:var(--color-neutral-200)"></div><div style="height:84px;background:var(--color-neutral-200)"></div><div style="height:84px;background:var(--color-neutral-200)"></div></div>
+<div style="height:22px;width:55%;background:var(--color-neutral-200)"></div>
+<div style="display:flex;gap:14px"><div style="height:210px;flex:1;background:var(--color-neutral-200)"></div><div style="height:210px;width:80px;background:var(--color-neutral-200)"></div></div>
+</div>
+</sc-if>
+<sc-if value="{{ homeReady }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;padding:20px 16px 10px;scrollbar-width:none;scroll-padding-inline:16px">
+<button class="zcard" onClick="{{ promo1 }}" style="flex:none;width:300px;height:144px;scroll-snap-align:start;background:var(--color-accent);color:#fff;display:flex;flex-direction:column;justify-content:space-between;padding:16px;cursor:pointer;text-align:start;font:inherit">
+<span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-accent-100)">{{ t.p1k }}</span>
+<span style="font-family:var(--font-heading);font-weight:600;font-size:30px;line-height:1">{{ t.p1t }}</span>
+<span style="font-size:13px;color:#fff;opacity:.9">{{ t.p1b }}</span></button>
+<button class="zcard" onClick="{{ promo2 }}" style="flex:none;width:300px;height:144px;scroll-snap-align:start;background:var(--color-accent-2-100);box-shadow:none;display:flex;justify-content:space-between;gap:12px;padding:16px;cursor:pointer;text-align:start;font:inherit;color:var(--color-text)">
+<span style="display:flex;flex-direction:column;justify-content:space-between"><span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-accent-2-700)">{{ t.p2k }}</span><span style="font-family:var(--font-heading);font-weight:600;font-size:28px;line-height:1">{{ t.p2t }}</span><span style="font-size:13px;color:var(--color-neutral-700)">{{ t.p2b }}</span></span>
+<span style="color:var(--color-accent-2)">{{ ic.cartL }}</span></button>
+<button class="zcard" onClick="{{ promo3 }}" style="flex:none;width:300px;height:144px;scroll-snap-align:start;background:var(--color-saffron-100);box-shadow:none;display:flex;justify-content:space-between;gap:12px;padding:16px;cursor:pointer;text-align:start;font:inherit;color:var(--color-text)">
+<span style="display:flex;flex-direction:column;justify-content:space-between"><span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-accent-700)">{{ t.p3k }}</span><span style="font-family:var(--font-heading);font-weight:600;font-size:28px;line-height:1">{{ t.p3t }}</span><span style="font-size:13px;color:var(--color-neutral-700)">{{ t.p3b }}</span></span>
+<span style="color:var(--color-accent)">{{ ic.cookieL }}</span></button>
+</div>
+<div style="padding:14px 16px 0">
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+<sc-for list="{{ cats }}" as="c" hint-placeholder-count="6"><button onClick="{{ c.tap }}" style="background:var(--color-card);border:0;border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);height:92px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;color:var(--color-text);font:600 13px var(--font-body);transition:transform .12s" style-hover="background:var(--color-accent-100)" style-active="transform:scale(.96)"><span style="color:var(--color-accent)">{{ c.iconM }}</span>{{ c.label }}</button></sc-for>
+</div>
+</div>
+<div style="display:flex;align-items:baseline;justify-content:space-between;padding:28px 16px 10px"><h3 style="margin:0;font-size:25px">{{ t.popular }}</h3><button class="btn btn-ghost" onClick="{{ seeAllPopular }}" style="font-size:14px">{{ t.seeAll }}</button></div>
+<div style="display:flex;gap:16px;overflow-x:auto;padding:8px 16px 10px;scroll-snap-type:x mandatory;scrollbar-width:none;scroll-padding-inline:16px">
+<sc-for list="{{ popular }}" as="s" hint-placeholder-count="3">
+<div class="zcard" onClick="{{ s.open }}" style="flex:none;width:252px;cursor:pointer;scroll-snap-align:start" style-hover="border-color:var(--color-accent)">
+<div style="position:relative;height:136px;display:grid;place-items:center;color:var(--color-accent-500);border-bottom:1px solid var(--color-divider);background:var(--ph)">{{ s.iconL }}
+<span style="position:absolute;top:10px;inset-inline-start:10px;font:500 10px ui-monospace,Menlo,monospace;letter-spacing:.04em;color:var(--color-accent-800)">{{ s.img }}</span>
+<button onClick="{{ s.fav }}" aria-label="Favorite" style="position:absolute;top:6px;inset-inline-end:6px;width:36px;height:36px;display:grid;place-items:center;background:var(--color-card);border:0;border-radius:999px;box-shadow:var(--shadow-sm);color:{{ s.favColor }};cursor:pointer">{{ s.heart }}</button>
+<span style="position:absolute;bottom:8px;inset-inline-start:8px;display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;background:var(--color-card);box-shadow:var(--shadow-sm);font-family:var(--font-heading);font-weight:600;font-size:15px;color:var(--color-text)">{{ ic.clockS }} {{ s.time }}</span>
+</div>
+<div style="padding:10px 12px 12px;display:flex;flex-direction:column;gap:3px">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="font-family:var(--font-heading);font-weight:600;font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.name }}</span><span style="display:flex;align-items:center;gap:3px;font-size:13px;font-weight:500;flex:none"><span style="color:var(--color-saffron)">{{ ic.starF }}</span>{{ s.rating }}<span style="color:var(--color-neutral-600)">({{ s.reviews }})</span></span></div>
+<div style="font-size:13px;color:var(--color-neutral-700);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.cuisine }}</div>
+<div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:{{ s.feeColor }}">{{ ic.bikeS }} {{ s.fee }}</div>
+</div>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;align-items:baseline;justify-content:space-between;padding:24px 16px 10px"><h3 style="margin:0;font-size:25px;display:flex;align-items:center;gap:6px"><span style="color:var(--color-accent)">{{ ic.zap }}</span>{{ t.fast }}</h3><button class="btn btn-ghost" onClick="{{ seeAllFast }}" style="font-size:14px">{{ t.seeAll }}</button></div>
+<div style="display:flex;gap:16px;overflow-x:auto;padding:8px 16px 10px;scroll-snap-type:x mandatory;scrollbar-width:none;scroll-padding-inline:16px">
+<sc-for list="{{ fast }}" as="s" hint-placeholder-count="3">
+<div class="zcard" onClick="{{ s.open }}" style="flex:none;width:200px;cursor:pointer;scroll-snap-align:start" style-hover="border-color:var(--color-accent)">
+<div style="position:relative;height:110px;display:grid;place-items:center;color:var(--color-accent-500);border-bottom:1px solid var(--color-divider);background:var(--ph)">{{ s.iconM }}
+<span style="position:absolute;bottom:8px;inset-inline-start:8px;display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;background:var(--color-accent);color:#fff;font-family:var(--font-heading);font-weight:600;font-size:15px">{{ ic.clockS }} {{ s.time }}</span>
+</div>
+<div style="padding:10px 12px 12px;display:flex;flex-direction:column;gap:2px">
+<span style="font-family:var(--font-heading);font-weight:600;font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.name }}</span>
+<div style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--color-neutral-700)"><span style="color:var(--color-saffron)">{{ ic.starF }}</span>{{ s.rating }} · <span style="color:{{ s.feeColor }};font-weight:500">{{ s.fee }}</span></div>
+</div>
+</div>
+</sc-for>
+</div>
+<div style="padding:24px 16px 10px"><h3 style="margin:0;font-size:25px">{{ t.rec }}</h3></div>
+<div style="display:flex;flex-direction:column;gap:22px;padding:8px 16px 28px">
+<sc-for list="{{ recommended }}" as="s" hint-placeholder-count="3">
+<div class="zcard" onClick="{{ s.open }}" style="cursor:pointer" style-hover="border-color:var(--color-accent)">
+<div style="position:relative;height:170px;display:grid;place-items:center;color:var(--color-accent-500);border-bottom:1px solid var(--color-divider);background:var(--ph)">{{ s.iconL }}
+<span style="position:absolute;top:10px;inset-inline-start:10px;font:500 10px ui-monospace,Menlo,monospace;letter-spacing:.04em;color:var(--color-accent-800)">{{ s.img }}</span>
+<button onClick="{{ s.fav }}" aria-label="Favorite" style="position:absolute;top:6px;inset-inline-end:6px;width:40px;height:40px;display:grid;place-items:center;background:var(--color-card);border:0;border-radius:999px;box-shadow:var(--shadow-sm);color:{{ s.favColor }};cursor:pointer">{{ s.heart }}</button>
+<span style="position:absolute;bottom:8px;inset-inline-start:8px;display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;background:var(--color-card);box-shadow:var(--shadow-sm);font-family:var(--font-heading);font-weight:600;font-size:16px;color:var(--color-text)">{{ ic.clockS }} {{ s.time }}</span>
+<sc-if value="{{ s.closed }}"><span style="position:absolute;inset:0;display:grid;place-items:center;background:color-mix(in srgb,var(--color-bg) 72%,transparent);font-family:var(--font-heading);font-weight:600;font-size:22px;color:var(--color-text)">{{ s.closedLabel }}</span></sc-if>
+</div>
+<div style="padding:12px 14px 14px;display:flex;justify-content:space-between;gap:12px">
+<div style="min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-family:var(--font-heading);font-weight:600;font-size:18px">{{ s.name }}</span><span style="font-size:13px;color:var(--color-neutral-700)">{{ s.cuisine }} · {{ s.area }}</span></div>
+<div style="flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-size:13px"><span style="display:flex;align-items:center;gap:3px;font-weight:500"><span style="color:var(--color-saffron)">{{ ic.starF }}</span>{{ s.rating }}</span><span style="display:flex;align-items:center;gap:4px;font-weight:500;color:{{ s.feeColor }}">{{ ic.bikeS }} {{ s.fee }}</span></div>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ is.search }}">
+<div style="position:absolute;inset:0;display:flex;flex-direction:column">
+<div style="padding:4px 16px 10px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--color-divider)">
+<div style="display:flex;align-items:center;gap:10px;height:50px;padding:0 6px 0 16px;border:1.5px solid var(--color-accent);border-radius:999px;background:var(--color-card)">
+<span style="color:var(--color-neutral-700)">{{ ic.search }}</span>
+<input ref="{{ searchRef }}" value="{{ q }}" onChange="{{ onQ }}" onKeyDown="{{ onQKey }}" placeholder="{{ t.searchPh }}" style="flex:1;min-width:0;border:0;background:none;font:inherit;font-size:16px;color:var(--color-text);outline:none">
+<sc-if value="{{ q }}"><button onClick="{{ clearQ }}" aria-label="Clear" style="width:36px;height:36px;display:grid;place-items:center;background:none;border:0;cursor:pointer;color:var(--color-neutral-700)">{{ ic.x }}</button></sc-if>
+</div>
+<div style="display:flex;gap:8px;overflow-x:auto;scrollbar-width:none">
+<button onClick="{{ openSort }}" style="flex:none;height:36px;padding:0 12px;display:flex;align-items:center;gap:6px;border:1px solid var(--color-text);border-radius:999px;background:none;color:var(--color-text);font:500 13px var(--font-body);cursor:pointer;white-space:nowrap">{{ ic.slidersS }} {{ sortLabel }}</button>
+<sc-for list="{{ filterChips }}" as="c" hint-placeholder-count="3"><button onClick="{{ c.tap }}" style="flex:none;height:36px;padding:0 12px;display:flex;align-items:center;border-radius:999px;border:1px solid {{ c.bd }};background:{{ c.bg }};color:{{ c.fg }};font:500 13px var(--font-body);cursor:pointer;white-space:nowrap">{{ c.label }}</button></sc-for>
+</div>
+<div style="display:flex;gap:8px;overflow-x:auto;scrollbar-width:none">
+<sc-for list="{{ catChips }}" as="c" hint-placeholder-count="5"><button onClick="{{ c.tap }}" style="flex:none;height:32px;padding:0 10px;border-radius:999px;border:1px solid {{ c.bd }};background:{{ c.bg }};color:{{ c.fg }};font:500 12px var(--font-body);cursor:pointer;white-space:nowrap">{{ c.label }}</button></sc-for>
+</div>
+</div>
+<div style="flex:1;overflow-y:auto;scrollbar-width:none;padding:6px 16px 24px">
+<sc-if value="{{ searchIdle }}" hint-placeholder-val="{{ true }}">
+<sc-if value="{{ hasRecent }}">
+<h6 style="margin:16px 0 4px;color:var(--color-neutral-700)">{{ t.recent }}</h6>
+<sc-for list="{{ recent }}" as="r"><div onClick="{{ r.tap }}" style="display:flex;align-items:center;gap:12px;min-height:48px;border-bottom:1px solid var(--color-divider);cursor:pointer"><span style="color:var(--color-neutral-600)">{{ ic.clock }}</span><span style="flex:1;font-size:15px">{{ r.label }}</span><button onClick="{{ r.remove }}" aria-label="Remove" style="width:40px;height:40px;display:grid;place-items:center;background:none;border:0;cursor:pointer;color:var(--color-neutral-600)">{{ ic.xS }}</button></div></sc-for>
+</sc-if>
+<h6 style="margin:24px 0 10px;color:var(--color-neutral-700)">{{ t.trending }}</h6>
+<div style="display:flex;flex-wrap:wrap;gap:8px"><sc-for list="{{ trending }}" as="x"><button onClick="{{ x.tap }}" style="height:38px;padding:0 14px;display:flex;align-items:center;gap:6px;border:1px solid var(--color-divider);border-radius:999px;background:var(--color-card);font:500 14px var(--font-body);color:var(--color-text);cursor:pointer" style-hover="border-color:var(--color-accent);color:var(--color-accent-700)"><span style="color:var(--color-accent)">{{ ic.searchS }}</span>{{ x.label }}</button></sc-for></div>
+</sc-if>
+<sc-if value="{{ searchingV }}">
+<div style="display:flex;flex-direction:column">
+<sc-for list="{{ skel }}" as="k"><div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--color-divider)"><div style="width:76px;height:76px;background:var(--color-neutral-200)"></div><div style="flex:1;display:flex;flex-direction:column;gap:8px;justify-content:center"><div style="height:16px;width:60%;background:var(--color-neutral-200)"></div><div style="height:12px;width:80%;background:var(--color-neutral-200)"></div><div style="height:12px;width:40%;background:var(--color-neutral-200)"></div></div></div></sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ searchEmpty }}">
+<div style="padding:56px 16px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px">
+<div class="zcard" style="width:88px;height:88px;display:grid;place-items:center;color:var(--color-accent)">{{ ic.searchL }}</div>
+<h2 style="font-size:28px;margin:14px 0 0">{{ t.noResults }}</h2>
+<p style="color:var(--color-neutral-700);margin:0">{{ t.noResultsBody }}</p>
+<button class="btn btn-secondary" onClick="{{ clearFilters }}" style="height:46px;padding:0 20px;margin-top:8px;font-size:15px">{{ t.clear }}</button>
+</div>
+</sc-if>
+<sc-if value="{{ searchHas }}">
+<div style="font-size:13px;color:var(--color-neutral-700);padding:10px 0 2px">{{ resultLabel }}</div>
+<sc-for list="{{ storeResults }}" as="s">
+<div onClick="{{ s.open }}" style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--color-divider);cursor:pointer">
+<div class="zcard" style="width:76px;height:76px;flex:none;display:grid;place-items:center;color:var(--color-accent-500);background:var(--ph)">{{ s.iconM }}</div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;justify-content:center">
+<div style="display:flex;align-items:center;gap:8px"><span style="font-family:var(--font-heading);font-weight:600;font-size:19px">{{ s.name }}</span><sc-if value="{{ s.closed }}"><span class="tag tag-neutral">{{ s.closedLabel }}</span></sc-if></div>
+<span style="font-size:13px;color:var(--color-neutral-700)">{{ s.cuisine }}</span>
+<div style="display:flex;align-items:center;gap:10px;font-size:13px;font-weight:500"><span style="display:flex;align-items:center;gap:3px"><span style="color:var(--color-saffron)">{{ ic.starF }}</span>{{ s.rating }}</span><span style="display:flex;align-items:center;gap:4px">{{ ic.clockS }} {{ s.time }}</span><span style="display:flex;align-items:center;gap:4px;color:{{ s.feeColor }}">{{ ic.bikeS }} {{ s.fee }}</span></div>
+</div>
+</div>
+</sc-for>
+<sc-if value="{{ hasProdRes }}">
+<h6 style="margin:24px 0 2px;color:var(--color-neutral-700)">{{ t.products }}</h6>
+<sc-for list="{{ prodResults }}" as="p">
+<div onClick="{{ p.open }}" style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--color-divider);cursor:pointer">
+<div style="width:56px;height:56px;flex:none;display:grid;place-items:center;color:var(--color-accent-500);border-radius:var(--radius-md);background:var(--ph)">{{ p.iconM }}</div>
+<div style="flex:1;min-width:0"><div style="font-weight:500;font-size:15px">{{ p.name }}</div><div style="font-size:13px;color:var(--color-neutral-700)">{{ p.storeName }} · {{ p.priceStr }}</div></div>
+<button class="btn btn-primary" onClick="{{ p.add }}" aria-label="Add" style="width:40px;height:40px;padding:0">{{ ic.plus }}</button>
+</div>
+</sc-for>
+</sc-if>
+</sc-if>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ is.store }}">
+<div style="position:absolute;inset:0;display:flex;flex-direction:column">
+<div ref="{{ storeRef }}" onScroll="{{ onStoreScroll }}" style="flex:1;overflow-y:auto;position:relative;scrollbar-width:none">
+<div style="position:relative;height:210px;display:grid;place-items:center;color:var(--color-accent-500);border-bottom:1px solid var(--color-divider);background:var(--ph)">{{ cur.iconX }}
+<span style="position:absolute;bottom:10px;inset-inline-end:12px;font:500 10px ui-monospace,Menlo,monospace;letter-spacing:.04em;color:var(--color-accent-800)">{{ cur.img }}</span>
+<div style="position:absolute;top:6px;inset-inline:12px;display:flex;justify-content:space-between">
+<button onClick="{{ back }}" aria-label="Back" style="width:44px;height:44px;background:var(--color-card);border:0;border-radius:999px;box-shadow:var(--shadow-md);display:grid;place-items:center;cursor:pointer;color:var(--color-text)">{{ ic.back }}</button>
+<button onClick="{{ cur.fav }}" aria-label="Favorite" style="width:44px;height:44px;background:var(--color-card);border:0;border-radius:999px;box-shadow:var(--shadow-md);display:grid;place-items:center;cursor:pointer;color:{{ cur.favColor }}">{{ cur.heart }}</button>
+</div>
+</div>
+<div style="padding:0 16px">
+<div class="zcard" style="width:76px;height:76px;margin-top:-38px;border:4px solid var(--color-bg);box-shadow:var(--shadow-md);display:grid;place-items:center;font-family:var(--font-heading);font-weight:600;font-size:28px;color:var(--color-accent-700)">{{ cur.initials }}</div>
+<h1 style="font-size:34px;margin:12px 0 2px">{{ cur.name }}</h1>
+<div style="color:var(--color-neutral-700);font-size:14px">{{ cur.cuisine }} · {{ cur.area }}</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px">
+<div style="background:var(--color-card);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:10px 12px"><div style="display:flex;align-items:center;gap:4px;font-family:var(--font-heading);font-weight:600;font-size:18px"><span style="color:var(--color-saffron)">{{ ic.starFM }}</span>{{ cur.rating }}</div><div style="font-size:12px;color:var(--color-neutral-700)">{{ cur.reviews }} {{ t.ratings }}</div></div>
+<div style="background:var(--color-card);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:10px 12px"><div style="font-family:var(--font-heading);font-weight:600;font-size:18px">{{ cur.time }}</div><div style="font-size:12px;color:var(--color-neutral-700)">{{ t.delivery }}</div></div>
+<div style="background:var(--color-card);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:10px 12px"><div style="font-family:var(--font-heading);font-weight:600;font-size:18px;color:{{ cur.feeColor }}">{{ cur.fee }}</div><div style="font-size:12px;color:var(--color-neutral-700)">{{ cur.minStr }}</div></div>
+</div>
+<sc-if value="{{ curClosed }}"><div class="tag tag-neutral" style="display:flex;gap:8px;margin-top:12px;padding:10px 12px;font-size:14px">{{ ic.clockS }} {{ cur.closedLabel }}</div></sc-if>
+</div>
+<div style="position:sticky;top:0;z-index:5;background:var(--color-bg);border-bottom:1px solid var(--color-divider);margin-top:18px;display:flex;overflow-x:auto;scrollbar-width:none;padding:0 6px">
+<sc-for list="{{ storeTabs }}" as="tb" hint-placeholder-count="4"><button onClick="{{ tb.tap }}" style="flex:none;height:48px;padding:0 12px;background:none;border:0;border-bottom:2px solid {{ tb.bd }};color:{{ tb.fg }};font-family:var(--font-heading);font-weight:600;font-size:17px;cursor:pointer;white-space:nowrap">{{ tb.label }}</button></sc-for>
+</div>
+<div style="padding:0 16px 28px">
+<sc-for list="{{ storeSecs }}" as="sec">
+<div data-sec="{{ sec.id }}" style="padding-top:22px">
+<h3 style="font-size:23px;margin:0 0 2px">{{ sec.name }}</h3>
+<sc-for list="{{ sec.items }}" as="p">
+<div onClick="{{ p.open }}" style="display:flex;gap:14px;padding:16px 0;border-bottom:1px solid var(--color-divider);cursor:pointer">
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+<sc-if value="{{ p.popular }}"><span class="tag tag-accent" style="align-self:flex-start;font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:2px 6px">{{ t.popularTag }}</span></sc-if>
+<div style="font-weight:500;font-size:16px;line-height:1.3">{{ p.name }}</div>
+<div style="font-size:13px;color:var(--color-neutral-700);line-height:1.4">{{ p.desc }}</div>
+<div style="font-family:var(--font-heading);font-weight:600;font-size:18px;margin-top:2px">{{ p.priceStr }}</div>
+</div>
+<div style="position:relative;width:108px;height:108px;flex:none">
+<div class="zcard" style="position:absolute;inset:0;display:grid;place-items:center;color:var(--color-accent-500);background:var(--ph)">{{ p.icon }}<span style="position:absolute;top:6px;inset-inline-start:6px;font:500 9px ui-monospace,Menlo,monospace;color:var(--color-accent-800)">{{ p.img }}</span></div>
+<sc-if value="{{ p.showAdd }}"><button class="btn btn-primary" onClick="{{ p.add }}" aria-label="Add" style="position:absolute;bottom:-8px;inset-inline-end:-8px;width:42px;height:42px;padding:0;box-shadow:var(--shadow-md)">{{ ic.plus }}<sc-if value="{{ p.qtyBadge }}"><span style="position:absolute;top:-9px;inset-inline-start:-9px;min-width:20px;height:20px;border-radius:999px;background:var(--color-text);color:#fff;font:600 11px/20px var(--font-body);text-align:center">{{ p.qty }}</span></sc-if></button></sc-if>
+<sc-if value="{{ p.inCart }}"><div onClick="{{ stop }}" style="position:absolute;bottom:-8px;inset-inline-end:-8px;display:flex;align-items:center;background:var(--color-accent);color:#fff;border-radius:999px;box-shadow:var(--shadow-md);height:42px"><button onClick="{{ p.dec }}" aria-label="Remove one" style="width:38px;height:42px;display:grid;place-items:center;background:none;border:0;color:inherit;cursor:pointer">{{ p.decIcon }}</button><span style="min-width:18px;text-align:center;font-weight:600">{{ p.qty }}</span><button onClick="{{ p.inc }}" aria-label="Add one" style="width:38px;height:42px;display:grid;place-items:center;background:none;border:0;color:inherit;cursor:pointer">{{ ic.plusS }}</button></div></sc-if>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ is.product }}">
+<div style="position:absolute;inset:0;display:flex;flex-direction:column">
+<div style="flex:1;overflow-y:auto;scrollbar-width:none">
+<div style="position:relative;height:320px;display:grid;place-items:center;color:var(--color-accent-500);border-bottom:1px solid var(--color-divider);background:var(--ph)">{{ prod.iconX }}
+<span style="position:absolute;bottom:10px;inset-inline-start:12px;font:500 10px ui-monospace,Menlo,monospace;letter-spacing:.04em;color:var(--color-accent-800)">photo · {{ prod.img }}</span>
+<div style="position:absolute;top:6px;inset-inline:12px;display:flex;justify-content:space-between">
+<button onClick="{{ back }}" aria-label="Close" style="width:44px;height:44px;background:var(--color-card);border:0;border-radius:999px;box-shadow:var(--shadow-md);display:grid;place-items:center;cursor:pointer;color:var(--color-text)">{{ ic.x }}</button>
+<button onClick="{{ prod.fav }}" aria-label="Favorite" style="width:44px;height:44px;background:var(--color-card);border:0;border-radius:999px;box-shadow:var(--shadow-md);display:grid;place-items:center;cursor:pointer;color:{{ prod.favColor }}">{{ prod.heart }}</button>
+</div>
+</div>
+<div style="padding:20px 16px 4px">
+<div style="font-size:12px;color:var(--color-neutral-700);margin-bottom:6px">{{ prod.storeName }}</div>
+<h1 style="font-size:34px;margin:0 0 8px;text-wrap:balance">{{ prod.name }}</h1>
+<p style="font-size:15px;color:var(--color-neutral-700);margin:0 0 10px">{{ prod.desc }}</p>
+<div style="font-family:var(--font-heading);font-weight:600;font-size:26px;color:var(--color-accent-700)">{{ prod.priceStr }}</div>
+</div>
+<sc-for list="{{ groups }}" as="g">
+<div style="padding:22px 16px 0">
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px"><div><h4 style="margin:0;font-size:21px">{{ g.name }}</h4><div style="font-size:12px;color:var(--color-neutral-700)">{{ g.sub }}</div></div><span class="tag tag-neutral">{{ g.tag }}</span></div>
+<sc-for list="{{ g.choices }}" as="c"><label class="radio" style="display:flex;width:100%;min-height:52px;border-bottom:1px solid var(--color-divider);font-size:15px"><input type="{{ g.type }}" name="{{ g.id }}" checked="{{ c.checked }}" onChange="{{ c.pick }}"><span class="dot" style="border-radius:{{ g.dotR }}"></span><span style="flex:1">{{ c.label }}</span><span style="color:var(--color-neutral-700);font-size:14px">{{ c.extra }}</span></label></sc-for>
+</div>
+</sc-for>
+<div style="height:20px"></div>
+</div>
+<div style="display:flex;gap:12px;padding:12px 16px 30px;border-top:1px solid var(--color-divider);background:var(--color-bg)">
+<div style="display:flex;align-items:center;border:1px solid var(--color-divider);border-radius:999px;background:var(--color-card);height:54px">
+<button onClick="{{ qtyDec }}" aria-label="Less" style="width:46px;height:52px;display:grid;place-items:center;background:none;border:0;cursor:pointer;color:var(--color-text)">{{ ic.minus }}</button>
+<span style="min-width:26px;text-align:center;font-family:var(--font-heading);font-weight:600;font-size:18px">{{ qty }}</span>
+<button onClick="{{ qtyInc }}" aria-label="More" style="width:46px;height:52px;display:grid;place-items:center;background:none;border:0;cursor:pointer;color:var(--color-text)">{{ ic.plus }}</button>
+</div>
+<button class="btn btn-primary" onClick="{{ addProd }}" style="flex:1;height:54px;font-size:17px">{{ addProdLabel }}</button>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ is.cart }}">
+<div style="position:absolute;inset:0;display:flex;flex-direction:column">
+<div style="display:flex;align-items:center;gap:6px;padding:0 12px;height:56px;border-bottom:1px solid var(--color-divider)">
+<button class="btn btn-ghost btn-icon" onClick="{{ back }}" aria-label="Back" style="width:44px;height:44px;color:var(--color-text)">{{ ic.back }}</button>
+<div style="flex:1;min-width:0"><div style="font-family:var(--font-heading);font-weight:600;font-size:23px;line-height:1.1">{{ t.cart }}</div><div style="font-size:12px;color:var(--color-neutral-700)">{{ cartStoreName }}</div></div>
+</div>
+<sc-if value="{{ cartEmpty }}">
+<div style="flex:1;padding:64px 32px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px">
+<div class="zcard" style="width:96px;height:96px;display:grid;place-items:center;color:var(--color-accent)">{{ ic.bagL }}</div>
+<h2 style="font-size:30px;margin:16px 0 0">{{ t.emptyCart }}</h2>
+<p style="color:var(--color-neutral-700);margin:0;max-width:270px">{{ t.emptyCartBody }}</p>
+<button class="btn btn-primary" onClick="{{ browse }}" style="height:50px;padding:0 28px;margin-top:12px;font-size:16px">{{ t.browse }}</button>
+</div>
+</sc-if>
+<sc-if value="{{ cartHas }}">
+<div style="flex:1;overflow-y:auto;scrollbar-width:none;padding:0 16px 24px">
+<div style="display:flex;align-items:center;gap:8px;padding:12px 0 4px;font-size:13px;color:var(--color-neutral-700)">{{ ic.clockS }} {{ cartEta }}</div>
+<sc-for list="{{ lines }}" as="l">
+<div style="display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--color-divider);align-items:center">
+<div style="width:60px;height:60px;flex:none;display:grid;place-items:center;color:var(--color-accent-500);border-radius:var(--radius-md);background:var(--ph)">{{ l.icon }}</div>
+<div style="flex:1;min-width:0"><div style="font-weight:500;font-size:15px;line-height:1.3">{{ l.name }}</div><div style="font-size:12px;color:var(--color-neutral-700)">{{ l.optText }}</div><div style="font-family:var(--font-heading);font-weight:600;font-size:17px;margin-top:2px">{{ l.totalStr }}</div></div>
+<div style="display:flex;align-items:center;border:1px solid var(--color-divider);border-radius:999px;background:var(--color-card);height:40px;flex:none"><button onClick="{{ l.dec }}" aria-label="Less" style="width:38px;height:38px;display:grid;place-items:center;background:none;border:0;cursor:pointer;color:var(--color-text)">{{ l.decIcon }}</button><span style="min-width:20px;text-align:center;font-weight:600">{{ l.qty }}</span><button onClick="{{ l.inc }}" aria-label="More" style="width:38px;height:38px;display:grid;place-items:center;background:none;border:0;cursor:pointer;color:var(--color-text)">{{ ic.plusS }}</button></div>
+</div>
+</sc-for>
+<button class="btn btn-ghost" onClick="{{ addMore }}" style="margin-top:10px;font-size:15px;height:40px">{{ ic.plusS }} {{ t.addMore }}</button>
+<sc-if value="{{ belowMin }}"><div class="tag tag-accent" style="display:flex;margin-top:12px;padding:10px 12px;font-size:13px">{{ belowMinText }}</div></sc-if>
+<h6 style="margin:24px 0 8px;color:var(--color-neutral-700)">{{ t.promo }}</h6>
+<div style="display:flex;gap:8px"><input class="input" value="{{ promoInput }}" onChange="{{ onPromo }}" placeholder="MARHABA" style="min-height:48px;font-size:15px;letter-spacing:.06em"><button class="btn btn-secondary" onClick="{{ applyPromo }}" style="height:48px;padding:0 18px;font-size:15px;flex:none">{{ t.apply }}</button></div>
+<sc-if value="{{ promoMsg }}"><div style="display:flex;align-items:center;gap:6px;font-size:13px;margin-top:8px;color:{{ promoColor }}">{{ promoIcon }} {{ promoMsg }}</div></sc-if>
+<h6 style="margin:24px 0 8px;color:var(--color-neutral-700)">{{ t.address }}</h6>
+<button onClick="{{ openAddr }}" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;border:0;border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);background:var(--color-card);cursor:pointer;text-align:start;font:inherit;color:var(--color-text)" style-hover="border-color:var(--color-accent)"><span style="color:var(--color-accent)">{{ ic.pin }}</span><span style="flex:1;min-width:0"><span style="display:block;font-weight:600">{{ addrLabel }}</span><span style="display:block;font-size:13px;color:var(--color-neutral-700)">{{ addrStreet }}</span></span><span style="font-size:14px;color:var(--color-accent-700);font-weight:500">{{ t.change }}</span></button>
+<div style="margin-top:24px;display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{ sumRows }}" as="r"><div style="display:flex;justify-content:space-between;font-size:15px"><span style="color:var(--color-neutral-700)">{{ r.label }}</span><span style="color:{{ r.fg }};font-weight:500">{{ r.val }}</span></div></sc-for>
+<div style="display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--color-divider);padding-top:10px;margin-top:4px"><span style="font-family:var(--font-heading);font-weight:600;font-size:18px">{{ t.total }}</span><span style="font-family:var(--font-heading);font-weight:600;font-size:23px">{{ totalStr }}</span></div>
+</div>
+</div>
+<div style="padding:12px 16px 30px;border-top:1px solid var(--color-divider)">
+<button class="btn btn-primary" disabled="{{ cartBlocked }}" onClick="{{ goCheckout }}" style="width:100%;height:56px;justify-content:space-between;padding:0 18px;font-size:18px"><span>{{ t.placeOrder }}</span><span>{{ totalStr }}</span></button>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ is.checkout }}">
+<div style="position:absolute;inset:0;display:flex;flex-direction:column">
+<div style="display:flex;align-items:center;gap:6px;padding:0 12px;height:56px;border-bottom:1px solid var(--color-divider)">
+<button class="btn btn-ghost btn-icon" onClick="{{ back }}" aria-label="Back" style="width:44px;height:44px;color:var(--color-text)">{{ ic.back }}</button>
+<div style="font-family:var(--font-heading);font-weight:600;font-size:23px;flex:1">{{ t.checkout }}</div>
+</div>
+<div style="flex:1;overflow-y:auto;scrollbar-width:none;padding:0 16px 24px">
+<div style="padding:18px 0 16px;border-bottom:1px solid var(--color-divider)">
+<h6 style="margin:0 0 4px;color:var(--color-neutral-700)">{{ t.eta }}</h6>
+<div style="display:flex;align-items:center;gap:12px"><span style="color:var(--color-accent)">{{ ic.bikeM }}</span><span style="font-family:var(--font-heading);font-weight:600;font-size:42px;line-height:1">{{ etaBig }}</span></div>
+<div style="font-size:13px;color:var(--color-neutral-700);margin:4px 0 12px">{{ arriveText }}</div>
+<div class="seg"><label class="seg-opt" style="padding:8px 16px;font-size:14px"><input type="radio" name="when" checked="{{ whenNow }}" onChange="{{ setNow }}">{{ t.now }}</label><label class="seg-opt" style="padding:8px 16px;font-size:14px"><input type="radio" name="when" checked="{{ whenSched }}" onChange="{{ setSched }}">{{ t.schedule }}</label></div>
+<sc-if value="{{ whenSched }}"><div style="display:flex;gap:8px;margin-top:10px"><sc-for list="{{ slots }}" as="c"><button onClick="{{ c.tap }}" style="height:38px;padding:0 14px;border-radius:999px;border:1px solid {{ c.bd }};background:{{ c.bg }};color:{{ c.fg }};font:500 14px var(--font-body);cursor:pointer">{{ c.label }}</button></sc-for></div></sc-if>
+</div>
+<h6 style="margin:22px 0 8px;color:var(--color-neutral-700)">{{ t.address }}</h6>
+<div class="zcard" style="padding:14px;display:flex;gap:12px">
+<span style="color:var(--color-accent)">{{ ic.pin }}</span>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">{{ addrLabel }}</span><span style="font-size:14px">{{ addrStreet }}</span><span style="font-size:13px;color:var(--color-neutral-700)">{{ addrBuilding }}</span><span style="font-size:13px;color:var(--color-neutral-700)">{{ addrLandmark }}</span></div>
+<button class="btn btn-ghost" onClick="{{ openAddr }}" style="align-self:flex-start;font-size:14px">{{ t.change }}</button>
+</div>
+<h6 style="margin:22px 0 8px;color:var(--color-neutral-700)">{{ t.instr }}</h6>
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px"><sc-for list="{{ instrChips }}" as="c"><button onClick="{{ c.tap }}" style="height:36px;padding:0 12px;border-radius:999px;border:1px solid {{ c.bd }};background:{{ c.bg }};color:{{ c.fg }};font:500 13px var(--font-body);cursor:pointer">{{ c.label }}</button></sc-for></div>
+<textarea class="input" value="{{ instr }}" onChange="{{ onInstr }}" placeholder="{{ t.instrPh }}" style="min-height:72px"></textarea>
+<h6 style="margin:22px 0 4px;color:var(--color-neutral-700)">{{ t.payment }}</h6>
+<sc-for list="{{ pays }}" as="p"><label class="radio" style="display:flex;width:100%;min-height:60px;border-bottom:1px solid var(--color-divider);gap:12px"><input type="radio" name="pay" checked="{{ p.on }}" onChange="{{ p.pick }}"><span class="dot"></span><span style="color:var(--color-accent)">{{ p.icon }}</span><span style="flex:1;display:flex;flex-direction:column"><span style="font-weight:500;font-size:15px">{{ p.label }}</span><span style="font-size:12px;color:var(--color-neutral-700)">{{ p.sub }}</span></span></label></sc-for>
+<h6 style="margin:22px 0 8px;color:var(--color-neutral-700)">{{ t.summary }} · {{ cartStoreName }}</h6>
+<div style="display:flex;flex-direction:column;gap:6px;padding-bottom:10px;border-bottom:1px solid var(--color-divider)"><sc-for list="{{ summaryLines }}" as="r"><div style="display:flex;justify-content:space-between;gap:12px;font-size:14px"><span>{{ r.text }}</span><span style="flex:none">{{ r.val }}</span></div></sc-for></div>
+<div style="display:flex;flex-direction:column;gap:6px;padding-top:10px">
+<sc-for list="{{ sumRows }}" as="r"><div style="display:flex;justify-content:space-between;font-size:14px"><span style="color:var(--color-neutral-700)">{{ r.label }}</span><span style="color:{{ r.fg }};font-weight:500">{{ r.val }}</span></div></sc-for>
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px"><span style="font-family:var(--font-heading);font-weight:600;font-size:18px">{{ t.total }}</span><span style="font-family:var(--font-heading);font-weight:600;font-size:23px">{{ totalStr }}</span></div>
+</div>
+</div>
+<div style="padding:12px 16px 30px;border-top:1px solid var(--color-divider)">
+<button class="btn btn-primary" disabled="{{ placing }}" onClick="{{ placeOrder }}" style="width:100%;height:56px;font-size:18px">{{ confirmLabel }}</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ is.tracking }}">
+<div style="position:absolute;inset:0;display:flex;flex-direction:column">
+<div dir="ltr" style="position:relative;height:320px;flex:none;background:var(--color-surface);border-bottom:1px solid var(--color-divider);overflow:hidden">
+<svg width="390" height="320" viewBox="0 0 390 320" style="position:absolute;inset:0">
+<defs><pattern id="zqh" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" style="fill:var(--color-accent-100)"></rect><line x1="0" y1="0" x2="0" y2="8" style="stroke:var(--color-accent-200);stroke-width:2"></line></pattern></defs>
+<rect x="205" y="163" width="92" height="54" rx="10" style="fill:var(--color-accent-2-100);stroke:var(--color-accent-2-300)"></rect>
+<path d="M0 150H390M0 230H390M0 60H390M70 0V320M190 0V320M310 0V320M250 0V320" style="stroke:var(--color-bg);stroke-width:14;fill:none"></path>
+<path d="M-10 318L400 10" style="stroke:var(--color-bg);stroke-width:22;fill:none"></path>
+<path d="M-10 318L400 10" style="stroke:var(--color-divider);stroke-width:1;stroke-dasharray:6 6;fill:none"></path>
+<polyline points="70,80 70,150 190,150 190,230 310,230 310,262" style="fill:none;stroke:var(--color-accent);stroke-width:3;stroke-dasharray:7 5"></polyline>
+<text x="84" y="145" style="font:500 9px ui-monospace,Menlo,monospace;fill:var(--color-neutral-600);letter-spacing:.06em">RUE DE LA LIBERTÉ</text>
+<text x="214" y="225" style="font:500 9px ui-monospace,Menlo,monospace;fill:var(--color-neutral-600);letter-spacing:.06em">BD ZERKTOUNI</text>
+<text x="222" y="194" style="font:500 9px ui-monospace,Menlo,monospace;fill:var(--color-accent-2-700);letter-spacing:.06em">JARDIN</text>
+<text x="200" y="112" transform="rotate(-37 200 112)" style="font:500 9px ui-monospace,Menlo,monospace;fill:var(--color-neutral-600);letter-spacing:.06em">AV. MOHAMMED V</text>
+<rect x="58" y="68" width="24" height="24" rx="8" style="fill:var(--color-text)"></rect>
+<rect x="65" y="75" width="10" height="10" style="fill:var(--color-bg)"></rect>
+<circle cx="310" cy="266" r="16" style="fill:var(--color-accent-200);stroke:var(--color-accent)"></circle>
+<circle cx="310" cy="266" r="6" style="fill:var(--color-accent-800)"></circle>
+</svg>
+<div style="position:absolute;left:{{ dx }}px;top:{{ dy }}px;transform:translate(-50%,-50%);width:40px;height:40px;background:var(--color-accent);color:#fff;display:grid;place-items:center;border:3px solid #fff;border-radius:50%;box-shadow:var(--shadow-md);transition:left 1s linear,top 1s linear">{{ ic.bike }}</div>
+<div style="position:absolute;top:6px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:center">
+<button onClick="{{ back }}" aria-label="Back" style="width:44px;height:44px;background:var(--color-card);border:0;border-radius:999px;box-shadow:var(--shadow-md);display:grid;place-items:center;cursor:pointer;color:var(--color-text)">{{ ic.chevL }}</button>
+<span style="padding:6px 12px;border-radius:999px;background:var(--color-card);box-shadow:var(--shadow-sm);font:500 12px ui-monospace,Menlo,monospace">{{ activeId }}</span>
+</div>
+</div>
+<div style="flex:1;overflow-y:auto;scrollbar-width:none">
+<sc-if value="{{ notDelivered }}" hint-placeholder-val="{{ true }}">
+<div style="padding:16px 16px 14px;border-bottom:1px solid var(--color-divider)">
+<h6 style="margin:0;color:var(--color-neutral-700)">{{ t.arriving }}</h6>
+<div style="display:flex;align-items:baseline;gap:6px"><span style="font-family:var(--font-heading);font-weight:600;font-size:56px;line-height:1">{{ etaMin }}</span><span style="font-family:var(--font-heading);font-weight:600;font-size:24px">{{ t.min }}</span><span style="margin-inline-start:auto;font-size:14px;color:var(--color-neutral-700)">{{ arriveAt }}</span></div>
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:10px"><sc-for list="{{ progSegs }}" as="g"><span style="height:5px;border-radius:3px;background:{{ g.bg }};transition:background .4s"></span></sc-for></div>
+</div>
+</sc-if>
+<sc-if value="{{ delivered }}">
+<div style="padding:18px 16px;border-bottom:1px solid var(--color-divider);display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;align-items:center;gap:10px"><span style="width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--color-accent-2);color:#fff">{{ ic.check }}</span><span style="font-family:var(--font-heading);font-weight:600;font-size:30px">{{ t.s4 }} · {{ t.s4b }}</span></div>
+<div style="font-size:15px;margin-top:6px">{{ t.rate }}</div>
+<div style="display:flex;gap:6px;color:var(--color-saffron)"><sc-for list="{{ stars }}" as="st"><button onClick="{{ st.tap }}" aria-label="Rate" style="width:46px;height:46px;display:grid;place-items:center;background:none;border:0;cursor:pointer;color:inherit">{{ st.icon }}</button></sc-for></div>
+<button class="btn btn-primary" onClick="{{ finishOrder }}" style="height:50px;font-size:17px;margin-top:4px">{{ t.done }}</button>
+</div>
+</sc-if>
+<div style="padding:18px 16px 4px">
+<sc-for list="{{ steps }}" as="st" hint-placeholder-count="5">
+<div style="display:flex;gap:14px">
+<div style="display:flex;flex-direction:column;align-items:center;width:16px;flex:none"><span style="width:14px;height:14px;border-radius:50%;margin-top:4px;border:1.5px solid {{ st.dotBd }};background:{{ st.dotBg }};flex:none;transition:all .4s"></span><sc-if value="{{ st.notLast }}"><span style="flex:1;width:1.5px;background:{{ st.lineBg }};min-height:22px"></span></sc-if></div>
+<div style="flex:1;padding-bottom:14px;display:flex;justify-content:space-between;gap:8px"><div><div style="font-size:15px;font-weight:{{ st.fw }};color:{{ st.fg }}">{{ st.label }}</div><sc-if value="{{ st.sub }}"><div style="font-size:13px;color:var(--color-neutral-700)">{{ st.sub }}</div></sc-if></div><div style="font-size:13px;color:var(--color-neutral-600)">{{ st.time }}</div></div>
+</div>
+</sc-for>
+</div>
+<div class="zcard" style="margin:6px 16px 16px;padding:14px;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:12px">
+<div style="width:52px;height:52px;flex:none;display:grid;place-items:center;font-family:var(--font-heading);font-weight:600;font-size:20px;color:var(--color-accent-800);border-radius:999px;background:var(--ph)">YB</div>
+<div style="flex:1;min-width:0"><div style="font-size:12px;color:var(--color-neutral-700)">{{ t.rider }}</div><div style="font-family:var(--font-heading);font-weight:600;font-size:20px">Youssef B.</div><div style="font-size:13px;color:var(--color-neutral-700);display:flex;align-items:center;gap:4px"><span style="color:var(--color-saffron)">{{ ic.starF }}</span>4.9 · Honda Vision · <span dir="ltr">48213-أ-7</span></div></div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+<button class="btn btn-secondary" onClick="{{ callDriver }}" style="height:48px;font-size:16px">{{ ic.phoneS }} {{ t.call }}</button>
+<button class="btn btn-secondary" onClick="{{ chatDriver }}" style="height:48px;font-size:16px">{{ ic.msgS }} {{ t.chat }}</button>
+</div>
+</div>
+<div style="margin:0 16px 28px;padding:12px 0;border-top:1px solid var(--color-divider);display:flex;justify-content:space-between;font-size:14px"><span><span style="font-weight:600">{{ activeStore }}</span> · {{ activeItems }} · {{ activePay }}</span><span style="font-weight:600">{{ activeTotal }}</span></div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ is.orders }}">
+<div style="position:absolute;inset:0;display:flex;flex-direction:column">
+<div style="padding:8px 16px 12px;border-bottom:1px solid var(--color-divider)"><h1 style="font-size:36px;margin:0">{{ t.orders }}</h1></div>
+<div style="flex:1;overflow-y:auto;scrollbar-width:none;padding:0 16px 24px">
+<sc-if value="{{ hasActive }}">
+<h6 style="margin:20px 0 10px;color:var(--color-neutral-700)">{{ t.current }}</h6>
+<div class="zcard" onClick="{{ goTrack }}" style="padding:14px;display:flex;flex-direction:column;gap:10px;cursor:pointer" style-hover="border-color:var(--color-accent)">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-family:var(--font-heading);font-weight:600;font-size:18px">{{ activeStore }}</span><span style="font:500 11px ui-monospace,Menlo,monospace;color:var(--color-neutral-600)">{{ activeId }}</span></div>
+<div style="display:flex;align-items:baseline;gap:8px"><span class="tag tag-accent">{{ activeStatus }}</span><span style="font-size:13px;color:var(--color-neutral-700)">{{ arriveAt }}</span></div>
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px"><sc-for list="{{ progSegs }}" as="g"><span style="height:5px;border-radius:3px;background:{{ g.bg }}"></span></sc-for></div>
+<button class="btn btn-primary" onClick="{{ goTrack }}" style="height:46px;font-size:16px">{{ ic.navS }} {{ t.track }}</button>
+</div>
+</sc-if>
+<h6 style="margin:24px 0 2px;color:var(--color-neutral-700)">{{ t.previous }}</h6>
+<sc-if value="{{ noOrders }}"><div style="padding:40px 0;text-align:center;color:var(--color-neutral-700)"><div style="font-family:var(--font-heading);font-weight:600;font-size:24px;color:var(--color-text)">{{ t.noOrders }}</div>{{ t.noOrdersBody }}</div></sc-if>
+<sc-for list="{{ pastOrders }}" as="o" hint-placeholder-count="3">
+<div style="padding:16px 0;border-bottom:1px solid var(--color-divider);display:flex;gap:12px">
+<div style="width:56px;height:56px;flex:none;display:grid;place-items:center;color:var(--color-accent-500);border-radius:var(--radius-md);background:var(--ph)">{{ o.iconM }}</div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+<div style="display:flex;justify-content:space-between;gap:8px"><span style="font-family:var(--font-heading);font-weight:600;font-size:19px">{{ o.store }}</span><span style="font-weight:600;font-size:15px">{{ o.totalStr }}</span></div>
+<span style="font-size:12px;color:var(--color-neutral-700)">{{ o.date }} · {{ t.s4 }}</span>
+<span style="font-size:13px;color:var(--color-neutral-800)">{{ o.itemsText }}</span>
+<div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-secondary" onClick="{{ o.reorder }}" style="height:38px;padding:0 14px;font-size:14px">{{ ic.rotateS }} {{ t.reorder }}</button><button class="btn btn-ghost" onClick="{{ o.open }}" style="height:38px;font-size:14px">{{ t.details }}</button></div>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ is.orderDetail }}">
+<div style="position:absolute;inset:0;display:flex;flex-direction:column">
+<div style="display:flex;align-items:center;gap:6px;padding:0 12px;height:56px;border-bottom:1px solid var(--color-divider)">
+<button class="btn btn-ghost btn-icon" onClick="{{ back }}" aria-label="Back" style="width:44px;height:44px;color:var(--color-text)">{{ ic.back }}</button>
+<div style="flex:1"><div style="font-family:var(--font-heading);font-weight:600;font-size:23px;line-height:1.1">{{ t.orderDetails }}</div><div style="font:500 11px ui-monospace,Menlo,monospace;color:var(--color-neutral-600)">{{ od.id }}</div></div>
+</div>
+<div style="flex:1;overflow-y:auto;scrollbar-width:none;padding:18px 16px 24px">
+<div style="display:flex;align-items:center;gap:12px">
+<div style="width:56px;height:56px;flex:none;display:grid;place-items:center;color:var(--color-accent-500);border-radius:var(--radius-md);background:var(--ph)">{{ od.iconM }}</div>
+<div><div style="font-family:var(--font-heading);font-weight:600;font-size:24px">{{ od.store }}</div><div style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--color-neutral-700)"><span class="tag tag-accent">{{ od.status }}</span>{{ od.date }}</div></div>
+</div>
+<h6 style="margin:24px 0 8px;color:var(--color-neutral-700)">{{ t.summary }}</h6>
+<div style="display:flex;flex-direction:column;gap:6px;padding-bottom:10px;border-bottom:1px solid var(--color-divider)"><sc-for list="{{ od.lines }}" as="r"><div style="display:flex;justify-content:space-between;gap:12px;font-size:15px"><span>{{ r.text }}</span><span style="flex:none">{{ r.val }}</span></div></sc-for></div>
+<div style="display:flex;flex-direction:column;gap:6px;padding-top:10px">
+<sc-for list="{{ od.sum }}" as="r"><div style="display:flex;justify-content:space-between;font-size:14px"><span style="color:var(--color-neutral-700)">{{ r.label }}</span><span style="color:{{ r.fg }};font-weight:500">{{ r.val }}</span></div></sc-for>
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px"><span style="font-family:var(--font-heading);font-weight:600;font-size:18px">{{ t.total }}</span><span style="font-family:var(--font-heading);font-weight:600;font-size:23px">{{ od.total }}</span></div>
+</div>
+<h6 style="margin:24px 0 8px;color:var(--color-neutral-700)">{{ t.address }}</h6>
+<div style="display:flex;gap:10px;font-size:14px"><span style="color:var(--color-accent)">{{ ic.pinS }}</span>{{ od.addr }}</div>
+<h6 style="margin:20px 0 8px;color:var(--color-neutral-700)">{{ t.payment }}</h6>
+<div style="display:flex;gap:10px;font-size:14px"><span style="color:var(--color-accent)">{{ ic.cashS }}</span>{{ od.pay }}</div>
+</div>
+<div style="padding:12px 16px 30px;border-top:1px solid var(--color-divider);display:grid;grid-template-columns:1fr 1.4fr;gap:10px">
+<button class="btn btn-secondary" onClick="{{ getHelp }}" style="height:54px;font-size:16px">{{ ic.helpS }} {{ t.getHelp }}</button>
+<button class="btn btn-primary" onClick="{{ odReorder }}" style="height:54px;font-size:17px">{{ ic.rotateS }} {{ t.reorder }}</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ is.favorites }}">
+<div style="position:absolute;inset:0;display:flex;flex-direction:column">
+<div style="padding:8px 16px 12px;border-bottom:1px solid var(--color-divider);display:flex;flex-direction:column;gap:10px">
+<h1 style="font-size:36px;margin:0">{{ t.favorites }}</h1>
+<div class="seg" style="align-self:flex-start"><sc-for list="{{ favTabs }}" as="f"><label class="seg-opt" style="padding:8px 18px;font-size:14px"><input type="radio" name="favtab" checked="{{ f.on }}" onChange="{{ f.pick }}">{{ f.label }}</label></sc-for></div>
+</div>
+<div style="flex:1;overflow-y:auto;scrollbar-width:none;padding:0 16px 24px">
+<sc-if value="{{ favStores }}" hint-placeholder-val="{{ true }}">
+<sc-if value="{{ favStoresEmpty }}"><div style="padding:64px 16px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px"><div class="zcard" style="width:88px;height:88px;display:grid;place-items:center;color:var(--color-accent)">{{ ic.heartL }}</div><h2 style="font-size:28px;margin:14px 0 0">{{ t.favEmpty }}</h2><p style="color:var(--color-neutral-700);margin:0">{{ t.favEmptyBody }}</p></div></sc-if>
+<sc-for list="{{ favStoreList }}" as="s">
+<div onClick="{{ s.open }}" style="display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--color-divider);cursor:pointer;align-items:center">
+<div class="zcard" style="width:76px;height:76px;flex:none;display:grid;place-items:center;color:var(--color-accent-500);background:var(--ph)">{{ s.iconM }}</div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-family:var(--font-heading);font-weight:600;font-size:19px">{{ s.name }}</span><span style="font-size:13px;color:var(--color-neutral-700)">{{ s.cuisine }}</span><div style="display:flex;align-items:center;gap:10px;font-size:13px;font-weight:500"><span style="display:flex;align-items:center;gap:3px"><span style="color:var(--color-saffron)">{{ ic.starF }}</span>{{ s.rating }}</span><span style="display:flex;align-items:center;gap:4px">{{ ic.clockS }} {{ s.time }}</span></div></div>
+<button onClick="{{ s.fav }}" aria-label="Remove favorite" style="width:44px;height:44px;display:grid;place-items:center;background:var(--color-accent-100);border:0;border-radius:999px;cursor:pointer;color:{{ s.favColor }}">{{ s.heart }}</button>
+</div>
+</sc-for>
+</sc-if>
+<sc-if value="{{ favProds }}">
+<sc-if value="{{ favProdsEmpty }}"><div style="padding:64px 16px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px"><div class="zcard" style="width:88px;height:88px;display:grid;place-items:center;color:var(--color-accent)">{{ ic.heartL }}</div><h2 style="font-size:28px;margin:14px 0 0">{{ t.favEmpty }}</h2><p style="color:var(--color-neutral-700);margin:0">{{ t.favEmptyBody }}</p></div></sc-if>
+<sc-for list="{{ favProdList }}" as="p">
+<div onClick="{{ p.open }}" style="display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--color-divider);cursor:pointer">
+<div style="width:64px;height:64px;flex:none;display:grid;place-items:center;color:var(--color-accent-500);border-radius:var(--radius-md);background:var(--ph)">{{ p.iconM }}</div>
+<div style="flex:1;min-width:0"><div style="font-weight:500;font-size:15px">{{ p.name }}</div><div style="font-size:13px;color:var(--color-neutral-700)">{{ p.storeName }}</div><div style="font-family:var(--font-heading);font-weight:600;font-size:17px">{{ p.priceStr }}</div></div>
+<button onClick="{{ p.fav }}" aria-label="Remove favorite" style="width:40px;height:40px;display:grid;place-items:center;background:none;border:0;cursor:pointer;color:{{ p.favColor }}">{{ p.heart }}</button>
+<button class="btn btn-primary" onClick="{{ p.add }}" aria-label="Add" style="width:40px;height:40px;padding:0">{{ ic.plus }}</button>
+</div>
+</sc-for>
+</sc-if>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ is.profile }}">
+<div style="position:absolute;inset:0;display:flex;flex-direction:column">
+<div style="flex:1;overflow-y:auto;scrollbar-width:none;padding-bottom:24px">
+<div style="padding:12px 16px 20px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--color-divider)">
+<div class="zcard" style="width:68px;height:68px;flex:none;display:grid;place-items:center;font-family:var(--font-heading);font-weight:600;font-size:26px;color:var(--color-accent-700)">SE</div>
+<div style="flex:1"><div style="font-family:var(--font-heading);font-weight:600;font-size:26px;line-height:1.1">Salma El Amrani</div><div dir="ltr" style="font-size:14px;color:var(--color-neutral-700);text-align:start">+212 6 61 23 45 67</div></div>
+</div>
+<sc-for list="{{ profileRows }}" as="r"><button onClick="{{ r.tap }}" style="display:flex;align-items:center;gap:14px;width:100%;min-height:62px;padding:8px 16px;background:none;border:0;border-bottom:1px solid var(--color-divider);cursor:pointer;font:inherit;color:var(--color-text);text-align:start" style-hover="background:var(--color-accent-100)"><span style="color:var(--color-accent)">{{ r.icon }}</span><span style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-size:15px;font-weight:500">{{ r.label }}</span><span style="font-size:12px;color:var(--color-neutral-700);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.sub }}</span></span><span style="color:var(--color-neutral-500)">{{ ic.fwdS }}</span></button></sc-for>
+<div style="display:flex;align-items:center;gap:14px;min-height:62px;padding:8px 16px;border-bottom:1px solid var(--color-divider)"><span style="color:var(--color-accent)">{{ ic.bell }}</span><span style="flex:1;font-size:15px;font-weight:500">{{ t.notifications }}</span><button onClick="{{ toggleNotif }}" aria-label="Toggle notifications" style="width:50px;height:30px;border-radius:999px;border:1px solid {{ notifBd }};background:{{ notifBg }};position:relative;cursor:pointer;transition:background .2s"><span style="position:absolute;top:4px;left:{{ notifX }};width:20px;height:20px;border-radius:50%;background:{{ notifKnob }};transition:left .2s"></span></button></div>
+<div style="display:flex;align-items:center;gap:14px;min-height:62px;padding:8px 16px;border-bottom:1px solid var(--color-divider)"><span style="color:var(--color-accent)">{{ ic.globe }}</span><span style="flex:1;font-size:15px;font-weight:500">{{ t.language }}</span><div class="seg"><sc-for list="{{ langs }}" as="l"><label class="seg-opt" style="padding:6px 10px;font-size:13px"><input type="radio" name="lang-prof" checked="{{ l.on }}" onChange="{{ l.pick }}">{{ l.short }}</label></sc-for></div></div>
+<sc-for list="{{ profileRows2 }}" as="r"><button onClick="{{ r.tap }}" style="display:flex;align-items:center;gap:14px;width:100%;min-height:58px;padding:8px 16px;background:none;border:0;border-bottom:1px solid var(--color-divider);cursor:pointer;font:inherit;color:var(--color-text);text-align:start" style-hover="background:var(--color-accent-100)"><span style="color:var(--color-accent)">{{ r.icon }}</span><span style="flex:1;font-size:15px;font-weight:500">{{ r.label }}</span><span style="color:var(--color-neutral-500)">{{ ic.fwdS }}</span></button></sc-for>
+<button onClick="{{ logout }}" style="display:flex;align-items:center;gap:14px;width:100%;min-height:58px;padding:8px 16px;background:none;border:0;cursor:pointer;font:inherit;font-size:15px;font-weight:500;color:var(--color-accent-700);text-align:start">{{ ic.logout }} {{ t.logout }}</button>
+<div style="padding:16px;font:500 11px ui-monospace,Menlo,monospace;color:var(--color-neutral-600)">YALLO 1.0 · MARRAKECH · CASABLANCA · RABAT</div>
+</div>
+</div>
+</sc-if>
+<div style="position:absolute;left:16px;right:16px;bottom:12px;z-index:50;display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:var(--radius-md);background:var(--color-neutral-900);color:var(--color-bg);font-size:14px;box-shadow:var(--shadow-lg);opacity:{{ toastOp }};transform:{{ toastTf }};transition:opacity .25s,transform .25s;pointer-events:none">{{ ic.checkS }} {{ toastMsg }}</div>
+<div style="position:absolute;inset:0;z-index:40;pointer-events:{{ sheetPE }}">
+<div onClick="{{ closeSheet }}" style="position:absolute;inset:0;background:color-mix(in srgb,var(--color-neutral-900) 45%,transparent);opacity:{{ sheetOp }};transition:opacity .25s"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;max-height:88%;display:flex;flex-direction:column;background:var(--color-bg);border-radius:24px 24px 0 0;box-shadow:var(--shadow-lg);transform:{{ sheetTf }};transition:transform .32s cubic-bezier(.2,.8,.2,1)">
+<div style="display:flex;justify-content:center;padding:8px 0 4px"><span style="width:40px;height:5px;border-radius:3px;background:var(--color-neutral-300)"></span></div>
+<div style="overflow-y:auto;scrollbar-width:none;padding:4px 16px 34px">
+<sc-if value="{{ sh.address }}">
+<h3 style="font-size:27px;margin:4px 0 12px">{{ t.address }}</h3>
+<button class="btn btn-secondary" onClick="{{ useLocation }}" style="width:100%;height:48px;justify-content:flex-start;gap:10px;font-size:15px;padding:0 14px"><span style="color:var(--color-accent)">{{ ic.nav }}</span>{{ t.useLoc }}</button>
+<sc-for list="{{ addrList }}" as="a"><label class="radio" style="display:flex;width:100%;padding:14px 0;border-bottom:1px solid var(--color-divider);align-items:flex-start"><input type="radio" name="addr" checked="{{ a.on }}" onChange="{{ a.pick }}"><span class="dot" style="margin-top:3px"></span><span style="flex:1;display:flex;flex-direction:column;gap:1px"><span style="font-weight:600;font-size:15px">{{ a.label }}</span><span style="font-size:13px">{{ a.line }}</span><span style="font-size:12px;color:var(--color-neutral-700)">{{ a.extra }}</span></span></label></sc-for>
+<button class="btn btn-ghost" onClick="{{ openNewAddr }}" style="margin-top:10px;font-size:15px;height:44px">{{ ic.plusS }} {{ t.addNew }}</button>
+</sc-if>
+<sc-if value="{{ sh.newAddress }}">
+<h3 style="font-size:27px;margin:4px 0 12px">{{ t.addNew }}</h3>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div class="field"><label>{{ t.city }}</label><div class="seg"><sc-for list="{{ naCity }}" as="c"><label class="seg-opt" style="padding:8px 14px;font-size:14px"><input type="radio" name="nacity" checked="{{ c.on }}" onChange="{{ c.pick }}">{{ c.label }}</label></sc-for></div></div>
+<div class="field"><label>{{ t.district }}</label><input class="input" value="{{ na.district }}" onChange="{{ naDistrict }}" placeholder="Guéliz, Maârif, Agdal…" style="min-height:46px;font-size:15px"></div>
+<div class="field"><label>{{ t.street }}</label><input class="input" value="{{ na.street }}" onChange="{{ naStreet }}" placeholder="12 Rue de la Liberté" style="min-height:46px;font-size:15px"></div>
+<div class="field"><label>{{ t.building }}</label><input class="input" value="{{ na.building }}" onChange="{{ naBuilding }}" placeholder="Imm. 4, 2e étage, Appt 8" style="min-height:46px;font-size:15px"></div>
+<div class="field"><label>{{ t.landmark }}</label><input class="input" value="{{ na.landmark }}" onChange="{{ naLandmark }}" placeholder="{{ t.landmarkPh }}" style="min-height:46px;font-size:15px"></div>
+<div class="field"><label>{{ t.label }}</label><input class="input" value="{{ na.label }}" onChange="{{ naLabel }}" placeholder="Home, Work, Dar lwalida…" style="min-height:46px;font-size:15px"></div>
+<button class="btn btn-primary" disabled="{{ naInvalid }}" onClick="{{ saveAddr }}" style="height:52px;font-size:17px;margin-top:4px">{{ t.save }}</button>
+</div>
+</sc-if>
+<sc-if value="{{ sh.sort }}">
+<h3 style="font-size:27px;margin:4px 0 8px">{{ t.sort }}</h3>
+<sc-for list="{{ sortOpts }}" as="o"><label class="radio" style="display:flex;width:100%;min-height:54px;border-bottom:1px solid var(--color-divider);font-size:15px"><input type="radio" name="sort" checked="{{ o.on }}" onChange="{{ o.pick }}"><span class="dot"></span>{{ o.label }}</label></sc-for>
+</sc-if>
+<sc-if value="{{ sh.newCart }}">
+<h3 style="font-size:27px;margin:4px 0 6px">{{ t.newCartT }}</h3>
+<p style="color:var(--color-neutral-700);margin:0 0 18px">{{ newCartBody }}</p>
+<div style="display:grid;grid-template-columns:1fr 1.4fr;gap:10px"><button class="btn btn-secondary" onClick="{{ closeSheet }}" style="height:52px;font-size:16px">{{ t.cancel }}</button><button class="btn btn-primary" onClick="{{ confirmNewCart }}" style="height:52px;font-size:16px">{{ t.newCartOk }}</button></div>
+</sc-if>
+<sc-if value="{{ sh.chat }}">
+<div style="display:flex;align-items:center;gap:10px;margin:4px 0 12px"><span style="width:40px;height:40px;display:grid;place-items:center;font-family:var(--font-heading);font-weight:600;color:var(--color-accent-800);border-radius:999px;background:var(--color-accent-100)">YB</span><div><div style="font-family:var(--font-heading);font-weight:600;font-size:21px;line-height:1">Youssef B.</div><div style="font-size:12px;color:var(--color-neutral-700)">{{ t.rider }} · {{ activeStatus }}</div></div></div>
+<div style="display:flex;flex-direction:column;gap:8px;min-height:160px;padding:8px 0 14px">
+<sc-for list="{{ chatMsgs }}" as="m"><div style="align-self:{{ m.align }};max-width:78%;padding:9px 14px;border-radius:18px;font-size:14px;border:1px solid {{ m.bd }};background:{{ m.bg }};color:{{ m.fg }}">{{ m.text }}</div></sc-for>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px"><sc-for list="{{ quickReplies }}" as="r"><button onClick="{{ r.tap }}" style="min-height:38px;padding:6px 12px;border-radius:999px;border:1px solid var(--color-accent);background:none;color:var(--color-accent-700);font:500 13px var(--font-body);cursor:pointer;text-align:start">{{ r.label }}</button></sc-for></div>
+</sc-if>
+<sc-if value="{{ sh.payments }}">
+<h3 style="font-size:27px;margin:4px 0 8px">{{ t.payments }}</h3>
+<sc-for list="{{ payList }}" as="p"><div style="display:flex;align-items:center;gap:12px;min-height:60px;border-bottom:1px solid var(--color-divider)"><span style="color:var(--color-accent)">{{ p.icon }}</span><span style="flex:1;display:flex;flex-direction:column"><span style="font-weight:500">{{ p.label }}</span><span style="font-size:12px;color:var(--color-neutral-700)">{{ p.sub }}</span></span></div></sc-for>
+<button class="btn btn-ghost" onClick="{{ addCard }}" style="margin-top:10px;font-size:15px;height:44px">{{ ic.plusS }} {{ t.addCard }}</button>
+</sc-if>
+</div>
+</div>
+</div>
+</div>
+<sc-if value="{{ showCartBar }}">
+<div style="flex:none;padding:8px 12px;border-top:1px solid var(--color-divider);background:var(--color-bg)">
+<button class="btn btn-primary" onClick="{{ goCart }}" style="width:100%;height:54px;justify-content:space-between;padding:0 16px;font-size:17px"><span style="display:flex;align-items:center;gap:10px"><span style="min-width:26px;height:26px;border-radius:999px;background:rgba(255,255,255,.22);display:grid;place-items:center;font-size:14px">{{ cartCount }}</span>{{ cartBarLabel }}</span><span>{{ totalStr }}</span></button>
+</div>
+</sc-if>
+<sc-if value="{{ cartBarSpacer }}"><div style="height:22px;flex:none"></div></sc-if>
+<sc-if value="{{ showNav }}">
+<nav style="flex:none;display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--color-divider);background:var(--color-bg);padding:0 4px 24px">
+<sc-for list="{{ navItems }}" as="n" hint-placeholder-count="5"><button onClick="{{ n.go }}" style="background:none;border:0;border-top:2px solid {{ n.bar }};display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 0 4px;min-height:52px;color:{{ n.color }};font:500 11px var(--font-body);cursor:pointer;position:relative"><span style="position:relative">{{ n.icon }}<sc-if value="{{ n.dot }}"><span style="position:absolute;top:-2px;right:-4px;width:8px;height:8px;border-radius:50%;background:var(--color-accent)"></span></sc-if></span>{{ n.label }}</button></sc-for>
+</nav>
+</sc-if>
+<div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:134px;height:5px;border-radius:3px;background:var(--color-text);z-index:60;pointer-events:none"></div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Paprika&quot;,&quot;Saffron&quot;,&quot;Majorelle blue&quot;],&quot;default&quot;:&quot;Paprika&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Look&quot;},&quot;networkError&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;States&quot;},&quot;showScreenIndex&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Presentation&quot;},&quot;startScreen&quot;:{&quot;editor&quot;:null,&quot;default&quot;:null,&quot;tsType&quot;:&quot;string&quot;},&quot;bare&quot;:{&quot;editor&quot;:null,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  D = this.buildData();
+  IC = this.buildIcons();
+  rootRef = React.createRef();
+  storeRef = React.createRef();
+  searchRef = React.createRef();
+  state = this.initState();
+
+  initState(lang) {
+    return {
+      screen: 'onb', stack: [], onb: 0, authStep: 'phone', phoneNum: '', otp: '', lang: lang || 'en',
+      addrId: 'a1', addresses: this.D.addresses.slice(),
+      cart: { storeId: null, lines: [] }, pending: null,
+      favS: ['s1', 's4', 's6'], favP: ['p4-1', 'p1-2', 'p7-2'],
+      q: '', recent: ['Tajine', 'Paracetamol', 'Msemen'], fCat: null, fRating: false, fFast: false, fPrice: 0, sort: 'rec', searching: false,
+      storeId: 's1', storeTab: null, prodId: 'p1-1', sel: {}, qty: 1,
+      promoInput: '', promo: null, promoMsg: '',
+      pay: 'cash', instr: '', instrChips: [], when: 'now', slot: 0,
+      placing: false, active: null, trackT: 0, rating: 0, chat: [],
+      orders: this.D.pastOrders.slice(), orderId: null, favTab: 'stores',
+      sheet: null, lastSheet: null, toast: null, homeLoading: false, recovered: false, notif: true,
+      na: { label: '', city: 'Marrakech', district: '', street: '', building: '', landmark: '' }
+    };
+  }
+
+  buildIcons() {
+    const spec = {
+      home: 'p:m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1z',
+      search: 'c:11 11 8|p:m21 21-4.3-4.3',
+      receipt: 'p:M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z|p:M8 8h8|p:M8 12h8|p:M8 16h5',
+      heart: 'p:M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z',
+      user: 'p:M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2|c:12 7 4',
+      pin: 'p:M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z|c:12 10 3',
+      down: 'p:m6 9 6 6 6-6', chevL: 'p:m15 18-6-6 6-6', chevR: 'p:m9 18 6-6-6-6',
+      arrowR: 'p:M5 12h14|p:m12 5 7 7-7 7', arrowL: 'p:M19 12H5|p:m12 19-7-7 7-7',
+      bag: 'p:M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z|p:M3 6h18|p:M16 10a4 4 0 0 1-8 0',
+      star: 'p:M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z',
+      clock: 'c:12 12 10|p:M12 6v6l4 2',
+      bike: 'c:5.5 17.5 3.5|c:18.5 17.5 3.5|p:M15 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-3 11.5V14l-3-3 4-3 2 3h2',
+      plus: 'p:M5 12h14|p:M12 5v14', minus: 'p:M5 12h14', x: 'p:M18 6 6 18|p:m6 6 12 12',
+      sliders: 'p:M4 21v-7|p:M4 10V3|p:M12 21v-9|p:M12 8V3|p:M20 21v-5|p:M20 12V3|p:M1 14h6|p:M9 8h6|p:M17 16h6',
+      phone: 'p:M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z',
+      msg: 'p:M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+      check: 'p:M20 6 9 17l-5-5',
+      utensils: 'p:M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2|p:M7 2v20|p:M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7',
+      cart: 'c:8 21 1|c:19 21 1|p:M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12',
+      pill: 'p:m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z|p:m8.5 8.5 7 7',
+      store: 'p:m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7|p:M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8|p:M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4|p:M2 7h20|p:M2 7v3a2 2 0 0 0 4 0 2 2 0 0 0 4 0 2 2 0 0 0 4 0 2 2 0 0 0 4 0 2 2 0 0 0 4 0V7',
+      cookie: 'p:M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5|p:M8.5 8.5v.01|p:M16 15.5v.01|p:M12 12v.01|p:M11 17v.01|p:M7 14v.01',
+      cup: 'p:m6 8 1.75 12.28a2 2 0 0 0 2 1.72h4.54a2 2 0 0 0 2-1.72L18 8|p:M5 8h14|p:M7 15a6.47 6.47 0 0 1 5 0 6.47 6.47 0 0 0 5 0|p:m12 8 1-6h2',
+      trash: 'p:M3 6h18|p:M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6|p:M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2',
+      card: 'r:2 5 20 14 2|p:M2 10h20', cash: 'r:2 6 20 12 2|c:12 12 2|p:M6 12h.01M18 12h.01',
+      bell: 'p:M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9|p:M10.3 21a1.94 1.94 0 0 0 3.4 0',
+      help: 'c:12 12 10|p:M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3|p:M12 17h.01',
+      gear: 'c:12 12 3|p:M12 2v2|p:M12 20v2|p:m4.93 4.93 1.41 1.41|p:m17.66 17.66 1.41 1.41|p:M2 12h2|p:M20 12h2|p:m6.34 17.66-1.41 1.41|p:m19.07 4.93-1.41 1.41',
+      logout: 'p:M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4|p:m16 17 5-5-5-5|p:M21 12H9',
+      globe: 'c:12 12 10|p:M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20|p:M2 12h20',
+      nav: 'p:m3 11 19-9-9 19-2-8-8-2z',
+      tag: 'p:M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z|c:7.5 7.5 .5',
+      rotate: 'p:M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8|p:M3 3v5h5',
+      zap: 'p:M13 2 3 14h9l-1 8 10-12h-9l1-8z',
+      wifiOff: 'p:M12 20h.01|p:M8.5 16.43a5 5 0 0 1 7 0|p:M2 8.82a15 15 0 0 1 4.17-2.65|p:M10.66 5c4.01-.36 8.14.9 11.34 3.76|p:M16.85 11.25a10 10 0 0 1 2.22 1.68|p:M5 13a10 10 0 0 1 5.24-2.76|p:m2 2 20 20',
+      edit: 'p:M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z',
+      send: 'p:m22 2-7 20-4-9-9-4Z|p:M22 2 11 13'
+    };
+    const mk = (sp, size, fill) => React.createElement('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: fill ? 'currentColor' : 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', style: { display: 'block', flex: 'none' } },
+      sp.split('|').map((s, i) => {
+        const k = s[0], v = s.slice(2);
+        if (k === 'p') return React.createElement('path', { key: i, d: v });
+        const n = v.split(' ').map(Number);
+        if (k === 'c') return React.createElement('circle', { key: i, cx: n[0], cy: n[1], r: n[2] });
+        return React.createElement('rect', { key: i, x: n[0], y: n[1], width: n[2], height: n[3], rx: n[4] || 0 });
+      }));
+    const o = {};
+    for (const k in spec) { o[k] = mk(spec[k], 20); o[k + 'S'] = mk(spec[k], 15); o[k + 'M'] = mk(spec[k], 28); o[k + 'L'] = mk(spec[k], 40); o[k + 'X'] = mk(spec[k], 72); }
+    o.heartF = mk(spec.heart, 20, true); o.starF = mk(spec.star, 13, true); o.starFM = mk(spec.star, 18, true);
+    o.starBig = mk(spec.star, 34); o.starBigF = mk(spec.star, 34, true);
+    return o;
+  }
+
+  buildData() {
+    const stores = [
+      ['s1', 'Dar Zitoun', 'Moroccan · Tajine · Couscous', 'restaurants', 4.8, '1.2k', 1200, 25, 35, 9, 2, 60, 'Médina', false, 'cover · tajine', 'DZ'],
+      ['s2', 'Burger Atlas', 'Burgers · American', 'restaurants', 4.6, '860', 860, 15, 25, 0, 2, 50, 'Guéliz', false, 'cover · smash burger', 'BA'],
+      ['s3', 'Pizzeria Guéliz', 'Pizza · Italian', 'restaurants', 4.5, '640', 640, 30, 40, 12, 2, 60, 'Guéliz', false, 'cover · wood oven', 'PG'],
+      ['s4', 'Pâtisserie Al Warda', 'Moroccan pastries · Breakfast', 'bakery', 4.9, '2.1k', 2100, 15, 20, 7, 1, 30, 'Guéliz', false, 'cover · cornes de gazelle', 'AW'],
+      ['s5', 'Souk Frais Market', 'Groceries · Fresh produce', 'groceries', 4.7, '1.5k', 1500, 20, 30, 10, 1, 50, 'Hivernage', false, 'cover · market stall', 'SF'],
+      ['s6', 'Pharmacie Ibn Sina', 'Pharmacy · Parapharmacy', 'pharmacy', 4.8, '930', 930, 20, 30, 10, 2, 0, 'Guéliz', false, 'cover · pharmacy shelf', 'IS'],
+      ['s7', 'Jus Jemaa', 'Fresh juices · Coffee', 'drinks', 4.6, '410', 410, 10, 20, 5, 1, 20, 'Jemaa el-Fna', false, 'cover · orange stand', 'JJ'],
+      ['s8', 'Maison Argane', 'Hammam · Beauty · Crafts', 'shops', 4.7, '280', 280, 35, 50, 15, 3, 50, 'Médina', false, 'cover · argan jars', 'MA'],
+      ['s9', 'Sushi Majorelle', 'Sushi · Asian', 'restaurants', 4.4, '350', 350, 30, 45, 15, 3, 80, 'Majorelle', true, 'cover · maki', 'SM'],
+      ['s10', 'Snack Chez Hamid', 'Street food · Sandwiches', 'restaurants', 4.5, '1.8k', 1800, 15, 25, 6, 1, 30, 'Bab Doukkala', false, 'cover · grill', 'CH']
+    ].map(a => ({ id: a[0], name: a[1], cuisine: a[2], cat: a[3], rating: a[4], reviews: a[5], rc: a[6], tMin: a[7], tMax: a[8], fee: a[9], price: a[10], min: a[11], area: a[12], closed: a[13], img: a[14], initials: a[15], opens: '19:00' }));
+    const products = [
+      ['p1-1', 's1', 'Tajines', 'Chicken tajine, preserved lemon & olives', 'Slow-cooked in clay with saffron, ginger and Meslalla olives.', 85, 'tajine', 'tajine', 1],
+      ['p1-2', 's1', 'Tajines', 'Lamb tajine with prunes & almonds', 'Tender lamb shoulder, caramelised prunes, toasted almonds and sesame.', 110, 'tajine', 'tajine', 1],
+      ['p1-3', 's1', 'Tajines', 'Kefta tajine with eggs', 'Spiced beef meatballs in tomato sauce, finished with eggs.', 70, 'tajine', 'tajine', 0],
+      ['p1-4', 's1', 'Couscous', 'Couscous with seven vegetables', 'Hand-rolled semolina, beef, chickpeas and seasonal vegetables.', 90, 'couscous', 'tajine', 1],
+      ['p1-5', 's1', 'Couscous', 'Couscous tfaya', 'Chicken, caramelised onions, raisins and cinnamon.', 95, 'couscous', 'tajine', 0],
+      ['p1-6', 's1', 'Starters', 'Chicken pastilla', 'Flaky warqa pastry, almonds, cinnamon and icing sugar.', 75, 'pastilla', null, 0],
+      ['p1-7', 's1', 'Starters', 'Harira', 'Tomato, lentil and chickpea soup, served with dates.', 25, 'harira', null, 0],
+      ['p1-8', 's1', 'Drinks', 'Mint tea · pot for two', 'Gunpowder green tea with fresh mint.', 20, 'atay', null, 0],
+      ['p2-1', 's2', 'Burgers', 'Atlas smash burger', 'Two smashed beef patties, cheddar, pickles, house sauce.', 65, 'burger', 'burger', 1],
+      ['p2-2', 's2', 'Burgers', 'Double harissa cheese', 'Beef, double cheddar, harissa mayo, grilled onions.', 85, 'burger', 'burger', 0],
+      ['p2-3', 's2', 'Burgers', 'Crispy chicken', 'Buttermilk fried chicken, slaw, chipotle mayo.', 60, 'burger', 'burger', 0],
+      ['p2-4', 's2', 'Sides', 'Loaded fries', 'Fries, cheese sauce, smoked beef, chives.', 30, 'fries', null, 0],
+      ['p2-5', 's2', 'Drinks', 'Date & vanilla milkshake', 'Medjool dates, vanilla ice cream, milk.', 35, 'milkshake', null, 0],
+      ['p3-1', 's3', 'Pizza', 'Margherita', 'San Marzano tomato, fior di latte, basil.', 60, 'pizza', 'pizza', 1],
+      ['p3-2', 's3', 'Pizza', 'Kefta & merguez', 'Spiced kefta, merguez, peppers, mozzarella.', 80, 'pizza', 'pizza', 1],
+      ['p3-3', 's3', 'Pizza', 'Quattro formaggi', 'Mozzarella, gorgonzola, parmesan, Chefchaouen goat cheese.', 85, 'pizza', 'pizza', 0],
+      ['p3-4', 's3', 'Desserts', 'Tiramisu', 'Mascarpone, espresso, cocoa.', 35, 'tiramisu', null, 0],
+      ['p4-1', 's4', 'Moroccan pastries', 'Cornes de gazelle · 250 g', 'Almond paste and orange blossom in a thin crescent.', 60, 'kaab el ghzal', null, 1],
+      ['p4-2', 's4', 'Moroccan pastries', 'Chebakia · 500 g', 'Sesame flowers, fried and dipped in honey.', 55, 'chebakia', null, 0],
+      ['p4-3', 's4', 'Breakfast', 'Msemen · 4 pcs', 'Flaky square pancakes, made from 7 am.', 16, 'msemen', null, 1],
+      ['p4-4', 's4', 'Breakfast', 'Croissant pur beurre', 'Baked every morning.', 7, 'croissant', null, 0],
+      ['p4-5', 's4', 'Breakfast', 'Baghrir with honey & butter · 3 pcs', 'Thousand-hole semolina pancakes.', 18, 'baghrir', null, 0],
+      ['p5-1', 's5', 'Fresh', 'Fresh mint · bunch', 'For tea — picked this morning.', 5, 'naanaa', null, 1],
+      ['p5-2', 's5', 'Fresh', 'Oranges · 1 kg', 'Juicing oranges from Berkane.', 8, 'oranges', null, 0],
+      ['p5-3', 's5', 'Fresh', 'Khobz · round loaf', 'Traditional wheat bread.', 3, 'khobz', null, 0],
+      ['p5-4', 's5', 'Dairy & eggs', 'Beldi eggs · 12', 'Free-range country eggs.', 24, 'eggs', null, 0],
+      ['p5-5', 's5', 'Dairy & eggs', 'Fresh milk · 1 L', 'Pasteurised whole milk.', 8.5, 'milk', null, 0],
+      ['p5-6', 's5', 'Pantry', 'Olive oil from Meknès · 1 L', 'Extra virgin, first cold press.', 75, 'olive oil', null, 0],
+      ['p5-7', 's5', 'Pantry', 'Culinary argan oil · 250 ml', 'Toasted, from a women’s cooperative near Essaouira.', 120, 'argan oil', null, 1],
+      ['p6-1', 's6', 'Pain & fever', 'Paracetamol 1000 mg · 8 tablets', 'Pain and fever relief. Read the leaflet.', 19.6, 'paracetamol', null, 1],
+      ['p6-2', 's6', 'Vitamins', 'Vitamin C 1000 mg · 20 effervescent', 'Orange flavour.', 45, 'vitamin c', null, 0],
+      ['p6-3', 's6', 'Skin', 'Sunscreen SPF 50+ · 50 ml', 'Very high protection, fragrance-free.', 145, 'spf 50', null, 0],
+      ['p6-4', 's6', 'Baby', 'Baby wipes · 72', 'Sensitive skin, alcohol-free.', 29, 'wipes', null, 0],
+      ['p6-5', 's6', 'Devices', 'Digital thermometer', 'Reads in 10 seconds.', 89, 'thermometer', null, 0],
+      ['p7-1', 's7', 'Juices', 'Fresh orange juice · 50 cl', 'Squeezed to order.', 15, 'orange juice', 'drink', 1],
+      ['p7-2', 's7', 'Juices', 'Avocado & almond smoothie', 'Avocado, milk, almonds, a touch of dates.', 25, 'jus d’avocat', 'drink', 1],
+      ['p7-3', 's7', 'Juices', 'Panaché', 'Banana, apple, orange and milk.', 22, 'panaché', 'drink', 0],
+      ['p7-4', 's7', 'Coffee', 'Nous-nous', 'Half coffee, half milk, in a glass.', 12, 'nous-nous', null, 0],
+      ['p8-1', 's8', 'Hammam', 'Savon beldi · black soap', 'Olive-based black soap with eucalyptus.', 35, 'savon beldi', null, 1],
+      ['p8-2', 's8', 'Hammam', 'Rhassoul clay · 200 g', 'Atlas mountain clay for hair and skin.', 40, 'rhassoul', null, 0],
+      ['p8-3', 's8', 'Beauty', 'Rose water from Kelâat M’Gouna', 'Distilled Damask roses, 250 ml.', 45, 'rose water', null, 0],
+      ['p8-4', 's8', 'Home', 'Tea glasses · set of 6', 'Hand-painted, gold rim.', 90, 'tea glasses', null, 0],
+      ['p9-1', 's9', 'Rolls', 'Salmon avocado roll · 8 pcs', 'Salmon, avocado, sesame.', 75, 'maki', null, 0],
+      ['p9-2', 's9', 'Rolls', 'Crispy shrimp roll · 8 pcs', 'Tempura shrimp, spicy mayo.', 85, 'maki', null, 0],
+      ['p10-1', 's10', 'Sandwiches', 'Kefta bocadillo', 'Grilled kefta, onions and harissa in fresh khobz.', 30, 'bocadillo', null, 1],
+      ['p10-2', 's10', 'Sandwiches', 'Tacos mixte', 'Chicken, kefta, cheese sauce and fries in a grilled wrap.', 45, 'tacos', null, 1],
+      ['p10-3', 's10', 'Breakfast', 'Msemen with cheese & honey', 'Folded msemen, soft cheese, honey.', 15, 'msemen', null, 0],
+      ['p10-4', 's10', 'Breakfast', 'Sfenj · 3 pcs', 'Moroccan doughnuts, dusted with sugar.', 9, 'sfenj', null, 0]
+    ].map(a => ({ id: a[0], storeId: a[1], sec: a[2], name: a[3], desc: a[4], price: a[5], img: a[6], opt: a[7], pop: !!a[8] }));
+    const OPT = {
+      tajine: [{ id: 'size', name: 'Portion', req: true, choices: [['For 1', 0], ['For 2 to share', 70]] }, { id: 'side', name: 'Extras', multi: true, choices: [['Extra khobz', 5], ['Olives & preserved lemon', 8], ['Mint tea pot', 20]] }],
+      burger: [{ id: 'side', name: 'Side', req: true, choices: [['Fries', 0], ['Green salad', 0], ['Onion rings', 10]] }, { id: 'x', name: 'Add-ons', multi: true, choices: [['Extra cheddar', 8], ['Fried egg', 6], ['Smoked beef', 12]] }],
+      pizza: [{ id: 'size', name: 'Size', req: true, choices: [['Medium · 30 cm', 0], ['Large · 40 cm', 30]] }, { id: 'x', name: 'Extra toppings', multi: true, choices: [['Olives', 6], ['Mushrooms', 8], ['Extra mozzarella', 12]] }],
+      drink: [{ id: 'size', name: 'Size', req: true, choices: [['50 cl', 0], ['1 L', 12]] }, { id: 'sugar', name: 'Sugar', req: true, choices: [['Normal', 0], ['A little', 0], ['No sugar', 0]] }]
+    };
+    const storeMap = {}; stores.forEach(s => storeMap[s.id] = s);
+    const prodMap = {}; products.forEach(p => prodMap[p.id] = p);
+    const addresses = [
+      { id: 'a1', label: 'Home', city: 'Marrakech', district: 'Guéliz', street: '12 Rue de la Liberté', building: 'Imm. Nour, 3rd floor, Apt 7', landmark: 'Above Café Les Négociants' },
+      { id: 'a2', label: 'Work', city: 'Marrakech', district: 'Hivernage', street: 'Avenue Mohammed VI', building: 'Bureau 204', landmark: 'Opposite Menara Mall' },
+      { id: 'a3', label: 'Family', city: 'Casablanca', district: 'Maârif', street: '45 Rue Ibnou Mounir', building: 'Villa 3', landmark: 'Behind Twin Center' }
+    ];
+    const pastOrders = [
+      { id: 'ZQ-47912', storeId: 's1', date: 'Sep 24 · 20:14', lines: [{ pid: 'p1-1', qty: 1, unit: 85, sel: { size: [0], side: [] } }, { pid: 'p1-8', qty: 1, unit: 20, sel: {} }] },
+      { id: 'ZQ-47650', storeId: 's6', date: 'Sep 21 · 11:02', lines: [{ pid: 'p6-1', qty: 2, unit: 19.6, sel: {} }, { pid: 'p6-2', qty: 1, unit: 45, sel: {} }] },
+      { id: 'ZQ-47288', storeId: 's4', date: 'Sep 18 · 08:30', lines: [{ pid: 'p4-3', qty: 2, unit: 16, sel: {} }, { pid: 'p4-4', qty: 4, unit: 7, sel: {} }] }
+    ].map(o => { const sub = o.lines.reduce((a, l) => a + l.unit * l.qty, 0); const fee = storeMap[o.storeId].fee; return { ...o, sub, fee, service: 3, disc: 0, total: sub + fee + 3, status: 'delivered', addrId: 'a1', pay: 'cash' }; });
+    const k = 'home,search,orders,favorites,profile,deliverTo,searchPh,cat_restaurants,cat_groceries,cat_pharmacy,cat_shops,cat_bakery,cat_drinks,popular,fast,rec,seeAll,free,freeShort,viewCart,addToCart,added,from,cart,placeOrder,checkout,confirm,placing,subtotal,deliveryFee,serviceFee,discount,total,promo,apply,promoOk,promoBad,address,change,instr,instrPh,payment,cash,cashSub,cardSub,summary,eta,arriveAround,now,schedule,recent,trending,sort,sortRec,sortFast,sortRating,sortFee,price,results,noResults,noResultsBody,clear,emptyCart,emptyCartBody,browse,track,reorder,details,current,previous,noOrders,noOrdersBody,stores,products,favEmpty,favEmptyBody,logout,language,notifications,help,settings,personal,addresses,payments,next,skip,onb1t,onb1b,onb2t,onb2b,onb3t,onb3b,allow,manual,signIn,phoneHint,phone,continue,or,google,apple,guest,terms,otpT,otpSent,resend,s0,s1,s2,s3,s4,s0b,s1b,s2b,s3b,s4b,arriving,min,call,chat,rider,retry,errT,errB,items,addMore,minOrder,closed,required,optional,choose1,upTo,newCartT,newCartB,newCartOk,cancel,orderDetails,rate,done,getHelp,addNew,save,city,district,street,building,landmark,landmarkPh,label,useLoc,popularTag,ratings,delivery,p1k,p1t,p1b,p2k,p2t,p2b,p3k,p3t,p3b,msgPh,chatHi,chatReply,q1,q2,q3,addCard,soon,located,calling,thanks,paidWith'.split(',');
+    const en = ['Home','Search','Orders','Favorites','Profile','Deliver to','What are you looking for?','Restaurants','Groceries','Pharmacy','Shops','Bakery','Drinks','Popular near you','Fast delivery','Recommended for you','See all','Free delivery','Free','View cart','Add to cart','Added','from','Cart','Place order','Checkout','Confirm order','Placing order…','Subtotal','Delivery fee','Service fee','Discount','Total','Promo code','Apply','applied','This code isn’t valid','Delivery address','Change','Instructions for the rider','Anything else? e.g. “Blue door, 2nd floor”','Payment method','Cash on delivery','Pay the rider in dirhams','Expires 08/28','Order summary','Estimated delivery','Arrives around','Now','Schedule','Recent searches','Popular searches','Sort','Recommended','Fastest delivery','Top rated','Lowest delivery fee','Price','results','Nothing matches','Try another word or clear your filters.','Clear filters','Your cart is empty','Tajine, groceries or paracetamol — it’s all a tap away.','Browse stores','Track order','Reorder','Details','Current order','Previous orders','No orders yet','Your first order will show up here.','Stores','Products','No favorites yet','Tap the heart on any store or product to keep it here.','Log out','Language','Notifications','Help & support','Settings','Personal information','Saved addresses','Payment methods','Next','Skip','Your city, delivered','Restaurants, cafés and street food — from Guéliz to the medina.','Groceries & pharmacy in 30 min','Fresh mint, khobz or something for a fever, from shops in your neighbourhood.','Where should we deliver?','Share your location to see what’s open near you. Landmarks welcome.','Use my location','Enter address manually','Sign in or create an account','We’ll text you a 4-digit code.','Phone number','Continue','or','Continue with Google','Continue with Apple','Continue as guest','By continuing you accept the Terms and Privacy Policy.','Enter the code','Sent by SMS to','Resend code','Order confirmed','Preparing','Picked up','On the way','Delivered','The store accepted your order','The kitchen is on it','Youssef has your order','Youssef is heading to you','Enjoy your meal!','Arriving in','min','Call','Chat','Your rider','Try again','Can’t reach Yallo','Check your connection — your cart is saved.','items','Add more items','Minimum order','Closed','Required','Optional','Choose 1','up to','Start a new cart?','Your cart from %a will be cleared to order from %b.','Start new cart','Cancel','Order details','How was it?','Done','Get help','Add new address','Save address','City','Neighbourhood','Street & number','Building, floor, apartment','Landmark','e.g. Near Koutoubia mosque','Label','Use my current location','Popular','ratings','delivery','Welcome offer','−30% on your first order','Code MARHABA · up to 40 DH off','Groceries','Free delivery over 150 DH','Fresh produce from Souk Frais','Breakfast','Warm msemen from 7 am','Pâtisserie Al Warda · 15–20 min','Message Youssef…','Salam! I’ve picked up your order.','Wakha! I’m about 5 minutes away.','I’m at the building entrance','Please call when you arrive','Can you bring change for 200 DH?','Add a card','Coming soon in this prototype','Located · Guéliz, Marrakech','Calling Youssef…','Thanks for rating!','Paid with'];
+    const fr = ['Accueil','Recherche','Commandes','Favoris','Profil','Livrer à','Que cherchez-vous ?','Restaurants','Courses','Pharmacie','Boutiques','Pâtisserie','Boissons','Populaire près de vous','Livraison express','Recommandé pour vous','Tout voir','Livraison offerte','Offerte','Voir le panier','Ajouter au panier','Ajouté','dès','Panier','Commander','Paiement','Confirmer la commande','Envoi…','Sous-total','Frais de livraison','Frais de service','Réduction','Total','Code promo','Appliquer','appliqué','Ce code n’est pas valide','Adresse de livraison','Modifier','Instructions pour le livreur','Autre chose ? ex. « Porte bleue, 2e étage »','Moyen de paiement','Espèces à la livraison','Payez le livreur en dirhams','Expire 08/28','Récapitulatif','Livraison estimée','Arrivée vers','Maintenant','Programmer','Recherches récentes','Recherches populaires','Trier','Recommandé','Plus rapide','Mieux notés','Frais les plus bas','Prix','résultats','Aucun résultat','Essayez un autre mot ou effacez les filtres.','Effacer les filtres','Votre panier est vide','Tajine, courses ou paracétamol — tout est à portée de main.','Parcourir','Suivre','Recommander','Détails','Commande en cours','Commandes passées','Aucune commande','Votre première commande apparaîtra ici.','Magasins','Produits','Pas encore de favoris','Touchez le cœur pour retrouver un magasin ou produit ici.','Se déconnecter','Langue','Notifications','Aide & support','Paramètres','Informations personnelles','Adresses enregistrées','Moyens de paiement','Suivant','Passer','Votre ville, livrée','Restaurants, cafés et street food — de Guéliz à la médina.','Courses et pharmacie en 30 min','Menthe fraîche, khobz ou un remède, depuis les commerces du quartier.','Où livrer ?','Partagez votre position pour voir ce qui est ouvert près de vous.','Utiliser ma position','Saisir une adresse','Connexion ou inscription','Nous vous envoyons un code à 4 chiffres.','Numéro de téléphone','Continuer','ou','Continuer avec Google','Continuer avec Apple','Continuer en invité','En continuant, vous acceptez les CGU et la politique de confidentialité.','Saisissez le code','Envoyé par SMS au','Renvoyer le code','Commande confirmée','En préparation','Récupérée','En route','Livrée','Le magasin a accepté votre commande','La cuisine s’en occupe','Youssef a récupéré votre commande','Youssef arrive','Bon appétit !','Arrivée dans','min','Appeler','Message','Votre livreur','Réessayer','Connexion impossible','Vérifiez votre connexion — votre panier est conservé.','articles','Ajouter des articles','Commande minimum','Fermé','Obligatoire','Facultatif','Choisir 1','jusqu’à','Nouveau panier ?','Votre panier de %a sera vidé pour commander chez %b.','Nouveau panier','Annuler','Détails de la commande','Comment était-ce ?','Terminé','Obtenir de l’aide','Ajouter une adresse','Enregistrer','Ville','Quartier','Rue et numéro','Immeuble, étage, appartement','Repère','ex. Près de la Koutoubia','Nom','Utiliser ma position actuelle','Populaire','avis','livraison','Offre de bienvenue','−30 % sur votre 1re commande','Code MARHABA · jusqu’à 40 DH','Courses','Livraison offerte dès 150 DH','Produits frais de Souk Frais','Petit-déjeuner','Msemen chaud dès 7 h','Pâtisserie Al Warda · 15–20 min','Écrire à Youssef…','Salam ! J’ai récupéré votre commande.','Wakha ! J’arrive dans 5 minutes.','Je suis à l’entrée de l’immeuble','Appelez-moi en arrivant','Avez-vous la monnaie sur 200 DH ?','Ajouter une carte','Bientôt disponible dans ce prototype','Localisé · Guéliz, Marrakech','Appel de Youssef…','Merci pour votre note !','Payé par'];
+    const ar = ['الرئيسية','البحث','الطلبات','المفضلة','الحساب','التوصيل إلى','عن ماذا تبحث؟','مطاعم','بقالة','صيدلية','متاجر','حلويات','مشروبات','الأكثر طلباً بالقرب منك','توصيل سريع','مقترح لك','عرض الكل','توصيل مجاني','مجاني','عرض السلة','أضف إلى السلة','تمت الإضافة','من','السلة','اطلب الآن','إتمام الطلب','تأكيد الطلب','جارٍ الإرسال…','المجموع الفرعي','رسوم التوصيل','رسوم الخدمة','خصم','المجموع','رمز الخصم','تطبيق','تم التطبيق','هذا الرمز غير صالح','عنوان التوصيل','تغيير','تعليمات للموصّل','شيء آخر؟ مثلاً «باب أزرق، الطابق الثاني»','طريقة الدفع','الدفع عند الاستلام','ادفع للموصّل بالدرهم','تنتهي 08/28','ملخص الطلب','الوقت المتوقع','يصل حوالي','الآن','جدولة','عمليات البحث الأخيرة','الأكثر بحثاً','ترتيب','مقترح','الأسرع','الأعلى تقييماً','أقل رسوم توصيل','السعر','نتيجة','لا توجد نتائج','جرّب كلمة أخرى أو امسح عوامل التصفية.','مسح عوامل التصفية','سلتك فارغة','طاجين، بقالة أو دواء — كل شيء بلمسة واحدة.','تصفح المتاجر','تتبع الطلب','أعد الطلب','التفاصيل','الطلب الحالي','الطلبات السابقة','لا توجد طلبات بعد','سيظهر طلبك الأول هنا.','المتاجر','المنتجات','لا توجد مفضلة بعد','اضغط على القلب لحفظ أي متجر أو منتج هنا.','تسجيل الخروج','اللغة','الإشعارات','المساعدة والدعم','الإعدادات','المعلومات الشخصية','العناوين المحفوظة','طرق الدفع','التالي','تخطي','مدينتك، حتى باب بيتك','مطاعم ومقاهٍ وأكلات الشارع — من جليز إلى المدينة القديمة.','البقالة والصيدلية في 30 دقيقة','نعناع طازج، خبز أو دواء، من متاجر حيّك.','أين نوصل طلبك؟','شارك موقعك لرؤية ما هو مفتوح بالقرب منك.','استخدم موقعي','أدخل العنوان يدوياً','سجّل الدخول أو أنشئ حساباً','سنرسل لك رمزاً من 4 أرقام.','رقم الهاتف','متابعة','أو','المتابعة مع Google','المتابعة مع Apple','المتابعة كضيف','بالمتابعة، أنت توافق على الشروط وسياسة الخصوصية.','أدخل الرمز','أُرسل عبر SMS إلى','إعادة إرسال الرمز','تم تأكيد الطلب','قيد التحضير','تم الاستلام','في الطريق','تم التوصيل','قبل المتجر طلبك','المطبخ يحضّر طلبك','يوسف استلم طلبك','يوسف في طريقه إليك','بالصحة والراحة!','يصل خلال','د','اتصال','دردشة','الموصّل','حاول مجدداً','تعذّر الاتصال بيالو','تحقق من اتصالك — سلتك محفوظة.','منتجات','أضف المزيد','الحد الأدنى للطلب','مغلق','إلزامي','اختياري','اختر 1','حتى','بدء سلة جديدة؟','سيتم إفراغ سلتك من %a للطلب من %b.','سلة جديدة','إلغاء','تفاصيل الطلب','كيف كانت التجربة؟','تم','طلب المساعدة','إضافة عنوان جديد','حفظ العنوان','المدينة','الحي','الشارع والرقم','العمارة، الطابق، الشقة','معلم قريب','مثلاً: قرب مسجد الكتبية','الاسم','استخدم موقعي الحالي','الأكثر طلباً','تقييم','التوصيل','عرض ترحيبي','خصم 30% على طلبك الأول','الرمز MARHABA · حتى 40 درهم','بقالة','توصيل مجاني فوق 150 درهم','منتجات طازجة من سوق فريه','فطور','مسمن ساخن من 7 صباحاً','حلويات الوردة · 15–20 د','اكتب ليوسف…','سلام! استلمت طلبك.','واخا! أنا على بعد 5 دقائق.','أنا عند مدخل العمارة','اتصل بي عند الوصول','هل لديك صرف لـ 200 درهم؟','إضافة بطاقة','قريباً في هذا النموذج','تم التحديد · جليز، مراكش','جارٍ الاتصال بيوسف…','شكراً على تقييمك!','الدفع عبر'];
+    if (en.length !== k.length || fr.length !== k.length || ar.length !== k.length) console.warn('Yallo i18n length mismatch', k.length, en.length, fr.length, ar.length);
+    const T = { en: {}, fr: {}, ar: {} };
+    k.forEach((key, i) => { T.en[key] = en[i]; T.fr[key] = fr[i] || en[i]; T.ar[key] = ar[i] || en[i]; });
+    return { stores, storeMap, products, prodMap, OPT, addresses, pastOrders, T, cats: ['restaurants', 'groceries', 'pharmacy', 'shops', 'bakery', 'drinks'] };
+  }
+
+  componentDidMount() {
+    if (!this.state || !this.state.lang) this.setState(this.initState());
+    if (this.props.startScreen) setTimeout(() => this.jumpTo(this.props.startScreen), 0);
+    if (!this.props.bare) this.iv = setInterval(() => { const s = this.state; if (s.active && s.trackT < 34) this.setState({ trackT: s.trackT + 1 }); }, 1000);
+    this.applyTheme();
+  }
+  componentDidUpdate(pp) {
+    if (pp.theme !== this.props.theme) this.applyTheme();
+    if (pp.networkError !== this.props.networkError && this.props.networkError) this.setState({ recovered: false });
+  }
+  componentWillUnmount() { clearInterval(this.iv); }
+  applyTheme() {
+    const el = this.rootRef.current; if (!el) return;
+    const th = this.props.theme || 'Paprika';
+    const ramps = {
+      Saffron: ['#b5650a', '#fdf2e1', '#fadfb6', '#f3c27a', '#e9a13f', '#cf8214', '#b5650a', '#8e4f08', '#663906', '#3a2104'],
+      Majorelle: ['#2f4bc4', '#eaeefe', '#d2dafc', '#aebcf7', '#8497ef', '#5d74e3', '#2f4bc4', '#263d9f', '#1c2d76', '#101a44']
+    };
+    const keys = ['--color-accent', '--color-accent-100', '--color-accent-200', '--color-accent-300', '--color-accent-400', '--color-accent-500', '--color-accent-600', '--color-accent-700', '--color-accent-800', '--color-accent-900'];
+    const r = ramps[th.split(' ')[0]];
+    keys.forEach((k, i) => r ? el.style.setProperty(k, r[i]) : el.style.removeProperty(k));
+  }
+
+  t() { return this.D.T[(this.state && this.state.lang) || 'en']; }
+  fmt(n) { const v = Math.round(n * 100) / 100; return (Number.isInteger(v) ? String(v) : v.toFixed(2).replace('.', ',')) + ' DH'; }
+  norm(x) { return String(x).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+  clock(ms) { const d = new Date(ms); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+  toast(msg) { clearTimeout(this.tt); this.setState({ toast: msg }); this.tt = setTimeout(() => this.setState({ toast: null }), 2200); }
+
+  go(screen, extra) { this.setState(s => ({ screen, stack: [...s.stack, s.screen], sheet: null, ...(extra || {}) })); }
+  tabTo(screen, extra) { this.setState({ screen, stack: [], sheet: null, ...(extra || {}) }); }
+  back = () => this.setState(s => { const st = s.stack.slice(); const prev = st.pop() || 'home'; return { screen: prev, stack: st }; });
+  openSheet(k) { this.setState({ sheet: k, lastSheet: k }); }
+  closeSheet = () => this.setState({ sheet: null });
+
+  openStore(id) { this.go('store', { storeId: id, storeTab: null }); }
+  openProduct(pid) { const p = this.D.prodMap[pid]; const sel = {}; (this.D.OPT[p.opt] || []).forEach(g => { sel[g.id] = g.req ? [0] : []; }); this.go('product', { prodId: pid, sel, qty: 1 }); }
+  openCategory(c) { this.tabTo('search', { fCat: c, q: '' }); this.kick(); }
+  unit(p, sel) { let u = p.price; (this.D.OPT[p.opt] || []).forEach(g => (sel[g.id] || []).forEach(i => u += g.choices[i][1])); return u; }
+  optText(p, sel) { return (this.D.OPT[p.opt] || []).flatMap(g => (sel[g.id] || []).map(i => g.choices[i][0])).join(' · '); }
+  toggleFav(key, id) { this.setState(s => ({ [key]: s[key].includes(id) ? s[key].filter(x => x !== id) : [...s[key], id] })); }
+
+  addLine(pid, sel, qty, fromProduct) {
+    const p = this.D.prodMap[pid], store = this.D.storeMap[p.storeId], s = this.state, t = this.t();
+    if (store.closed) { this.toast(`${store.name} · ${t.closed} · ${store.opens}`); return false; }
+    if (s.cart.storeId && s.cart.storeId !== p.storeId && s.cart.lines.length) { this.setState({ pending: { pid, sel, qty, fromProduct } }); this.openSheet('newCart'); return false; }
+    const key = pid + '|' + JSON.stringify(sel), unit = this.unit(p, sel);
+    this.setState(st => { const lines = st.cart.lines.slice(); const i = lines.findIndex(l => l.key === key); if (i >= 0) lines[i] = { ...lines[i], qty: lines[i].qty + qty }; else lines.push({ key, pid, sel, qty, unit }); return { cart: { storeId: p.storeId, lines } }; });
+    return true;
+  }
+  confirmNewCart = () => {
+    const pd = this.state.pending;
+    this.setState({ cart: { storeId: null, lines: [] }, sheet: null, pending: null, promo: null, promoMsg: '' }, () => {
+      if (!pd) return;
+      if (this.addLine(pd.pid, pd.sel, pd.qty)) { if (pd.fromProduct) this.back(); this.toast(`${this.t().added} · ${this.D.prodMap[pd.pid].name}`); }
+    });
+  };
+  chg(key, d) { this.setState(s => { const lines = s.cart.lines.map(l => l.key === key ? { ...l, qty: l.qty + d } : l).filter(l => l.qty > 0); return { cart: { storeId: lines.length ? s.cart.storeId : null, lines } }; }); }
+  pick(g, i) { this.setState(s => { const cur = s.sel[g.id] || []; const n = g.multi ? (cur.includes(i) ? cur.filter(x => x !== i) : [...cur, i]) : [i]; return { sel: { ...s.sel, [g.id]: n } }; }); }
+  totals(cart, promo) {
+    const store = cart.storeId ? this.D.storeMap[cart.storeId] : null;
+    const sub = cart.lines.reduce((a, l) => a + l.unit * l.qty, 0), count = cart.lines.reduce((a, l) => a + l.qty, 0);
+    let fee = store ? store.fee : 0; if (store && store.cat === 'groceries' && sub >= 150) fee = 0; if (promo === 'LIVRAISON') fee = 0;
+    const service = sub > 0 ? 3 : 0, disc = promo === 'MARHABA' ? Math.min(40, Math.round(sub * 0.3)) : 0;
+    return { sub, fee, service, disc, total: sub + fee + service - disc, count, store };
+  }
+  sumRows(tt) {
+    const t = this.t(), P = v => this.fmt(v);
+    return [{ label: t.subtotal, val: P(tt.sub), fg: 'var(--color-text)' }, { label: t.deliveryFee, val: tt.fee === 0 ? t.freeShort : P(tt.fee), fg: tt.fee === 0 ? 'var(--color-accent-2-700)' : 'var(--color-text)' }, { label: t.serviceFee, val: P(tt.service), fg: 'var(--color-text)' }]
+      .concat(tt.disc > 0 ? [{ label: t.discount, val: '− ' + P(tt.disc), fg: 'var(--color-accent-2-700)' }] : []);
+  }
+  applyPromo = () => { const c = this.state.promoInput.trim().toUpperCase(); if (!c) return; this.setState(c === 'MARHABA' || c === 'LIVRAISON' ? { promo: c, promoMsg: 'ok' } : { promo: null, promoMsg: 'bad' }); };
+  placeOrder = () => {
+    if (this.state.placing) return;
+    this.setState({ placing: true });
+    setTimeout(() => this.setState(s => {
+      const tt = this.totals(s.cart, s.promo);
+      return { placing: false, active: { id: 'ZQ-' + (48000 + Math.floor(Math.random() * 900)), storeId: s.cart.storeId, lines: s.cart.lines, sub: tt.sub, fee: tt.fee, service: tt.service, disc: tt.disc, total: tt.total, placedAt: Date.now(), addrId: s.addrId, pay: s.pay }, cart: { storeId: null, lines: [] }, promo: null, promoInput: '', promoMsg: '', trackT: 0, rating: 0, chat: [], screen: 'tracking', stack: ['home'], sheet: null };
+    }), 1400);
+  };
+  finishOrder = () => {
+    this.setState(s => ({ orders: [{ ...s.active, date: 'Today · ' + this.clock(Date.now()), status: 'delivered' }, ...s.orders], active: null, screen: 'orders', stack: [] }));
+    if (this.state.rating) this.toast(this.t().thanks);
+  };
+  reorder(o) {
+    const st = this.D.storeMap[o.storeId];
+    if (st.closed) { this.toast(`${st.name} · ${this.t().closed}`); return; }
+    this.setState({ cart: { storeId: o.storeId, lines: o.lines.map(l => ({ ...l, sel: l.sel || {}, key: l.pid + '|' + JSON.stringify(l.sel || {}) })) }, promo: null, promoMsg: '' });
+    this.go('cart');
+  }
+  kick() { clearTimeout(this.sq); this.setState({ searching: true }); this.sq = setTimeout(() => this.setState({ searching: false }), 450); }
+  addRecent(q) { q = (q || '').trim(); if (!q) return; this.setState(s => ({ recent: [q, ...s.recent.filter(r => r.toLowerCase() !== q.toLowerCase())].slice(0, 5) })); }
+  setQ(v) { this.setState({ q: v }); this.addRecent(v); this.kick(); }
+  jump(id) { const c = this.storeRef.current; if (!c) return; const el = c.querySelector(`[data-sec="${id}"]`); if (el) c.scrollTo({ top: el.offsetTop - 48, behavior: 'smooth' }); this.setState({ storeTab: id }); }
+  onStoreScroll = () => { const c = this.storeRef.current; if (!c) return; let cur = null; c.querySelectorAll('[data-sec]').forEach(e => { if (!cur || e.offsetTop - 60 <= c.scrollTop) cur = e.dataset.sec; }); if (cur !== this.state.storeTab) this.setState({ storeTab: cur }); };
+  enterApp() { this.setState({ screen: 'home', stack: [], homeLoading: true, sheet: null }); setTimeout(() => this.setState({ homeLoading: false }), 900); }
+  sendChat(text) { this.setState(s => ({ chat: [...s.chat, { me: true, text }] })); setTimeout(() => this.setState(s => ({ chat: [...s.chat, { me: false, text: this.t().chatReply }] })), 1300); }
+  seedCart() { const s = this.state; return s.cart.lines.length ? s.cart : { storeId: 's1', lines: [{ key: 'p1-1|{"size":[0],"side":[]}', pid: 'p1-1', sel: { size: [0], side: [] }, qty: 1, unit: 85 }, { key: 'p1-8|{}', pid: 'p1-8', sel: {}, qty: 2, unit: 20 }] }; }
+  jumpTo(k) {
+    const s = this.state, base = { sheet: null };
+    const m = {
+      onb: { screen: 'onb', onb: 0, stack: [] }, auth: { screen: 'auth', authStep: 'phone', stack: [] },
+      home: { screen: 'home', stack: [] }, search: { screen: 'search', stack: [] }, orders: { screen: 'orders', stack: [] }, favorites: { screen: 'favorites', stack: [] }, profile: { screen: 'profile', stack: [] },
+      store: { screen: 'store', stack: ['home'], storeId: 's1', storeTab: null },
+      product: { screen: 'product', stack: ['home', 'store'], storeId: 's1', prodId: 'p1-2', sel: { size: [0], side: [] }, qty: 1 },
+      cart: { screen: 'cart', stack: ['home'], cart: this.seedCart() },
+      checkout: { screen: 'checkout', stack: ['home', 'cart'], cart: this.seedCart() },
+      tracking: { screen: 'tracking', stack: ['home'] },
+      orderDetail: { screen: 'orderDetail', stack: ['orders'], orderId: s.orders[0].id }
+    };
+    if (k === 'tracking' && !s.active) { const c = this.seedCart(), tt = this.totals(c, null); Object.assign(m.tracking, { active: { id: 'ZQ-48127', storeId: c.storeId, lines: c.lines, sub: tt.sub, fee: tt.fee, service: tt.service, disc: 0, total: tt.total, placedAt: Date.now() - 16 * 60000, addrId: s.addrId, pay: 'cash' }, trackT: 16, chat: [], rating: 0 }); }
+    this.setState({ ...base, ...m[k] });
+  }
+
+  renderVals() {
+    const s = { ...(this._defs || (this._defs = this.initState())), ...(this.state || {}) }, D = this.D, I = this.IC, t = D.T[s.lang] || D.T.en, P = v => this.fmt(v), rtl = s.lang === 'ar';
+    const CI = { restaurants: 'utensils', groceries: 'cart', pharmacy: 'pill', shops: 'store', bakery: 'cookie', drinks: 'cup' };
+    const ic = { ...I, back: rtl ? I.chevR : I.chevL, fwdS: rtl ? I.chevLS : I.chevRS, arrow: rtl ? I.arrowL : I.arrowR };
+    const favS = new Set(s.favS), favP = new Set(s.favP);
+    const on = b => ({ bg: b ? 'var(--color-accent)' : 'transparent', fg: b ? '#fff' : 'var(--color-text)', bd: b ? 'var(--color-accent)' : 'var(--color-divider)' });
+    const sv = x => { const f = favS.has(x.id); return { id: x.id, name: x.name, cuisine: x.cuisine, area: x.area, rating: x.rating.toFixed(1), reviews: x.reviews, time: `${x.tMin}–${x.tMax} min`, fee: x.fee === 0 ? t.free : P(x.fee), feeColor: x.fee === 0 ? 'var(--color-accent-2-700)' : 'var(--color-neutral-700)', closed: x.closed, closedLabel: `${t.closed} · ${x.opens}`, img: x.img, iconL: I[CI[x.cat] + 'L'], iconM: I[CI[x.cat] + 'M'], iconX: I[CI[x.cat] + 'X'], initials: x.initials, heart: f ? I.heartF : I.heart, favColor: f ? 'var(--color-accent)' : 'var(--color-text)', minStr: `${t.minOrder} ${P(x.min)}`, open: () => this.openStore(x.id), fav: e => { e.stopPropagation(); this.toggleFav('favS', x.id); } }; };
+    const cartQty = pid => s.cart.lines.filter(l => l.pid === pid).reduce((a, l) => a + l.qty, 0);
+    const pv = p => {
+      const st = D.storeMap[p.storeId], q = cartQty(p.id), hasOpt = !!p.opt, f = favP.has(p.id), sk = p.id + '|{}', line = s.cart.lines.find(l => l.key === sk);
+      return { id: p.id, name: p.name, desc: p.desc, priceStr: (hasOpt ? t.from + ' ' : '') + P(p.price), img: p.img, icon: I[CI[st.cat] + 'L'], iconM: I[CI[st.cat] + 'M'], storeName: st.name, popular: p.pop, qty: q, inCart: !hasOpt && q > 0, showAdd: hasOpt || q === 0, qtyBadge: hasOpt && q > 0, decIcon: line && line.qty === 1 ? I.trashS : I.minusS, heart: f ? I.heartF : I.heart, favColor: f ? 'var(--color-accent)' : 'var(--color-text)',
+        open: () => this.openProduct(p.id), fav: e => { e.stopPropagation(); this.toggleFav('favP', p.id); },
+        add: e => { e.stopPropagation(); if (hasOpt) this.openProduct(p.id); else if (this.addLine(p.id, {}, 1)) this.toast(`${t.added} · ${p.name}`); },
+        inc: e => { e.stopPropagation(); this.addLine(p.id, {}, 1); }, dec: e => { e.stopPropagation(); this.chg(sk, -1); } };
+    };
+    const is = {}; ['onb', 'auth', 'home', 'search', 'store', 'product', 'cart', 'checkout', 'tracking', 'orders', 'orderDetail', 'favorites', 'profile'].forEach(k => is[k] = s.screen === k);
+
+    // cart
+    const tt = this.totals(s.cart, s.promo), cs = tt.store;
+    const lines = s.cart.lines.map(l => { const p = D.prodMap[l.pid]; return { key: l.key, name: p.name, optText: this.optText(p, l.sel), totalStr: P(l.unit * l.qty), qty: l.qty, icon: I[CI[D.storeMap[p.storeId].cat] + 'M'], decIcon: l.qty === 1 ? I.trashS : I.minusS, inc: () => this.chg(l.key, 1), dec: () => this.chg(l.key, -1) }; });
+    const belowMin = !!cs && tt.sub < cs.min;
+    const addr = s.addresses.find(a => a.id === s.addrId) || s.addresses[0];
+    const promoDesc = s.promo === 'MARHABA' ? '−30%, ' + t.upTo + ' 40 DH' : t.free;
+    const barScreens = ['home', 'search', 'favorites', 'store'];
+    const showCartBar = tt.count > 0 && barScreens.includes(s.screen) && (s.screen !== 'store' || s.cart.storeId === s.storeId);
+
+    // search
+    const nq = this.norm(s.q.trim());
+    const match = x => !nq || this.norm(x.name + ' ' + x.cuisine).includes(nq) || D.products.some(p => p.storeId === x.id && this.norm(p.name).includes(nq));
+    const sorters = { rec: (a, b) => (a.closed - b.closed) || (b.rating * Math.log(b.rc) - a.rating * Math.log(a.rc)), fast: (a, b) => a.tMin - b.tMin, rating: (a, b) => b.rating - a.rating, fee: (a, b) => a.fee - b.fee };
+    const rs = D.stores.filter(x => match(x) && (!s.fCat || x.cat === s.fCat) && (!s.fRating || x.rating >= 4.5) && (!s.fFast || x.tMax <= 25) && (!s.fPrice || x.price <= s.fPrice)).sort(sorters[s.sort]);
+    const prodRes = nq ? D.products.filter(p => this.norm(p.name + ' ' + p.img).includes(nq) && (!s.fCat || D.storeMap[p.storeId].cat === s.fCat)).slice(0, 8).map(pv) : [];
+    const sActive = !!(nq || s.fCat || s.fRating || s.fFast || s.fPrice);
+    const sortNames = { rec: t.sortRec, fast: t.sortFast, rating: t.sortRating, fee: t.sortFee };
+
+    // store
+    const cur = D.storeMap[s.storeId];
+    const prods = D.products.filter(p => p.storeId === cur.id);
+    const secNames = [...new Set(prods.map(p => p.sec))];
+    const storeSecs = secNames.map((n, i) => ({ id: 'sec' + i, name: n, items: prods.filter(p => p.sec === n).map(pv) }));
+    const activeTab = s.storeTab || 'sec0';
+
+    // product
+    const prod = D.prodMap[s.prodId], pst = D.storeMap[prod.storeId], pf = favP.has(prod.id);
+    const groups = (D.OPT[prod.opt] || []).map(g => ({ id: g.id, name: g.name, tag: g.req ? t.required : t.optional, sub: g.req ? t.choose1 : '', type: g.multi ? 'checkbox' : 'radio', dotR: g.multi ? '0' : '50%', choices: g.choices.map((c, i) => ({ label: c[0], extra: c[1] ? '+ ' + P(c[1]) : '', checked: (s.sel[g.id] || []).includes(i), pick: () => this.pick(g, i) })) }));
+    const unit = this.unit(prod, s.sel);
+
+    // tracking
+    const a = s.active, T = s.trackT, step = T < 5 ? 0 : T < 14 ? 1 : T < 20 ? 2 : T < 34 ? 3 : 4;
+    const route = [[70, 80], [70, 150], [190, 150], [190, 230], [310, 230], [310, 262]];
+    const prog = step < 2 ? 0 : step === 2 ? (T - 14) / 6 * 0.1 : step === 3 ? 0.1 + (T - 20) / 14 * 0.9 : 1;
+    const segs = route.slice(1).map((p, i) => Math.hypot(p[0] - route[i][0], p[1] - route[i][1])), L = segs.reduce((x, y) => x + y, 0);
+    let dist = prog * L, dx = route[0][0], dy = route[0][1];
+    for (let i = 0; i < segs.length; i++) { if (dist <= segs[i]) { const f = dist / segs[i]; dx = route[i][0] + (route[i + 1][0] - route[i][0]) * f; dy = route[i][1] + (route[i + 1][1] - route[i][1]) * f; break; } dist -= segs[i]; dx = route[i + 1][0]; dy = route[i + 1][1]; }
+    const offs = [0, 2, 12, 15, 30];
+    const stepSubs = [t.s0b, t.s1b, t.s2b, t.s3b, t.s4b];
+    const steps = [t.s0, t.s1, t.s2, t.s3, t.s4].map((label, i) => ({ label, sub: i === step ? stepSubs[i] : '', time: a && i <= step ? this.clock(a.placedAt + offs[i] * 60000) : '', dotBg: i < step || (i === step && step === 4) ? 'var(--color-accent)' : 'var(--color-card)', dotBd: i <= step ? 'var(--color-accent)' : 'var(--color-neutral-400)', lineBg: i < step ? 'var(--color-accent)' : 'var(--color-divider)', fg: i <= step ? 'var(--color-text)' : 'var(--color-neutral-600)', fw: i === step ? 600 : 400, notLast: i < 4 }));
+    const etaMin = Math.max(1, Math.round(30 * (1 - T / 34)));
+    const atot = a ? { sub: a.sub, fee: a.fee, service: a.service, disc: a.disc } : null;
+    const aStore = a ? D.storeMap[a.storeId] : null;
+
+    // orders
+    const ordView = o => { const st = D.storeMap[o.storeId]; return { id: o.id, store: st.name, date: o.date, iconM: I[CI[st.cat] + 'M'], itemsText: o.lines.map(l => `${l.qty}× ${D.prodMap[l.pid].name}`).join(', '), totalStr: P(o.total), reorder: () => this.reorder(o), open: () => this.go('orderDetail', { orderId: o.id }) }; };
+    const od = s.orders.find(o => o.id === s.orderId) || s.orders[0];
+    const odAddr = s.addresses.find(x => x.id === od.addrId) || addr;
+
+    const sk = s.sheet || s.lastSheet;
+    const navDefs = [['home', 'home'], ['search', 'search'], ['orders', 'receipt'], ['favorites', 'heart'], ['profile', 'user']];
+    const idx = [['onb', 'Onboarding'], ['auth', 'Sign in'], ['home', 'Home'], ['search', 'Search & filters'], ['store', 'Store page'], ['product', 'Product details'], ['cart', 'Cart'], ['checkout', 'Checkout'], ['tracking', 'Order tracking'], ['orders', 'Orders'], ['orderDetail', 'Order details'], ['favorites', 'Favorites'], ['profile', 'Profile']];
+    const now = Date.now();
+    const langs = [['en', 'English', 'EN'], ['fr', 'Français', 'FR'], ['ar', 'العربية', 'ع']].map(l => ({ label: l[1], short: l[2], on: s.lang === l[0], pick: () => this.setState({ lang: l[0] }) }));
+    const na = s.na, setNa = f => e => { const v = e.target.value; this.setState(st => ({ na: { ...st.na, [f]: v } })); };
+    const phoneDigits = s.phoneNum.replace(/\D/g, '');
+
+    return {
+      rootRef: this.rootRef, storeRef: this.storeRef, searchRef: this.searchRef,
+      t, ic, is, dir: rtl ? 'rtl' : 'ltr', rootPad: this.props.bare ? '0' : '40px 24px', rootMinH: this.props.bare ? '0' : '100vh', showIndex: this.props.showScreenIndex ?? true,
+      clockNow: this.clock(now), langs,
+      index: idx.map((x, i) => ({ n: String(i + 1).padStart(2, '0'), label: x[1], go: () => this.jumpTo(x[0]), fg: s.screen === x[0] ? 'var(--color-accent-700)' : 'var(--color-text)', fw: s.screen === x[0] ? 600 : 400 })),
+      reset: () => { clearTimeout(this.tt); this.setState(this.initState(s.lang)); },
+      back: this.back, stop: e => e.stopPropagation(),
+
+      // onboarding
+      onb0: s.onb === 0, onb1: s.onb === 1, onb2: s.onb === 2, onbNotLast: s.onb < 2, onbLast: s.onb === 2,
+      onbTitle: [t.onb1t, t.onb2t, t.onb3t][s.onb], onbBody: [t.onb1b, t.onb2b, t.onb3b][s.onb],
+      onbDots: [0, 1, 2].map(i => ({ w: i === s.onb ? '32px' : '12px', bg: i <= s.onb ? 'var(--color-accent)' : 'var(--color-neutral-300)' })),
+      onbCats: D.cats.map(c => ({ label: t['cat_' + c], icon: I[CI[c] + 'L'] })),
+      onbNext: () => this.setState({ onb: Math.min(2, s.onb + 1) }), onbSkip: () => this.setState({ onb: 2 }),
+      allowLoc: () => { this.setState({ screen: 'auth', authStep: 'phone', addrId: 'a1' }); this.toast(t.located); },
+      manualAddr: () => this.openSheet('newAddress'),
+
+      // auth
+      authPhone: s.authStep === 'phone', authOtp: s.authStep === 'otp', phoneNum: s.phoneNum, otp: s.otp,
+      phoneInvalid: !(phoneDigits.length === 9 || (phoneDigits.length === 10 && phoneDigits[0] === '0')), phoneFmt: '+212 ' + (s.phoneNum || '6 61 23 45 67'),
+      onPhone: e => this.setState({ phoneNum: e.target.value.replace(/[^\d ]/g, '').slice(0, 13) }),
+      sendOtp: () => this.setState({ authStep: 'otp', otp: '' }),
+      onOtp: e => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); this.setState({ otp: v }); if (v.length === 4) setTimeout(() => this.enterApp(), 350); },
+      resend: () => this.toast(t.otpSent + ' +212 ' + (s.phoneNum || '')),
+      socialLogin: () => this.enterApp(), guest: () => this.enterApp(),
+      authBack: () => s.authStep === 'otp' ? this.setState({ authStep: 'phone' }) : this.setState({ screen: 'onb', onb: 2 }),
+
+      // home
+      addrShort: `${addr.label} · ${addr.street}`, openAddr: () => this.openSheet('address'),
+      cartCount: tt.count, goCart: () => this.go('cart'),
+      goSearch: () => { this.tabTo('search'); setTimeout(() => this.searchRef.current && this.searchRef.current.focus(), 60); },
+      homeError: !!this.props.networkError && !s.recovered && !s.homeLoading, homeLoadingV: s.homeLoading, homeReady: !s.homeLoading && !(this.props.networkError && !s.recovered),
+      retry: () => { this.setState({ homeLoading: true }); setTimeout(() => this.setState({ homeLoading: false, recovered: true }), 900); },
+      promo1: () => { this.setState({ promoInput: 'MARHABA' }); this.toast('MARHABA · ' + t.promo); },
+      promo2: () => this.openCategory('groceries'), promo3: () => this.openStore('s4'),
+      cats: D.cats.map(c => ({ label: t['cat_' + c], iconM: I[CI[c] + 'M'], tap: () => this.openCategory(c) })),
+      popular: [...D.stores.filter(x => !x.closed)].sort((x, y) => y.rc - x.rc).slice(0, 5).map(sv),
+      fast: D.stores.filter(x => !x.closed && x.tMax <= 25).sort((x, y) => x.tMin - y.tMin).map(sv),
+      recommended: ['s1', 's3', 's5', 's8', 's9', 's2'].map(id => sv(D.storeMap[id])),
+      seeAllPopular: () => { this.tabTo('search', { sort: 'rating', fRating: true }); this.kick(); },
+      seeAllFast: () => { this.tabTo('search', { sort: 'fast', fFast: true }); this.kick(); },
+
+      // search
+      q: s.q, onQ: e => { this.setState({ q: e.target.value }); this.kick(); }, onQKey: e => { if (e.key === 'Enter') this.addRecent(s.q); }, clearQ: () => this.setState({ q: '' }),
+      sortLabel: sortNames[s.sort], openSort: () => this.openSheet('sort'),
+      filterChips: [
+        { label: '★ 4.5+', tap: () => { this.setState({ fRating: !s.fRating }); this.kick(); }, ...on(s.fRating) },
+        { label: '≤ 25 min', tap: () => { this.setState({ fFast: !s.fFast }); this.kick(); }, ...on(s.fFast) },
+        { label: s.fPrice ? ['DH', 'DH DH', 'DH DH DH'][s.fPrice - 1] : t.price, tap: () => { this.setState({ fPrice: (s.fPrice + 1) % 4 }); this.kick(); }, ...on(!!s.fPrice) }
+      ],
+      catChips: [null, ...D.cats].map(c => ({ label: c ? t['cat_' + c] : t.stores + ' · ' + (s.lang === 'ar' ? 'الكل' : s.lang === 'fr' ? 'Tout' : 'All'), tap: () => { this.setState({ fCat: c }); this.kick(); }, ...on(s.fCat === c) })),
+      searchIdle: !sActive, searchingV: sActive && s.searching, searchEmpty: sActive && !s.searching && rs.length + prodRes.length === 0, searchHas: sActive && !s.searching && rs.length + prodRes.length > 0,
+      resultLabel: `${rs.length} ${t.stores.toLowerCase()} · ${sortNames[s.sort]}`, storeResults: rs.map(sv), hasStoreRes: rs.length > 0, prodResults: prodRes, hasProdRes: prodRes.length > 0,
+      recent: s.recent.map(r => ({ label: r, tap: () => this.setQ(r), remove: e => { e.stopPropagation(); this.setState({ recent: s.recent.filter(x => x !== r) }); } })), hasRecent: s.recent.length > 0,
+      trending: ['Tajine', 'Pizza', 'Msemen', 'Paracetamol', 'Argan', 'Orange juice', 'Burger', 'Couscous'].map(x => ({ label: x, tap: () => this.setQ(x) })),
+      clearFilters: () => this.setState({ q: '', fCat: null, fRating: false, fFast: false, fPrice: 0 }),
+      sortOpts: Object.keys(sortNames).map(k2 => ({ label: sortNames[k2], on: s.sort === k2, pick: () => { this.setState({ sort: k2, sheet: null }); this.kick(); } })),
+      skel: [1, 2, 3, 4],
+
+      // store
+      cur: sv(cur), curClosed: cur.closed, storeSecs,
+      storeTabs: storeSecs.map(x => ({ label: x.name, tap: () => this.jump(x.id), fg: activeTab === x.id ? 'var(--color-accent-700)' : 'var(--color-neutral-700)', bd: activeTab === x.id ? 'var(--color-accent)' : 'transparent' })),
+      onStoreScroll: this.onStoreScroll,
+
+      // product
+      prod: { name: prod.name, desc: prod.desc, priceStr: P(prod.price), img: prod.img, storeName: pst.name + ' · ' + pst.tMin + '–' + pst.tMax + ' min', iconX: I[CI[pst.cat] + 'X'], heart: pf ? I.heartF : I.heart, favColor: pf ? 'var(--color-accent)' : 'var(--color-text)', fav: () => this.toggleFav('favP', prod.id) },
+      groups, qty: s.qty, qtyInc: () => this.setState({ qty: s.qty + 1 }), qtyDec: () => this.setState({ qty: Math.max(1, s.qty - 1) }),
+      addProdLabel: `${t.addToCart} · ${P(unit * s.qty)}`,
+      addProd: () => { if (this.addLine(prod.id, s.sel, s.qty, true)) { this.back(); this.toast(`${t.added} · ${s.qty}× ${prod.name}`); } },
+
+      // cart
+      cartEmpty: lines.length === 0, cartHas: lines.length > 0, lines, cartStoreName: cs ? cs.name : '', cartEta: cs ? `${cs.tMin}–${cs.tMax} min` : '',
+      addMore: () => cs && this.go('store', { storeId: cs.id }), browse: () => this.tabTo('home'),
+      belowMin, belowMinText: cs ? `${t.minOrder}: ${P(cs.min)} · +${P(Math.max(0, cs.min - tt.sub))}` : '',
+      promoInput: s.promoInput, onPromo: e => this.setState({ promoInput: e.target.value.toUpperCase(), promoMsg: '' }), applyPromo: this.applyPromo,
+      promoMsg: s.promoMsg === 'ok' ? `${s.promo} ${t.promoOk} · ${promoDesc}` : s.promoMsg === 'bad' ? t.promoBad : '', promoColor: s.promoMsg === 'ok' ? 'var(--color-accent-2-700)' : 'var(--color-text)',
+      promoIcon: s.promoMsg === 'ok' ? I.checkS : I.xS,
+      sumRows: this.sumRows(tt), totalStr: P(tt.total), cartBlocked: belowMin, goCheckout: () => this.go('checkout'),
+      addrLabel: addr.label, addrStreet: `${addr.street}, ${addr.district}, ${addr.city}`, addrBuilding: addr.building, addrLandmark: addr.landmark ? `${t.landmark}: ${addr.landmark}` : '',
+      showCartBar, cartBarLabel: t.viewCart, cartBarSpacer: showCartBar && s.screen === 'store',
+
+      // checkout
+      etaBig: cs ? (s.when === 'now' ? `${cs.tMin}–${cs.tMax} min` : ['21:30', '22:00', '22:30'][s.slot]) : '',
+      arriveText: cs ? (s.when === 'now' ? `${t.arriveAround} ${this.clock(now + cs.tMax * 60000)}` : `${t.schedule} · ${addr.district}`) : '',
+      whenNow: s.when === 'now', whenSched: s.when === 'sched', setNow: () => this.setState({ when: 'now' }), setSched: () => this.setState({ when: 'sched' }),
+      slots: ['21:30', '22:00', '22:30'].map((x, i) => ({ label: x, tap: () => this.setState({ slot: i }), ...on(s.slot === i) })),
+      instrChips: [t.q2, t.q1, 'Leave with the gardien', t.q3].map(x => ({ label: x, tap: () => this.setState(st => ({ instrChips: st.instrChips.includes(x) ? st.instrChips.filter(y => y !== x) : [...st.instrChips, x] })), ...on(s.instrChips.includes(x)) })),
+      instr: s.instr, onInstr: e => this.setState({ instr: e.target.value }),
+      pays: [['cash', t.cash, t.cashSub, I.cash], ['card', 'Visa •••• 4821', t.cardSub, I.card]].map(p => ({ label: p[1], sub: p[2], icon: p[3], on: s.pay === p[0], pick: () => this.setState({ pay: p[0] }) })),
+      summaryLines: lines.map(l => ({ text: `${l.qty}× ${l.name}`, val: l.totalStr })),
+      confirmLabel: s.placing ? t.placing : `${t.confirm} · ${P(tt.total)}`, placing: s.placing, placeOrder: this.placeOrder,
+
+      // tracking
+      hasActive: !!a, activeId: a ? a.id : '', activeStore: aStore ? aStore.name : '', activeTotal: a ? P(a.total) : '', activeItems: a ? `${a.lines.reduce((x, l) => x + l.qty, 0)} ${t.items}` : '',
+      activePay: a ? (a.pay === 'cash' ? t.cash : 'Visa •••• 4821') : '', activeStatus: [t.s0, t.s1, t.s2, t.s3, t.s4][step],
+      steps, notDelivered: step < 4, delivered: step === 4, etaMin, arriveAt: a ? `${t.arriveAround} ${this.clock(now + etaMin * 60000)}` : '',
+      progSegs: [0, 1, 2, 3, 4].map(i => ({ bg: i <= step ? 'var(--color-accent)' : 'var(--color-neutral-300)' })),
+      dx: Math.round(dx), dy: Math.round(dy), goTrack: () => this.go('tracking'),
+      callDriver: () => this.toast(t.calling), chatDriver: () => { if (!s.chat.length) this.setState({ chat: [{ me: false, text: t.chatHi }] }); this.openSheet('chat'); },
+      stars: [1, 2, 3, 4, 5].map(n => ({ icon: n <= s.rating ? I.starBigF : I.starBig, tap: () => this.setState({ rating: n }) })),
+      finishOrder: this.finishOrder, activeSum: atot ? this.sumRows(atot) : [],
+
+      // orders
+      pastOrders: s.orders.map(ordView), noOrders: s.orders.length === 0,
+      od: { ...ordView(od), status: t.s4, addr: `${odAddr.label} · ${odAddr.street}, ${odAddr.district}`, pay: od.pay === 'cash' ? t.cash : 'Visa •••• 4821', lines: od.lines.map(l => ({ text: `${l.qty}× ${D.prodMap[l.pid].name}`, val: P(l.unit * l.qty) })), sum: this.sumRows(od), total: P(od.total) },
+      odReorder: () => this.reorder(od), getHelp: () => this.toast(t.soon),
+
+      // favorites
+      favStores: s.favTab === 'stores', favProds: s.favTab === 'products',
+      favTabs: [['stores', t.stores], ['products', t.products]].map(x => ({ label: x[1], on: s.favTab === x[0], pick: () => this.setState({ favTab: x[0] }) })),
+      favStoreList: s.favS.map(id => sv(D.storeMap[id])), favProdList: s.favP.map(id => pv(D.prodMap[id])),
+      favStoresEmpty: s.favS.length === 0, favProdsEmpty: s.favP.length === 0,
+
+      // profile
+      profileRows: [
+        [I.user, t.personal, 'Salma El Amrani · salma.amrani@gmail.com', () => this.toast(t.soon)],
+        [I.pin, t.addresses, s.addresses.map(x => x.label).join(' · '), () => this.openSheet('address')],
+        [I.card, t.payments, `${t.cash} · Visa 4821`, () => this.openSheet('payments')],
+        [I.receipt, t.orders, `${s.orders.length} ${t.previous.toLowerCase()}`, () => this.tabTo('orders')],
+        [I.heart, t.favorites, `${s.favS.length} ${t.stores.toLowerCase()} · ${s.favP.length} ${t.products.toLowerCase()}`, () => this.tabTo('favorites')]
+      ].map(r => ({ icon: r[0], label: r[1], sub: r[2], tap: r[3] })),
+      profileRows2: [[I.help, t.help, '', () => this.toast(t.soon)], [I.gear, t.settings, '', () => this.toast(t.soon)]].map(r => ({ icon: r[0], label: r[1], sub: r[2], tap: r[3] })),
+      toggleNotif: () => this.setState({ notif: !s.notif }), notifBg: s.notif ? 'var(--color-accent)' : 'transparent', notifBd: s.notif ? 'var(--color-accent)' : 'var(--color-neutral-400)', notifKnob: s.notif ? '#fff' : 'var(--color-neutral-500)', notifX: s.notif ? '23px' : '3px',
+      logout: () => this.setState({ screen: 'auth', authStep: 'phone', stack: [], phoneNum: '', otp: '' }),
+
+      // nav
+      showNav: ['home', 'search', 'orders', 'favorites', 'profile'].includes(s.screen),
+      navItems: navDefs.map(n => ({ label: t[n[0]], icon: I[n[1]], go: () => this.tabTo(n[0]), color: s.screen === n[0] ? 'var(--color-accent-700)' : 'var(--color-neutral-600)', bar: s.screen === n[0] ? 'var(--color-accent)' : 'transparent', dot: n[0] === 'orders' && !!a && step < 4 })),
+
+      // sheets
+      sheetPE: s.sheet ? 'auto' : 'none', sheetOp: s.sheet ? 1 : 0, sheetTf: s.sheet ? 'translateY(0)' : 'translateY(calc(100% + 220px))', closeSheet: this.closeSheet,
+      sh: { address: sk === 'address', newAddress: sk === 'newAddress', sort: sk === 'sort', newCart: sk === 'newCart', chat: sk === 'chat', payments: sk === 'payments' },
+      addrList: s.addresses.map(x => ({ label: x.label, line: `${x.street}, ${x.district} · ${x.city}`, extra: [x.building, x.landmark].filter(Boolean).join(' · '), on: x.id === s.addrId, pick: () => { this.setState({ addrId: x.id, sheet: null }); } })),
+      useLocation: () => { this.setState({ addrId: 'a1', sheet: null }); this.toast(t.located); },
+      openNewAddr: () => this.openSheet('newAddress'),
+      na, naCity: ['Marrakech', 'Casablanca', 'Rabat'].map(c => ({ label: c, on: na.city === c, pick: () => this.setState(st => ({ na: { ...st.na, city: c } })) })),
+      naLabel: setNa('label'), naDistrict: setNa('district'), naStreet: setNa('street'), naBuilding: setNa('building'), naLandmark: setNa('landmark'),
+      naInvalid: !na.district.trim() || !na.street.trim(),
+      saveAddr: () => { const id = 'a' + Date.now(); const nx = { id, ...na, label: na.label.trim() || 'Other' }; this.setState(st => ({ addresses: [...st.addresses, nx], addrId: id, sheet: null, na: { label: '', city: 'Marrakech', district: '', street: '', building: '', landmark: '' }, ...(st.screen === 'onb' ? { screen: 'auth', authStep: 'phone' } : {}) })); },
+      newCartBody: t.newCartB.replace('%a', cs ? cs.name : '').replace('%b', s.pending ? D.storeMap[D.prodMap[s.pending.pid].storeId].name : ''),
+      confirmNewCart: this.confirmNewCart,
+      chatMsgs: s.chat.map(m => ({ text: m.text, align: m.me ? 'flex-end' : 'flex-start', bg: m.me ? 'var(--color-accent)' : 'var(--color-card)', fg: m.me ? '#fff' : 'var(--color-text)', bd: m.me ? 'var(--color-accent)' : 'var(--color-divider)' })),
+      quickReplies: [t.q1, t.q2, t.q3].map(x => ({ label: x, tap: () => this.sendChat(x) })),
+      addCard: () => this.toast(t.soon), payList: [[I.cash, t.cash, t.cashSub], [I.card, 'Visa •••• 4821', t.cardSub]].map(p => ({ icon: p[0], label: p[1], sub: p[2] })),
+
+      toastMsg: s.toast || '', toastOp: s.toast ? 1 : 0, toastTf: s.toast ? 'translateY(0)' : 'translateY(12px)'
+    };
+  }
+}
+</script>
+</body>
+</html>
