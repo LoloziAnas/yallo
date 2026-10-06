@@ -1,0 +1,13 @@
+{
+  "name": "yallo-e2e",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Joint end-to-end run across the customer app, back office and courier app on the shared mock API.",
+  "type": "module",
+  "scripts": {
+    "test": "node run.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "^1.49.0"
+  }
+}

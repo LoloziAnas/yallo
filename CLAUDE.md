@@ -10,6 +10,7 @@ Delivery platform for Marrakech. Several Claude sessions work here in parallel, 
 | `courier/` | Courier mobile app | Expo SDK 57 | courier |
 | `shared/` | `@yallo/shared`: domain model, order lifecycle, design tokens, demo seed, API client | plain TypeScript | back office |
 | `api/` | Mock API: the shared live state for all apps | Node + `ws`, run with `tsx` | back office |
+| `e2e/` | Joint end-to-end run across all three apps | Playwright (system Chrome) | back office |
 
 ## Rules for parallel sessions
 
@@ -71,3 +72,12 @@ or calling `POST /api/reset`, restores the demo seed.
 - Use `createYalloClient(url)` rather than calling these by hand. The back office uses `''`, because Vite
   proxies `/api`. On a phone, use the dev machine's LAN IP, not `localhost`.
 - Courier applications and payouts are still local to the back office.
+
+## Joint end-to-end run
+
+`cd e2e && npm install && npm test` drives the customer app (:8090), back office (:5191) and courier
+app (:8091) together against the API (:5190). A customer orders from Burger Atlas, ops offers it to
+Karim, Karim accepts, picks it up and delivers, and the customer's tracking follows. Every step is
+checked from each side, with screenshots in `e2e/out/`. It takes about 4 minutes, mostly simulated
+driving. It resets the API first. `CUSTOMER=api` skips the customer app; `HEADED=1` shows the browsers.
+Tell the app owners before changing their screen text, because the run asserts on it.
