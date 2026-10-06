@@ -146,7 +146,17 @@ export class Store {
         throw new ActionError('Each item needs a name, a whole qty ≥ 1 and a price ≥ 0');
       }
     }
-    const fee = body.fee ?? DEFAULT_FEE;
+    const money = (v: unknown, name: string, fallback: number) => {
+      if (v === undefined || v === null) return fallback;
+      if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) throw new ActionError(name + ' must be a number ≥ 0');
+      return v;
+    };
+    const fee = money(body.fee, 'fee', DEFAULT_FEE);
+    const serviceFee = money(body.serviceFee, 'serviceFee', 0);
+    const discount = money(body.discount, 'discount', 0);
+    const gross = body.items.reduce((sum, i) => sum + i.qty * i.price, 0) + fee + serviceFee;
+    if (discount > gross) throw new ActionError(`discount (${discount}) can't exceed the order (${gross} DH)`);
+    const promoCode = typeof body.promoCode === 'string' && body.promoCode.trim() ? body.promoCode.trim().slice(0, 32) : undefined;
     const nextNum = Math.max(...this.s.orders.map(o => Number(o.id.slice(1)))) + 1;
     const centre = ZONES[body.zone as ZoneName];
     // Spread drop-offs around the zone centre so new pins don't stack.
@@ -161,7 +171,10 @@ export class Store {
       courierId: null,
       items: body.items.map(i => ({ qty: i.qty, name: i.name, price: i.price })),
       fee,
-      total: body.items.reduce((sum, i) => sum + i.qty * i.price, 0) + fee,
+      ...(serviceFee ? { serviceFee } : {}),
+      ...(discount ? { discount } : {}),
+      ...(promoCode ? { promoCode } : {}),
+      total: gross - discount,
       pay: body.pay,
       placedAt: clockAt(this.s.t),
       elapsedSec: 0,

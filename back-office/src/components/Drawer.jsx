@@ -102,6 +102,12 @@ function OrderDetail({ v }) {
             </div>
           ))}
           <div className="muted" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span>Delivery fee</span><span>{od.fee} DH</span></div>
+          {od.serviceFee > 0 && <div className="muted" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span>Service fee</span><span>{od.serviceFee} DH</span></div>}
+          {od.discount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--color-accent-2-700)' }}>
+              <span>Discount{od.promoCode ? ' · ' + od.promoCode : ''}</span><span>−{od.discount} DH</span>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, fontWeight: 700 }}><span>Total</span><span>{od.total} DH</span></div>
           {od.refunded && <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent-2-700)' }}>Refunded {od.refundAmt} DH</div>}
         </div>

@@ -98,6 +98,18 @@ describe('Store', () => {
     assert.equal(order(s, '#48220').status, 'ready');
   });
 
+  test('service fee, discount and promo code feed the total', () => {
+    const o = s.placeOrder({ merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz', pay: 'card', fee: 9, serviceFee: 3, discount: 30, promoCode: ' MARHABA ',
+      items: [{ qty: 2, name: 'Chicken tajine (For 2 to share · Mint tea pot)', price: 50 }] });
+    assert.deepEqual([o.fee, o.serviceFee, o.discount, o.promoCode, o.total], [9, 3, 30, 'MARHABA', 100 + 9 + 3 - 30]);
+    const plain = s.placeOrder({ merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz', pay: 'cash', fee: 0, items: [{ qty: 1, name: 'Tea', price: 9 }] });
+    assert.deepEqual([plain.serviceFee, plain.discount, plain.promoCode, plain.total], [undefined, undefined, undefined, 9]);
+    const base = { merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz' as const, pay: 'cash' as const, items: [{ qty: 1, name: 'Tea', price: 9 }] };
+    assert.throws(() => s.placeOrder({ ...base, discount: 100 }), /can't exceed/);
+    assert.throws(() => s.placeOrder({ ...base, serviceFee: -3 }), /serviceFee must be/);
+    assert.throws(() => s.placeOrder({ ...base, fee: 'free' as never }), /fee must be/);
+  });
+
   test('rejects bad orders', () => {
     const ok = { merchantId: 'm2', customerName: 'Amal', zone: 'Hivernage' as const, pay: 'card' as const, items: [{ qty: 1, name: 'Fries', price: 19 }] };
     assert.throws(() => s.placeOrder({ ...ok, merchantId: 'nope' }), /No merchant/);

@@ -48,6 +48,14 @@ export type PlaceOrderBody = {
   pay: PayMethod;
   /** Delivery fee in DH. Defaults to 15. */
   fee?: number;
+  /** Service fee in DH. Defaults to 0. */
+  serviceFee?: number;
+  /**
+   * Discount in DH, already worked out by the app (the API doesn't check promo rules). Defaults to 0.
+   * It can't exceed items + fee + serviceFee.
+   */
+  discount?: number;
+  promoCode?: string;
 };
 
 export type OpenTicketBody = {

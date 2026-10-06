@@ -99,7 +99,13 @@ export type Order = {
   items: OrderItem[];
   /** Delivery fee in DH. */
   fee: number;
-  /** Total charged in DH, fee included. */
+  /** Service fee in DH. */
+  serviceFee?: number;
+  /** Discount in DH, e.g. from a promo code. */
+  discount?: number;
+  /** Promo code the customer applied, for ops' reference. */
+  promoCode?: string;
+  /** Total charged in DH: items + fee + serviceFee − discount. */
   total: number;
   /** DH paid to the courier for this job, tip excluded. Not the customer's delivery `fee`. */
   courierPay?: number;
