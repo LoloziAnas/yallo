@@ -65,4 +65,9 @@ The app is in English, French and Arabic, and Arabic switches the layout to righ
   no reload. Android mirrors `textAlign` under an RTL layout, which `Txt` accounts for.
 - **Order statuses** come from the shared lifecycle (`OrderStatus` from `@yallo/shared`, mirrored in
   `catalog.ts`).
+- **Location:** "Use my location" (onboarding and the address sheet) asks for permission, takes a GPS fix and
+  reverse-geocodes it into a "Current location" address (`src/location/locate.ts`). The delivery zone is the
+  nearest shared zone to the fix. Web has no reverse geocoding, so the street shows the coordinates. If
+  permission is refused or there's no fix, the address form opens and explains why. On the Android emulator,
+  set a position with `adb emu "geo fix <lon> <lat>"` (quoted, because the longitude is negative).
 - **Photos** are placeholders: a gradient, a category icon and a caption naming the shot to take.

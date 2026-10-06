@@ -26,8 +26,8 @@ export function Onboarding() {
   const rtl = useRtl();
   const lang = useApp((s) => s.lang);
   const setLang = useApp((s) => s.setLang);
-  const set = useApp((s) => s.set);
-  const showToast = useApp((s) => s.showToast);
+  const locateMe = useApp((s) => s.locateMe);
+  const [locating, setLocating] = useState(false);
   const bottom = useBottomPad(34);
   const [step, setStep] = useState(0);
 
@@ -107,13 +107,17 @@ export function Onboarding() {
       ) : (
         <View style={{ gap: 10 }}>
           <Button
-            label={t.allow}
+            label={locating ? t.locating : t.allow}
             icon="nav"
             fontSize={18}
-            onPress={() => {
-              set({ addrId: 'a1' });
-              showToast(t.located);
-              router.push('/sign-in');
+            disabled={locating}
+            onPress={async () => {
+              setLocating(true);
+              const result = await locateMe();
+              setLocating(false);
+              // Without a location, continue with the address form (it then goes on to sign-in).
+              if (result === 'ok') router.push('/sign-in');
+              else router.push({ pathname: '/new-address', params: { reason: result } });
             }}
             style={{ height: 54 }}
           />

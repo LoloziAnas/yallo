@@ -25,7 +25,11 @@ const zones: ZoneName[] = [
   'Agdal',
 ];
 
-const fold = (x: string) => x.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const fold = (x: string) =>
+  x
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 
 /** Delivery zone for an address neighbourhood; Guéliz when it isn't one of the shared zones. */
 export function zoneForDistrict(district: string): ZoneName {

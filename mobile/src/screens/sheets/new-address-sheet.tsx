@@ -1,8 +1,9 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Button } from '@/components/button';
+import { Icon } from '@/components/icon';
 import { Segmented } from '@/components/segmented';
 import { Sheet } from '@/components/sheet';
 import { TextField } from '@/components/text-field';
@@ -24,6 +25,8 @@ const empty = {
 /** New address form. From onboarding ("Enter address manually") it continues to sign-in. */
 export function NewAddressSheet() {
   const t = useT();
+  // Set when "Use my location" couldn't locate the device, to explain why the form opened.
+  const { reason } = useLocalSearchParams<{ reason?: 'denied' | 'unavailable' }>();
   const saveAddress = useApp((s) => s.saveAddress);
   const [na, setNa] = useState(empty);
   const field = (k: keyof typeof empty) => ({
@@ -40,6 +43,23 @@ export function NewAddressSheet() {
 
   return (
     <Sheet scroll>
+      {reason && (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            padding: 12,
+            marginBottom: 12,
+            borderRadius: 14,
+            backgroundColor: colors.accent100,
+          }}>
+          <Icon name="nav" size={15} color={colors.accent700} />
+          <Txt size={13} color={colors.accent800} style={{ flex: 1 }}>
+            {reason === 'denied' ? t.locDenied : t.locFailed}
+          </Txt>
+        </View>
+      )}
       <Txt heading size={27} style={{ marginBottom: 12 }}>
         {t.addNew}
       </Txt>

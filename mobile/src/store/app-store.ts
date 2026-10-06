@@ -1,12 +1,13 @@
 // App state and actions, ported from the Yallo design's logic class.
 // Orders go to the shared mock API, and the live feed drives tracking.
 // Screen-local UI state (product options, store tab, form fields) lives in the screens instead.
-import type { ApiOrder, LiveState, PlaceOrderBody } from '@yallo/shared';
+import type { ApiOrder, LiveState, PlaceOrderBody, ZoneName } from '@yallo/shared';
 import { router } from 'expo-router';
 import { create } from 'zustand';
 
 import { api } from '@/api/client';
 import { merchantForStore, zoneForDistrict } from '@/data/api-merchants';
+import { locate } from '@/location/locate';
 
 import {
   type Address,
@@ -132,6 +133,11 @@ type Actions = {
   clearFilters: () => void;
 
   saveAddress: (a: Omit<Address, 'id'>) => void;
+  /**
+   * Locates the device and selects that as the delivery address ("Current location").
+   * Otherwise resolves with why not, for the address form to explain.
+   */
+  locateMe: () => Promise<'ok' | 'denied' | 'unavailable'>;
 };
 
 const t = () => strings[useApp.getState().lang];
@@ -278,7 +284,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
     const body: PlaceOrderBody = {
       merchantId: merchantForStore[store.id],
       customerName: CUSTOMER_NAME,
-      zone: zoneForDistrict(addr.district),
+      zone: (addr.zone as ZoneName | undefined) ?? zoneForDistrict(addr.district),
       items: s.cart.lines.map((l) => {
         const p = productById[l.pid];
         const opts = optionText(p, l.sel);
@@ -418,6 +424,19 @@ export const useApp = create<State & Actions>()((set, get) => ({
       addresses: [...s.addresses, { ...a, id, label: a.label.trim() || 'Other' }],
       addrId: id,
     }));
+  },
+
+  locateMe: async () => {
+    const r = await locate();
+    if (!r.ok) return r.reason;
+    const here: Address = { ...r.address, id: 'loc', label: t().currentLoc };
+    set((s) => ({
+      addresses: [...s.addresses.filter((a) => a.id !== 'loc'), here],
+      addrId: 'loc',
+    }));
+    const where = [here.district, here.city].filter(Boolean).join(', ') || here.street;
+    get().showToast(t().located.replace('%s', where));
+    return 'ok';
   },
 }));
 

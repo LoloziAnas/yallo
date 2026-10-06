@@ -60,6 +60,8 @@ export type Address = {
   street: string;
   building: string;
   landmark: string;
+  /** Delivery zone detected from GPS (a shared ZoneName); otherwise derived from the district. */
+  zone?: string;
 };
 
 export type CartLine = { key: string; pid: string; sel: Selection; qty: number; unit: number };

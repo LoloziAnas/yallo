@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Button } from '@/components/button';
@@ -16,24 +17,28 @@ export function AddressSheet() {
   const addresses = useApp((s) => s.addresses);
   const addrId = useApp((s) => s.addrId);
   const set = useApp((s) => s.set);
-  const showToast = useApp((s) => s.showToast);
+  const locateMe = useApp((s) => s.locateMe);
+  const [locating, setLocating] = useState(false);
 
   return (
-    <SheetBody>
+    <SheetBody scroll>
       <Txt heading size={27} style={{ marginBottom: 12 }}>
         {t.address}
       </Txt>
       <Button
         variant="secondary"
-        onPress={() => {
-          set({ addrId: 'a1' });
-          showToast(t.located);
-          router.back();
+        disabled={locating}
+        onPress={async () => {
+          setLocating(true);
+          const result = await locateMe();
+          setLocating(false);
+          if (result === 'ok') router.back();
+          else router.replace({ pathname: '/new-address', params: { reason: result } });
         }}
         accessibilityLabel={t.useLoc}
         style={{ height: 48, justifyContent: 'flex-start', gap: 10, paddingHorizontal: 14 }}>
         <Icon name="nav" color={colors.accent} />
-        <Txt w={600}>{t.useLoc}</Txt>
+        <Txt w={600}>{locating ? t.locating : t.useLoc}</Txt>
       </Button>
       {addresses.map((a) => (
         <RadioRow

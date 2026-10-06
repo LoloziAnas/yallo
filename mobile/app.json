@@ -32,6 +32,12 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Yallo uses your location to deliver your order to where you are."
+        }
       ]
     ],
     "experiments": {
