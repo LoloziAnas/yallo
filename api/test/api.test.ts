@@ -2,7 +2,7 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import { createYalloClient, type LiveState, type YalloClient } from '@yallo/shared';
-import { OFFER_SEC } from '@yallo/shared';
+import { OFFER_SEC, courierPayFor, tripKm } from '@yallo/shared';
 import { AUTO_ACCEPT_SEC, AUTO_READY_SEC, STAND_IN_ACCEPT_SEC, Store } from '../src/store';
 import { createApi } from '../src/server';
 
@@ -212,6 +212,49 @@ describe('Job offers', () => {
     s.offerOrder('#48218', 'c3');
     s.setCourierAvailability('c3', 'off');
     assert.equal(order(s, '#48218').lastOffer!.outcome, 'declined');
+  });
+});
+
+describe('Courier pay', () => {
+  let s: Store;
+  beforeEach(() => { s = new Store(); });
+  const merchantPos = (id: string) => s.state.merchants.find(m => m.id === id)!.pos;
+
+  test('the rule: max(15, 12 + 3 × km), to the nearest 0.5 DH', () => {
+    assert.equal(courierPayFor(0), 15);
+    assert.equal(courierPayFor(1), 15);
+    assert.equal(courierPayFor(2.4), 19);      // 19.2
+    assert.equal(courierPayFor(6.2), 30.5);    // 30.6
+    assert.equal(courierPayFor(2.25), 19);     // 18.75 rounds up
+    assert.equal(tripKm({ x: 0, y: 0 }, { x: 3, y: 4 }, { x: 3, y: 14 }), 9); // (5 + 10) × 0.6
+  });
+
+  test('an offer prices the job for that courier; re-offering reprices; accepting keeps it', () => {
+    s.attachApp('c2'); s.attachApp('c3');
+    const o = order(s, '#48214');
+    s.offerOrder('#48214', 'c2');
+    const km2 = tripKm(courier(s, 'c2').pos, merchantPos('m2'), o.dropoff);
+    assert.deepEqual([o.courierKm, o.courierPay], [km2, courierPayFor(km2)]);
+    s.offerOrder('#48214', 'c3');
+    const km3 = tripKm(courier(s, 'c3').pos, merchantPos('m2'), o.dropoff);
+    assert.notEqual(km3, km2);
+    assert.deepEqual([o.courierKm, o.courierPay], [km3, courierPayFor(km3)]);
+    tick(s, 5); // c3 doesn't move while idle, but the price is frozen anyway
+    s.acceptOffer('#48214', 'c3');
+    assert.deepEqual([o.courierKm, o.courierPay], [km3, courierPayFor(km3)]);
+  });
+
+  test('direct assignment prices the job too', () => {
+    s.assignCourier('#48215', 'c11');
+    const o = order(s, '#48215');
+    assert.equal(o.courierPay, courierPayFor(o.courierKm!));
+  });
+
+  test('hand-set pay (the seeded #48213) is never repriced', () => {
+    s.unassignCourier('#48213');
+    s.offerOrder('#48213', 'c2');
+    const o = order(s, '#48213');
+    assert.deepEqual([o.courierPay, o.tip, o.courierKm], [30, 5, undefined]);
   });
 });
 

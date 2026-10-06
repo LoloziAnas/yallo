@@ -109,6 +109,11 @@ export type Order = {
   total: number;
   /** DH paid to the courier for this job, tip excluded. Not the customer's delivery `fee`. */
   courierPay?: number;
+  /**
+   * Trip km (courier → store → drop-off) that `courierPay` was priced on, frozen when the job was offered.
+   * Absent when the pay was set by hand.
+   */
+  courierKm?: number;
   /** Customer's tip for the courier, in DH. */
   tip?: number;
   pay: PayMethod;

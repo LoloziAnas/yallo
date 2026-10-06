@@ -1,6 +1,6 @@
 // In-memory state for the mock API: the shared demo seed plus the rules every app's actions go through.
 import {
-  ACTIVE_STATUSES, COURIERS, DEMO_ELAPSED_SEC, DEMO_START_MIN, MERCHANTS, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition,
+  ACTIVE_STATUSES, COURIERS, DEMO_ELAPSED_SEC, DEMO_START_MIN, MERCHANTS, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm,
   type ApiCourier, type ApiOrder, type LiveState, type OpenTicketBody, type OrderStatus, type PlaceOrderBody, type Ticket, type TicketPriority,
   type TicketSource, type ZoneName,
 } from '@yallo/shared';
@@ -220,6 +220,16 @@ export class Store {
     delete o.lastOffer;
   }
 
+  /**
+   * Prices the job for this courier from the trip they'd drive (courier → store → drop-off). Pay set by
+   * hand (courierPay without courierKm, like the seeded #48213) is kept.
+   */
+  private price(o: ApiOrder, c: ApiCourier) {
+    if (o.courierPay !== undefined && o.courierKm === undefined) return;
+    o.courierKm = tripKm(c.pos, this.merchant(o.merchantId).pos, o.dropoff);
+    o.courierPay = courierPayFor(o.courierKm);
+  }
+
   private endOffer(o: ApiOrder, outcome: 'declined' | 'expired' | 'withdrawn') {
     if (!o.offer) return;
     o.lastOffer = { courierId: o.offer.courierId, outcome, at: this.s.t };
@@ -237,6 +247,7 @@ export class Store {
     this.checkAvailable(o, c);
     const held = this.pendingOfferFor(c.id);
     if (held && held !== o) throw new ActionError(c.name + ' is considering an offer for ' + held.id, 409);
+    if (o.offer?.courierId !== c.id) this.price(o, c);
     this.assign(o, c);
     this.changed();
   }
@@ -250,6 +261,7 @@ export class Store {
     const held = this.pendingOfferFor(c.id);
     if (held && held !== o) throw new ActionError(c.name + ' is considering an offer for ' + held.id, 409);
     this.endOffer(o, 'withdrawn');
+    this.price(o, c);
     o.offer = { courierId: c.id, offeredAt: this.s.t, expiresAt: this.s.t + OFFER_SEC };
     this.changed();
   }
