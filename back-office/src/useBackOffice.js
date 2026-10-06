@@ -15,7 +15,7 @@ const chip = on => ({ bg:on ? 'var(--color-text)' : 'var(--color-card)', fg:on ?
 const initialState = startPage => ({
   page:startPage ?? 'live', city:'Marrakech', t:0, orders:ORDERS0, couriers:COURIERS0, merchants:MERCH.map(m => ({ ...m })),
   drawer:startPage && startPage !== 'live' ? null : { type:'order', id:'#48214' }, assignOpen:true, qTab:'action', layers:{ couriers:true, merchants:true },
-  oFilter:'all', oq:'', gq:'', cTab:'fleet', apps:APPS0, appSel:'a1', tickets:TICKETS0.map(t => ({ ...t, msgs:t.msgs.slice(), resolved:false })), tSel:'T-9011', tFilter:'open', draft:'',
+  oFilter:'all', oq:'', gq:'', cTab:'fleet', apps:APPS0, appSel:'a1', tickets:TICKETS0, tSel:'T-9011', tFilter:'open', draft:'',
   payTab:'couriers', paySel:{}, payDone:{}, modal:null, reason:null, refundMode:'full', refundAmt:'', comp:true, toast:null, suspended:{}, connected:false,
   w:typeof window === 'undefined' ? 1440 : window.innerWidth
 });
@@ -153,14 +153,14 @@ export function useBackOffice({ startPage } = {}) {
   const ticketList = s.tickets.filter(t => tMatch(t, s.tFilter)).map(t => ({ ...t, icon:IC[t.icon], order:t.order || 'No order', pBg:PR[t.prio][0], pFg:PR[t.prio][1], bg:'var(--color-card)', sh:t.id === s.tSel ? '0 0 0 2px var(--color-accent)' : 'var(--shadow-sm)', onClick:set({ tSel:t.id, draft:'' }) }));
   const T = s.tickets.find(t => t.id === s.tSel) || s.tickets[0];
   const TO = T.order && s.orders.find(o => o.id === T.order);
-  const addMsg = text => { if (!text.trim()) return; setState(st => ({ draft:'', tickets:st.tickets.map(t => t.id === T.id ? { ...t, msgs:[...t.msgs, ['us', text, clock.slice(0, 5)]] } : t) })); };
+  const addMsg = text => { if (text.trim()) act(api.addTicketMessage(T.id, 'ops', 'Leila', text), null, { draft:'' }); };
   const actByFrom = {
     Courier:[[IC.wallet,'Compensate courier 10 DH',() => toast('10 DH added to ' + T.name)],[IC.x,'Cancel linked order',() => TO && setState({ modal:'cancel', reason:null, drawer:{ type:'order', id:TO.id } })],[IC.phone,'Call courier',() => toast('Calling ' + T.name + '…')]],
     Merchant:[[IC.bike,'Assign courier now',() => TO && setState({ page:'live', drawer:{ type:'order', id:TO.id }, assignOpen:true })],[IC.phone,'Call merchant',() => toast('Calling ' + T.name + '…')]],
     Customer:[[IC.refund,'Refund order',() => TO && setState({ modal:'refund', reason:null, refundMode:'full', refundAmt:String(TO.total), drawer:{ type:'order', id:TO.id } })],[IC.gift,'Send 20 DH voucher',() => toast('20 DH voucher sent to ' + T.name)],[IC.phone,'Call customer',() => toast('Calling ' + T.name + '…')]]
   };
   const tkt = { ...T, from:T.from, hasOrder:!!TO, noOrder:!TO, om:TO && TO.m, oc:TO && TO.c, ototal:TO && TO.total, opay:TO && TO.pay, ocourier:TO && CBY[TO.courier] ? CBY[TO.courier].name : 'No courier', openOrder:TO ? openOrder(TO.id) : null,
-    msgs:T.msgs.map(([w, text, t]) => ({ text, t, who:w === 'us' ? 'Leila (Yallo)' : T.name, align:w === 'us' ? 'flex-end' : 'flex-start', bg:w === 'us' ? 'var(--color-accent)' : 'var(--color-surface)', fg:w === 'us' ? '#fff' : 'var(--color-text)' })),
+    msgs:T.msgs.map(([w, text, t, author]) => ({ text, t, who:w === 'us' ? author + ' (Yallo)' : T.name, align:w === 'us' ? 'flex-end' : 'flex-start', bg:w === 'us' ? 'var(--color-accent)' : 'var(--color-surface)', fg:w === 'us' ? '#fff' : 'var(--color-text)' })),
     actions:actByFrom[T.from].map(([icon, label, onClick]) => ({ icon, label, onClick })) };
   const MAC = { Courier:['Thanks, we\'re on it.','Please wait 5 min, we\'ll compensate the wait.','We\'ve cancelled the order — you\'ll be paid for the trip.'], Merchant:['A courier is on the way, ETA 4 min.','Sorry for the delay — we\'re reassigning now.'], Customer:['Sorry about this — we\'ve issued a refund.','Could you share a photo of the order?','A 20 DH voucher has been added to your account.'] };
   const macros = MAC[T.from].map(label => ({ label, onClick:() => addMsg(label) }));
@@ -239,8 +239,8 @@ export function useBackOffice({ startPage } = {}) {
     approveApp:() => removeApp(appCur.name + ' activated · welcome SMS sent'), rejectApp:set({ modal:'reject', reason:null }),
     merchantRows,
     tFilters, ticketList, tkt, macros, resolveLabel:T.resolved ? 'Resolved' : 'Resolve',
-    resolveTicket:() => { setState(st => ({ tickets:st.tickets.map(t => t.id === T.id ? { ...t, resolved:true } : t) })); toast(T.id + ' resolved'); },
-    escalate:() => toast(T.id + ' escalated to Tier 2'),
+    resolveTicket:() => act(api.resolveTicket(T.id), T.id + ' resolved'),
+    escalate:() => act(api.escalateTicket(T.id), T.id + ' escalated to Tier 2'), escalateLabel:T.escalated ? 'Escalated' : 'Escalate',
     draft:s.draft, onDraft:e => setState({ draft:e.target.value }), onDraftKey:e => { if (e.key === 'Enter') addMsg(s.draft); }, sendMsg:() => addMsg(s.draft),
     payTabs:[['couriers','Couriers'],['merchants','Merchants']].map(([k, label]) => ({ label, onClick:set({ payTab:k, paySel:{} }), ...pill(s.payTab === k) })),
     payKpis, payRows, payColName:isC ? 'Courier' : 'Merchant', payColN:isC ? 'Deliv.' : 'Orders', payColAdj:isC ? 'Cash held' : 'Commission',

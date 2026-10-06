@@ -1,6 +1,6 @@
 // Demo data for the Marrakech back office (Tuesday 6 October 2026, ~18:34).
 
-import { ZONES as Z, MERCHANTS, COURIERS, ORDERS, DEMO_ELAPSED_SEC } from '@yallo/shared';
+import { ZONES as Z, MERCHANTS, COURIERS, ORDERS, TICKETS, DEMO_ELAPSED_SEC } from '@yallo/shared';
 
 // The shared seed holds identities, positions and orders. The ops-only figures below (volumes,
 // acceptance, earnings, documents) belong to the back office and are joined on by id.
@@ -37,6 +37,7 @@ export const fromLive = live => ({
   merchants:live.merchants.map(toBoMerchant),
   couriers:live.couriers.map(toBoCourier),
   orders:live.orders.map(toBoOrder),
+  tickets:live.tickets.map(tk => toBoTicket(tk, live.t)),
   suspended:Object.fromEntries(live.couriers.filter(c => c.suspended).map(c => [c.id, true]))
 });
 
@@ -57,20 +58,15 @@ export const APPS0 = [
   { id:'a4', name:'Meryem Lazrak', city:'Marrakech', veh:'Motorcycle', sub:'Yesterday', plate:'38977-د-40', phone:'+212 677 48 10 56', email:'meryem.lz@gmail.com', docs:{ cin:null, lic:null, veh:null, rib:null } }
 ];
 export const DOCDEF = { cin:['National ID (CIN)','cin_front_back.jpg','Expires 03/2031 · name matches'], lic:['Driving licence','permis_A.jpg','Category A · valid until 2029'], veh:['Registration & insurance','carte_grise_assurance.pdf','Insurance valid until 11/2026'], rib:['Bank details (RIB)','rib_cih.pdf','CIH Bank · holder name matches'] };
-export const TICKETS0 = [
-  { id:'T-9011', from:'Courier', name:'Karim El Amrani', icon:'bike', subject:'Restaurant closed on arrival', order:'#48213', prio:'Urgent', time:'2m', meta:'Courier · Motorcycle · ★ 4.8 · 412 deliveries',
-    msgs:[['them','I\'m at Café Marrakech but the shutter is half down. Staff says the kitchen stopped.','18:34']] },
-  { id:'T-9010', from:'Merchant', name:'Burger House', icon:'store', subject:'Order ready 11 min, no courier', order:'#48214', prio:'High', time:'6m', meta:'Merchant · Hivernage · Manager: Rida',
-    msgs:[['them','Order #48214 has been ready for 11 minutes. The food is getting cold.','18:30'],['them','Can you send someone please?','18:32']] },
-  { id:'T-9012', from:'Customer', name:'Salma Berrada', icon:'user', subject:'Order arrived cold', order:'#48190', prio:'High', time:'4m', meta:'Customer since 2024 · 38 orders · Gold',
-    msgs:[['them','My pastilla arrived completely cold and the box was crushed.','18:31'],['us','Sorry about that, Salma. Could you send a photo of the order?','18:32'],['them','Sent it in the app just now.','18:33']] },
-  { id:'T-9009', from:'Customer', name:'Omar Tazi', icon:'user', subject:'Wrong item delivered', order:'#48176', prio:'Normal', time:'18m', meta:'Customer since 2025 · 6 orders',
-    msgs:[['them','I ordered tacos viande but got tacos poulet.','18:17']] },
-  { id:'T-9008', from:'Courier', name:'Hamza Rachidi', icon:'bike', subject:'App crashes on photo proof', order:null, prio:'Normal', time:'32m', meta:'Courier · Motorcycle · ★ 4.9 · Android 13',
-    msgs:[['them','When I take the delivery photo the app closes. Happened twice today.','18:02']] },
-  { id:'T-9007', from:'Customer', name:'Nadia Sqalli', icon:'user', subject:'Promo code MARHABA not applied', order:'#48217', prio:'Low', time:'1h', meta:'New customer · 1 order',
-    msgs:[['them','I entered MARHABA but the discount didn\'t show at checkout.','17:35']] }
-];
+const T_SOURCE = { customer:['Customer','user'], courier:['Courier','bike'], merchant:['Merchant','store'] };
+const T_PRIO = { urgent:'Urgent', high:'High', normal:'Normal', low:'Low' };
+const age = sec => sec < 60 ? 'now' : sec < 3600 ? Math.floor(sec / 60) + 'm' : Math.floor(sec / 3600) + 'h';
+/** Shared ticket → the Support screen's shape. `t` is the demo clock, for the ticket's age. */
+export const toBoTicket = (tk, t) => ({ id:tk.id, from:T_SOURCE[tk.source][0], icon:T_SOURCE[tk.source][1], name:tk.requesterName, subject:tk.subject,
+  order:tk.orderId, prio:T_PRIO[tk.priority], time:age(t - tk.openedAt), meta:tk.requesterMeta, resolved:tk.resolved, escalated:tk.escalated,
+  msgs:tk.messages.map(m => [m.from === 'ops' ? 'us' : 'them', m.text, m.at, m.author]) });
+export const TICKETS0 = TICKETS.map(tk => toBoTicket(tk, 0));
+
 export const PAY_C = [
   ['Imane Chraibi',68,2386,95,0,'CIH •••• 2290'],['Hamza Rachidi',61,2104,40,0,'Attijari •••• 8812'],['Karim El Amrani',57,1952,120,-146,'CIH •••• 4417'],
   ['Mehdi Tazi',54,1880,35,-1940,'BMCE •••• 0316'],['Rachid Alaoui',49,1702,0,-54,'CIH •••• 7741'],['Sara Idrissi',44,1390,60,0,'Barid •••• 5520'],

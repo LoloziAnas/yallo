@@ -1,5 +1,5 @@
 // Contract for the Yallo mock API (../api) and a small client usable from the web and React Native.
-import type { Courier, Merchant, Order, OrderItem, OrderStatus, PayMethod, ZoneName } from './model';
+import type { Courier, Merchant, Order, OrderItem, OrderStatus, PayMethod, Ticket, TicketPriority, TicketSource, ZoneName } from './model';
 
 export type ApiOrder = Order & {
   /** Seconds since the order was placed. Frozen once the order is delivered or cancelled. */
@@ -24,6 +24,8 @@ export type LiveState = {
   merchants: Merchant[];
   couriers: ApiCourier[];
   orders: ApiOrder[];
+  /** Support tickets, in display order (newest opened first). */
+  tickets: Ticket[];
 };
 
 export type PlaceOrderBody = {
@@ -34,6 +36,20 @@ export type PlaceOrderBody = {
   pay: PayMethod;
   /** Delivery fee in DH. Defaults to 15. */
   fee?: number;
+};
+
+export type OpenTicketBody = {
+  source: TicketSource;
+  requesterName: string;
+  requesterId?: string;
+  /** Defaults to a description built from the source. */
+  requesterMeta?: string;
+  subject: string;
+  orderId?: string | null;
+  /** Defaults to 'normal'. */
+  priority?: TicketPriority;
+  /** The first message. */
+  text: string;
 };
 
 export type LiveMessage = { type: 'state'; state: LiveState };
@@ -118,6 +134,13 @@ export function createYalloClient(baseUrl: string) {
     setCourierSuspended: (courierId: string, suspended: boolean) => post(`/couriers/${courierId}/suspend`, { suspended }),
     /** Courier app going online ('idle') or offline ('off'). 'busy' is set by assignment. */
     setCourierAvailability: (courierId: string, status: 'idle' | 'off') => post(`/couriers/${courierId}/availability`, { status }),
+    /** A customer, courier or merchant opens a ticket. Returns the new ticket. */
+    openTicket: (body: OpenTicketBody) => post<Ticket>('/tickets', body),
+    /** `from: 'requester'` on a resolved ticket reopens it. */
+    addTicketMessage: (ticketId: string, from: 'requester' | 'ops', author: string, text: string) =>
+      post(`/tickets/${ticketId}/messages`, { from, author, text }),
+    resolveTicket: (ticketId: string) => post(`/tickets/${ticketId}/resolve`),
+    escalateTicket: (ticketId: string) => post(`/tickets/${ticketId}/escalate`),
     /** Restores the demo seed. */
     reset: () => post('/reset'),
   };

@@ -113,6 +113,59 @@ describe('Store', () => {
   });
 });
 
+describe('Support tickets', () => {
+  let s: Store;
+  beforeEach(() => { s = new Store(); });
+  const ticket = (id: string) => s.state.tickets.find(tk => tk.id === id)!;
+  const open = { source: 'courier' as const, requesterName: 'Hamza Rachidi', requesterId: 'c2', subject: 'Customer not answering', orderId: '48211', text: 'Third call, no answer.' };
+
+  test('seeds the demo tickets in display order', () => {
+    assert.deepEqual(s.state.tickets.map(tk => tk.id), ['T-9011', 'T-9010', 'T-9012', 'T-9009', 'T-9008', 'T-9007']);
+  });
+
+  test('opening a ticket puts it first, with the next id and the first message', () => {
+    tick(s, 90);
+    const tk = s.openTicket(open);
+    assert.equal(tk.id, 'T-9013');
+    assert.equal(s.state.tickets[0].id, 'T-9013');
+    assert.equal(tk.orderId, '#48211');
+    assert.equal(tk.openedAt, 90);
+    assert.deepEqual(tk.messages, [{ from: 'requester', author: 'Hamza Rachidi', text: 'Third call, no answer.', at: '18:35' }]);
+    assert.equal(tk.priority, 'normal');
+  });
+
+  test('rejects tickets for unknown orders or requesters, or without text', () => {
+    assert.throws(() => s.openTicket({ ...open, orderId: '#1' }), /No order #1/);
+    assert.throws(() => s.openTicket({ ...open, requesterId: 'c99' }), /No courier c99/);
+    assert.throws(() => s.openTicket({ ...open, text: '  ' }), /text is required/);
+    assert.throws(() => s.openTicket({ ...open, source: 'admin' as never }), /source must be/);
+  });
+
+  test('ops replies, resolves, and a requester reply reopens', () => {
+    s.addTicketMessage('T-9009', 'ops', 'Leila', 'Sorry Omar, refunding the tacos now.');
+    assert.equal(ticket('T-9009').messages.at(-1)!.from, 'ops');
+    s.resolveTicket('T-9009');
+    assert.equal(ticket('T-9009').resolved, true);
+    assert.throws(() => s.resolveTicket('T-9009'), /already resolved/);
+    s.addTicketMessage('T-9009', 'requester', 'Omar Tazi', 'Still waiting for it.');
+    assert.equal(ticket('T-9009').resolved, false);
+  });
+
+  test('escalation is recorded, but not on resolved tickets', () => {
+    s.escalateTicket('T-9011');
+    assert.equal(ticket('T-9011').escalated, true);
+    s.resolveTicket('T-9008');
+    assert.throws(() => s.escalateTicket('T-9008'), /is resolved/);
+    assert.throws(() => s.escalateTicket('T-1'), /No ticket/);
+  });
+
+  test('reset restores the ticket seed', () => {
+    s.openTicket(open);
+    s.reset();
+    assert.equal(s.state.tickets.length, 6);
+  });
+});
+
 describe('HTTP and live feed', () => {
   let api: ReturnType<typeof createApi>;
   let client: YalloClient;
@@ -134,6 +187,14 @@ describe('HTTP and live feed', () => {
   test('rejected actions come back as errors with a message', async () => {
     await assert.rejects(client.assignCourier('#48214', 'c1'), /Karim El Amrani is not available/);
     await assert.rejects(client.setOrderStatus('#99999', 'ready'), /No order #99999/);
+  });
+
+  test('a ticket opened by one app reaches ops through the API', async () => {
+    const tk = await client.openTicket({ source: 'customer', requesterName: 'Rania', subject: 'Missing drink', orderId: '#48219', priority: 'high', text: 'No mint tea in the bag.' });
+    const s = await client.addTicketMessage(tk.id, 'ops', 'Leila', 'Sending a 20 DH voucher.');
+    assert.equal(s.tickets[0].id, tk.id);
+    assert.equal(s.tickets[0].messages.length, 2);
+    await assert.rejects(client.resolveTicket('T-1'), /No ticket T-1/);
   });
 
   test('pushes the state to subscribers when it changes', async () => {

@@ -29,7 +29,8 @@ Delivery platform for Marrakech. Several Claude sessions work here in parallel, 
 - `Order`, `Merchant`, `Courier`, `OrderItem`, `ZoneName`, `PayMethod`: entity types.
 - `colors`, `space`, `radius`, `shadow`, `fonts`: Zanqa tokens (web apps also have `zanqa.css`).
 - `ZONES`, `MERCHANTS`, `COURIERS`, `ORDERS`: the Marrakech demo seed (Tue 6 Oct 2026, ~18:34).
-- `createYalloClient(baseUrl)`, `LiveState`, `ApiOrder`, `ApiCourier`, `PlaceOrderBody`: the mock API contract.
+- `Ticket`, `TicketMessage`, `TicketSource`, `TicketPriority`, and the `TICKETS` seed: support tickets.
+- `createYalloClient(baseUrl)`, `LiveState`, `ApiOrder`, `ApiCourier`, `PlaceOrderBody`, `OpenTicketBody`: the mock API contract.
 
 Depend on it with `"@yallo/shared": "file:../shared"` (run `npm install ../shared` in your app).
 It ships TypeScript source with no build step. Vite handles it as is. Expo/Metro needs the parent
@@ -59,8 +60,10 @@ or calling `POST /api/reset`, restores the demo seed.
     merchant accepts it after 20 s and has it ready at 60 s.
   - `/api/orders/:n/assign {courierId}`, `/unassign`, `/status {status}`, `/cancel {reason, compensateCourier}`,
     `/refund {amount, reason}`. `:n` is the order number without "#".
+  - `/api/tickets` opens a ticket (body `OpenTicketBody`) and returns it. `/api/tickets/:id/messages {from: 'requester'|'ops', author, text}`
+    adds a message (a requester message reopens a resolved ticket). Also `/resolve` and `/escalate`.
   - `/api/merchants/:id/open {open}`, `/api/couriers/:id/suspend {suspended}`,
     `/api/couriers/:id/availability {status: 'idle'|'off'}`, `/api/reset`.
 - Use `createYalloClient(url)` rather than calling these by hand. The back office uses `''`, because Vite
   proxies `/api`. On a phone, use the dev machine's LAN IP, not `localhost`.
-- Support tickets, courier applications and payouts are still local to the back office.
+- Courier applications and payouts are still local to the back office.

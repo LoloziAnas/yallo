@@ -105,3 +105,37 @@ export type Order = {
   /** Local time the order was placed, "HH:MM". */
   placedAt: string;
 };
+
+/** Who opened a support ticket. */
+export type TicketSource = 'customer' | 'courier' | 'merchant';
+
+export type TicketPriority = 'urgent' | 'high' | 'normal' | 'low';
+
+export type TicketMessage = {
+  /** `requester` is whoever opened the ticket; `ops` is Yallo support. */
+  from: 'requester' | 'ops';
+  /** Display name of the person who wrote it. */
+  author: string;
+  text: string;
+  /** Local time, "HH:MM". */
+  at: string;
+};
+
+export type Ticket = {
+  /** Display id, e.g. "T-9011". */
+  id: string;
+  source: TicketSource;
+  requesterName: string;
+  /** Courier or merchant id when the requester is one; customers have none yet. */
+  requesterId?: string;
+  /** One line about the requester for ops, e.g. "Courier · Motorcycle · ★ 4.8". */
+  requesterMeta: string;
+  subject: string;
+  orderId: string | null;
+  priority: TicketPriority;
+  /** Demo clock second the ticket was opened. Negative for tickets older than the demo start. */
+  openedAt: number;
+  resolved: boolean;
+  escalated: boolean;
+  messages: TicketMessage[];
+};

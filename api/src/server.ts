@@ -20,6 +20,10 @@ const ROUTES: [string, RegExp, Handler][] = [
   ['POST', /^\/api\/merchants\/([\w-]+)\/open$/, (s, [id], b) => (s.setMerchantOpen(id, b?.open), s.state)],
   ['POST', /^\/api\/couriers\/([\w-]+)\/suspend$/, (s, [id], b) => (s.setCourierSuspended(id, b?.suspended), s.state)],
   ['POST', /^\/api\/couriers\/([\w-]+)\/availability$/, (s, [id], b) => (s.setCourierAvailability(id, b?.status), s.state)],
+  ['POST', /^\/api\/tickets$/, (s, _, b) => s.openTicket(b)],
+  ['POST', /^\/api\/tickets\/(T-\d+)\/messages$/, (s, [id], b) => (s.addTicketMessage(id, b?.from, b?.author, b?.text), s.state)],
+  ['POST', /^\/api\/tickets\/(T-\d+)\/resolve$/, (s, [id]) => (s.resolveTicket(id), s.state)],
+  ['POST', /^\/api\/tickets\/(T-\d+)\/escalate$/, (s, [id]) => (s.escalateTicket(id), s.state)],
   ['POST', /^\/api\/reset$/, s => (s.reset(), s.state)],
 ];
 

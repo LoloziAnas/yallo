@@ -22,6 +22,7 @@ export default function Support({ v }) {
                 <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: tk.pBg, color: tk.pFg }}>{tk.prio}</span>
                 <span className="muted" style={{ fontSize: 12 }}>{tk.order}</span>
                 {tk.resolved && <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-accent-2-700)' }}>Resolved</span>}
+                {tk.escalated && !tk.resolved && <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-accent-700)' }}>Escalated</span>}
               </div>
             </button>
           ))}
@@ -34,7 +35,7 @@ export default function Support({ v }) {
             <div className="muted" style={{ fontSize: 12 }}>{tkt.id} · {tkt.from} · {tkt.name}</div>
             <h3 className="ellip" style={{ margin: 0, fontSize: 18 }}>{tkt.subject}</h3>
           </div>
-          <button className="btn btn-secondary" onClick={v.escalate} style={{ height: 36, fontSize: 13, flex: 'none' }}>Escalate</button>
+          <button className="btn btn-secondary" onClick={v.escalate} disabled={tkt.escalated || tkt.resolved} style={{ height: 36, fontSize: 13, flex: 'none' }}>{v.escalateLabel}</button>
           <button className="btn btn-primary" onClick={v.resolveTicket} disabled={tkt.resolved} style={{ height: 36, fontSize: 13, boxShadow: 'none', flex: 'none' }}>{v.resolveLabel}</button>
         </div>
         {v.supNarrow && (

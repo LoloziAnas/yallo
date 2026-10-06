@@ -1,5 +1,5 @@
 // Marrakech demo seed: Tuesday 6 October 2026, about 18:34. The apps' shared starting state.
-import type { Courier, MapPoint, Merchant, Order, ZoneName } from './model';
+import type { Courier, MapPoint, Merchant, Order, Ticket, ZoneName } from './model';
 
 /** Zone centres on the shared demo map. */
 export const ZONES: Record<ZoneName, MapPoint> = {
@@ -85,3 +85,31 @@ export const DEMO_ELAPSED_SEC: Record<string, number> = {
 
 /** Demo wall clock at t = 0, in minutes after midnight (18:34). */
 export const DEMO_START_MIN = 18 * 60 + 34;
+
+const req = (author: string, text: string, at: string) => ({ from: 'requester' as const, author, text, at });
+
+/** Open support tickets at the demo's start, most pressing first. */
+export const TICKETS: Ticket[] = [
+  { id: 'T-9011', source: 'courier', requesterName: 'Karim El Amrani', requesterId: 'c1', requesterMeta: 'Courier · Motorcycle · ★ 4.8 · 412 deliveries',
+    subject: 'Restaurant closed on arrival', orderId: '#48213', priority: 'urgent', openedAt: -120, resolved: false, escalated: false,
+    messages: [req('Karim El Amrani', "I'm at Café Marrakech but the shutter is half down. Staff says the kitchen stopped.", '18:34')] },
+  { id: 'T-9010', source: 'merchant', requesterName: 'Burger House', requesterId: 'm2', requesterMeta: 'Merchant · Hivernage · Manager: Rida',
+    subject: 'Order ready 11 min, no courier', orderId: '#48214', priority: 'high', openedAt: -360, resolved: false, escalated: false,
+    messages: [req('Burger House', 'Order #48214 has been ready for 11 minutes. The food is getting cold.', '18:30'), req('Burger House', 'Can you send someone please?', '18:32')] },
+  { id: 'T-9012', source: 'customer', requesterName: 'Salma Berrada', requesterMeta: 'Customer since 2024 · 38 orders · Gold',
+    subject: 'Order arrived cold', orderId: '#48190', priority: 'high', openedAt: -240, resolved: false, escalated: false,
+    messages: [
+      req('Salma Berrada', 'My pastilla arrived completely cold and the box was crushed.', '18:31'),
+      { from: 'ops', author: 'Leila', text: 'Sorry about that, Salma. Could you send a photo of the order?', at: '18:32' },
+      req('Salma Berrada', 'Sent it in the app just now.', '18:33'),
+    ] },
+  { id: 'T-9009', source: 'customer', requesterName: 'Omar Tazi', requesterMeta: 'Customer since 2025 · 6 orders',
+    subject: 'Wrong item delivered', orderId: '#48176', priority: 'normal', openedAt: -1080, resolved: false, escalated: false,
+    messages: [req('Omar Tazi', 'I ordered tacos viande but got tacos poulet.', '18:17')] },
+  { id: 'T-9008', source: 'courier', requesterName: 'Hamza Rachidi', requesterId: 'c2', requesterMeta: 'Courier · Motorcycle · ★ 4.9 · Android 13',
+    subject: 'App crashes on photo proof', orderId: null, priority: 'normal', openedAt: -1920, resolved: false, escalated: false,
+    messages: [req('Hamza Rachidi', 'When I take the delivery photo the app closes. Happened twice today.', '18:02')] },
+  { id: 'T-9007', source: 'customer', requesterName: 'Nadia Sqalli', requesterMeta: 'New customer · 1 order',
+    subject: 'Promo code MARHABA not applied', orderId: '#48217', priority: 'low', openedAt: -3600, resolved: false, escalated: false,
+    messages: [req('Nadia Sqalli', "I entered MARHABA but the discount didn't show at checkout.", '17:35')] },
+];

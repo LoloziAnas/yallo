@@ -1,7 +1,8 @@
 // In-memory state for the mock API: the shared demo seed plus the rules every app's actions go through.
 import {
-  ACTIVE_STATUSES, COURIERS, DEMO_ELAPSED_SEC, DEMO_START_MIN, MERCHANTS, ORDERS, ZONES, canTransition,
-  type ApiOrder, type LiveState, type OrderStatus, type PlaceOrderBody, type ZoneName,
+  ACTIVE_STATUSES, COURIERS, DEMO_ELAPSED_SEC, DEMO_START_MIN, MERCHANTS, ORDERS, TICKETS, ZONES, canTransition,
+  type ApiOrder, type LiveState, type OpenTicketBody, type OrderStatus, type PlaceOrderBody, type Ticket, type TicketPriority,
+  type TicketSource, type ZoneName,
 } from '@yallo/shared';
 
 /** A rejected action. The server turns it into a 4xx with this message. */
@@ -19,6 +20,21 @@ const DEFAULT_FEE = 15;
 
 const isActive = (s: OrderStatus) => ACTIVE_STATUSES.includes(s);
 const clone = <T>(v: T): T => structuredClone(v);
+const SOURCES: TicketSource[] = ['customer', 'courier', 'merchant'];
+const PRIORITIES: TicketPriority[] = ['urgent', 'high', 'normal', 'low'];
+const MAX_TEXT = 2000;
+
+/** Demo wall-clock time at second `t`, "HH:MM". */
+export function clockAt(t: number) {
+  const min = DEMO_START_MIN + Math.floor(t / 60);
+  return String(Math.floor(min / 60) % 24).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0');
+}
+
+function cleanText(text: unknown, what: string) {
+  if (typeof text !== 'string' || !text.trim()) throw new ActionError(what + ' is required');
+  if (text.length > MAX_TEXT) throw new ActionError(what + ' is too long (max ' + MAX_TEXT + ' characters)');
+  return text.trim();
+}
 
 function seed(): LiveState {
   return {
@@ -26,6 +42,7 @@ function seed(): LiveState {
     merchants: clone(MERCHANTS),
     couriers: COURIERS.map(c => ({ ...clone(c), suspended: false })),
     orders: ORDERS.map(o => ({ ...clone(o), elapsedSec: DEMO_ELAPSED_SEC[o.id] ?? 0 })),
+    tickets: clone(TICKETS),
   };
 }
 
@@ -61,6 +78,12 @@ export class Store {
     const m = this.s.merchants.find(m => m.id === id);
     if (!m) throw new ActionError('No merchant ' + id, 404);
     return m;
+  }
+
+  private ticket(id: string) {
+    const tk = this.s.tickets.find(tk => tk.id === id);
+    if (!tk) throw new ActionError('No ticket ' + id, 404);
+    return tk;
   }
 
   private release(courierId: string | null) {
@@ -114,7 +137,6 @@ export class Store {
     }
     const fee = body.fee ?? DEFAULT_FEE;
     const nextNum = Math.max(...this.s.orders.map(o => Number(o.id.slice(1)))) + 1;
-    const now = DEMO_START_MIN + Math.floor(this.s.t / 60);
     const centre = ZONES[body.zone as ZoneName];
     // Spread drop-offs around the zone centre so new pins don't stack.
     const angle = nextNum * 2.39996, r = 3 + (nextNum % 4);
@@ -130,7 +152,7 @@ export class Store {
       fee,
       total: body.items.reduce((sum, i) => sum + i.qty * i.price, 0) + fee,
       pay: body.pay,
-      placedAt: String(Math.floor(now / 60) % 24).padStart(2, '0') + ':' + String(now % 60).padStart(2, '0'),
+      placedAt: clockAt(this.s.t),
       elapsedSec: 0,
     };
     this.s.orders.unshift(order);
@@ -216,6 +238,60 @@ export class Store {
     if (status !== 'idle' && status !== 'off') throw new ActionError("status must be 'idle' or 'off'");
     if (c.status === 'busy') throw new ActionError(c.name + ' is on a delivery', 409);
     c.status = status;
+    this.changed();
+  }
+
+  openTicket(body: OpenTicketBody): Ticket {
+    if (!SOURCES.includes(body?.source)) throw new ActionError("source must be 'customer', 'courier' or 'merchant'");
+    const requesterName = cleanText(body.requesterName, 'requesterName');
+    const subject = cleanText(body.subject, 'subject');
+    const text = cleanText(body.text, 'text');
+    const priority = body.priority ?? 'normal';
+    if (!PRIORITIES.includes(priority)) throw new ActionError('Unknown priority ' + priority);
+    if (body.orderId) this.order(body.orderId);
+    // Courier and merchant requesters must exist; customers have no ids yet.
+    if (body.requesterId && body.source === 'courier') this.courier(body.requesterId);
+    if (body.requesterId && body.source === 'merchant') this.merchant(body.requesterId);
+    const n = Math.max(...this.s.tickets.map(tk => Number(tk.id.slice(2))), 9000) + 1;
+    const ticket: Ticket = {
+      id: 'T-' + n,
+      source: body.source,
+      requesterName,
+      requesterId: body.requesterId,
+      requesterMeta: body.requesterMeta?.trim() || body.source[0].toUpperCase() + body.source.slice(1),
+      subject,
+      orderId: body.orderId ? (body.orderId.startsWith('#') ? body.orderId : '#' + body.orderId) : null,
+      priority,
+      openedAt: this.s.t,
+      resolved: false,
+      escalated: false,
+      messages: [{ from: 'requester', author: requesterName, text, at: clockAt(this.s.t) }],
+    };
+    this.s.tickets.unshift(ticket);
+    this.changed();
+    return ticket;
+  }
+
+  /** Adds a message. A requester writing on a resolved ticket reopens it. */
+  addTicketMessage(ticketId: string, from: 'requester' | 'ops', author: string, text: string) {
+    const tk = this.ticket(ticketId);
+    if (from !== 'requester' && from !== 'ops') throw new ActionError("from must be 'requester' or 'ops'");
+    tk.messages.push({ from, author: cleanText(author, 'author'), text: cleanText(text, 'text'), at: clockAt(this.s.t) });
+    if (from === 'requester') tk.resolved = false;
+    this.changed();
+  }
+
+  resolveTicket(ticketId: string) {
+    const tk = this.ticket(ticketId);
+    if (tk.resolved) throw new ActionError(tk.id + ' is already resolved', 409);
+    tk.resolved = true;
+    this.changed();
+  }
+
+  escalateTicket(ticketId: string) {
+    const tk = this.ticket(ticketId);
+    if (tk.resolved) throw new ActionError(tk.id + ' is resolved', 409);
+    tk.escalated = true;
     this.changed();
   }
 }
