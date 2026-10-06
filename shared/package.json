@@ -1,0 +1,18 @@
+{
+  "name": "@yallo/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Data model, order lifecycle, Zanqa design tokens and demo seed shared by the Yallo apps.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.0"
+  }
+}
