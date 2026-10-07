@@ -257,3 +257,18 @@ describe('cold start', () => {
     await expect(up).resolves.toBe(false);
   });
 });
+
+describe('live feed resubscription', () => {
+  it("ignores a replaced subscription's late 'disconnected' (sign-in resubscribes with the token)", async () => {
+    s().connectLive();
+    const oldStatus = mocked.subscribe.mock.calls.at(-1)![1] as (up: boolean) => void;
+    oldStatus(true);
+    // Signing in: a new subscription with the token; the old socket is closed.
+    s().connectLive();
+    const newStatus = mocked.subscribe.mock.calls.at(-1)![1] as (up: boolean) => void;
+    newStatus(true);
+    oldStatus(false); // the old socket's close event arrives late
+    expect(s().connected).toBe(true);
+    await expect(s().awaitApi()).resolves.toBe(true);
+  });
+});

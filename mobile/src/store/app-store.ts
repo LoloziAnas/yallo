@@ -307,6 +307,8 @@ const t = () => strings[useApp.getState().lang];
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 let wakeTimer: ReturnType<typeof setTimeout> | undefined;
+/** Counts live-feed subscriptions; callbacks from replaced ones are ignored (see connectLive). */
+let liveGen = 0;
 
 /** How long the API may stay unreachable before Home shows "Can't reach Yallo" (a sleeping free host takes ~60 s). */
 export const WAKE_MS = 90_000;
@@ -709,8 +711,14 @@ export const useApp = create<State & Actions>()(
 
       connectLive: () => {
         if (!get().connected) startWakeTimer();
+        // Only the latest subscription speaks. A replaced one (e.g. resubscribing with the token after sign-in)
+        // still reports its socket closing, possibly after the new one connected, which would leave the app
+        // thinking it's offline (orders then wait for a connection that's already there).
+        const gen = ++liveGen;
+        const current = () => gen === liveGen;
         return api.subscribe(
           (live) => {
+            if (!current()) return;
             // A new epoch means the API reseeded: order and ticket numbers start over, so ones
             // remembered from before may now name someone else's. Forget them.
             if (get().epoch !== live.epoch) {
@@ -735,6 +743,7 @@ export const useApp = create<State & Actions>()(
             set({ live, ...(lost !== !!active.lost ? { active: { ...active, lost } } : {}) });
           },
           (connected) => {
+            if (!current()) return;
             if (connected) {
               clearTimeout(wakeTimer);
               wakeTimer = undefined;
