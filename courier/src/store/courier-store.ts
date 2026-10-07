@@ -75,7 +75,14 @@ export interface Data {
   /** Server state generation; a change means the API restarted from other state or was reset. */
   epoch: string | null;
   /** Live: this courier's record (name, vehicle, rating) as the server has it. */
-  me: { name: string; phone: string; vehicle: string; rating: number; ratingCount?: number } | null;
+  me: {
+    name: string;
+    phone: string;
+    vehicle: string;
+    zone?: string;
+    rating: number;
+    ratingCount?: number;
+  } | null;
   /** The job this app is handing over right now (live), so its disappearance isn't read as a loss. */
   completing: string | null;
   /** Trip compensation ops granted when cancelling the job (live). */

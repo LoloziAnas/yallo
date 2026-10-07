@@ -104,6 +104,14 @@ export function Home() {
   const busy = inDelivery(s.phase);
   const sum = useEarningsSummary();
   const sim = s.simulate;
+  const live = s.source === 'live';
+  const name = live ? (s.me?.name ?? s.userName) : s.userName;
+  const words = name.split(/\s+/).filter(Boolean);
+  const initials = words
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join('');
+  const zone = live ? s.me?.zone : 'Guéliz';
   return (
     <Screen>
       <Scroll>
@@ -113,30 +121,37 @@ export function Home() {
             accessibilityLabel={t('Profile')}
             onPress={() => router.navigate('/profile')}>
             <Txt h size={20} color={colors.mint900}>
-              KE
+              {initials}
             </Txt>
           </RoundButton>
           <View style={{ flex: 1 }}>
             <Txt size={18} weight={700} lh={1.25}>
-              {t('Salam, Karim')}
+              {t(`Salam, ${words[0] ?? ''}`)}
             </Txt>
             <View style={[styles.row, { gap: 6 }]}>
               <Dot size={9} color={s.online ? colors.mint500 : colors.neutral500} />
               <Txt size={14} color={colors.neutral700}>
-                {t(busy ? 'On a delivery' : s.online ? 'Online · Guéliz' : 'Offline')}
+                {busy
+                  ? t('On a delivery')
+                  : s.online
+                    ? t(zone ? `Online · ${zone}` : 'Online')
+                    : t('Offline')}
               </Txt>
             </View>
           </View>
-          <RoundButton
-            bg={colors.surface}
-            icon="bell"
-            accessibilityLabel={t('Notifications')}
-            onPress={() => {
-              s.set({ notifRead: true });
-              router.push('/notifications');
-            }}>
-            {!s.notifRead && <View style={styles.unread} />}
-          </RoundButton>
+          {/* The notifications inbox is design-only for now; live alerts arrive as push / toasts. */}
+          {!live && (
+            <RoundButton
+              bg={colors.surface}
+              icon="bell"
+              accessibilityLabel={t('Notifications')}
+              onPress={() => {
+                s.set({ notifRead: true });
+                router.push('/notifications');
+              }}>
+              {!s.notifRead && <View style={styles.unread} />}
+            </RoundButton>
+          )}
         </View>
 
         {busy && <ActiveOrderCard />}
@@ -198,7 +213,7 @@ export function Home() {
               <View style={[styles.row, { gap: 6, flexShrink: 1 }]}>
                 <Icon name="pin" size={16} color={colors.mint900} />
                 <Txt size={14} weight={600} color={colors.mint900}>
-                  Guéliz, Marrakech
+                  {zone ? `${t(zone)}, Marrakech` : 'Marrakech'}
                 </Txt>
               </View>
               <Btn
@@ -253,33 +268,35 @@ export function Home() {
           </View>
         </View>
 
-        <PressCard onPress={() => router.push('/bonuses')} style={styles.challenge}>
-          <View style={styles.rowBetween}>
-            <Txt
-              size={11}
-              weight={700}
-              caps
-              color={colors.accent700}
-              style={{ letterSpacing: 1.1 }}>
-              {t('Weekend challenge')}
+        {!live && (
+          <PressCard onPress={() => router.push('/bonuses')} style={styles.challenge}>
+            <View style={styles.rowBetween}>
+              <Txt
+                size={11}
+                weight={700}
+                caps
+                color={colors.accent700}
+                style={{ letterSpacing: 1.1 }}>
+                {t('Weekend challenge')}
+              </Txt>
+              <Txt h size={18} color={colors.accent800}>
+                +100 DH
+              </Txt>
+            </View>
+            <Txt size={16} weight={600}>
+              {t('Complete 15 deliveries by Sunday')}
             </Txt>
-            <Txt h size={18} color={colors.accent800}>
-              +100 DH
+            <Progress
+              pct={(s.challenge / CHALLENGE_GOAL) * 100}
+              height={12}
+              track={colors.accent200}
+              fill={colors.accent}
+            />
+            <Txt size={13} color={colors.accent800}>
+              {s.challenge} / 15 · {t('ends Sun 4 Oct, 23:59')}
             </Txt>
-          </View>
-          <Txt size={16} weight={600}>
-            {t('Complete 15 deliveries by Sunday')}
-          </Txt>
-          <Progress
-            pct={(s.challenge / CHALLENGE_GOAL) * 100}
-            height={12}
-            track={colors.accent200}
-            fill={colors.accent}
-          />
-          <Txt size={13} color={colors.accent800}>
-            {s.challenge} / 15 · {t('ends Sun 4 Oct, 23:59')}
-          </Txt>
-        </PressCard>
+          </PressCard>
+        )}
       </Scroll>
     </Screen>
   );

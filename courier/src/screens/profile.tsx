@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -32,70 +33,110 @@ export function Profile() {
   const set = useCourier((s) => s.set);
   const showToast = useCourier((s) => s.showToast);
   const userName = useCourier((s) => s.userName);
+  const live = useCourier((s) => s.source === 'live');
+  const me = useCourier((s) => s.me);
+  const method = useCourier((s) => s.payout?.line?.method);
 
-  const groups: { title: string; rows: Row[] }[] = [
-    {
-      title: 'Account',
-      rows: [
+  // Live: only what the courier record and the payout run say. The design's other rows
+  // (documents, bonuses, performance, notifications, terms) come back once the server has them.
+  const groups: { title: string; rows: Row[] }[] = live
+    ? [
+        ...(method
+          ? [
+              {
+                title: 'Account',
+                rows: [
+                  {
+                    icon: 'card' as const,
+                    label: 'Payment information',
+                    val: method,
+                    onPress: () => router.push('/earnings'),
+                  },
+                ],
+              },
+            ]
+          : []),
         {
-          icon: 'user',
-          label: 'Personal information',
-          onPress: () => showToast('Personal information'),
+          title: 'Help',
+          rows: [{ icon: 'help', label: 'Help & support', onPress: () => router.push('/support') }],
+        },
+      ]
+    : [
+        {
+          title: 'Account',
+          rows: [
+            {
+              icon: 'user',
+              label: 'Personal information',
+              onPress: () => showToast('Personal information'),
+            },
+            {
+              icon: 'moto',
+              label: 'Vehicle',
+              val: 'Yamaha Crypton · 12345-أ-40',
+              onPress: () => showToast('Vehicle information'),
+            },
+            {
+              icon: 'doc',
+              label: 'Documents',
+              val: 'Approved',
+              valColor: colors.mint700,
+              onPress: () => showToast('All documents valid'),
+            },
+            {
+              icon: 'card',
+              label: 'Payment information',
+              val: 'CIH •••• 4417',
+              onPress: () => showToast('Payment information'),
+            },
+          ],
         },
         {
-          icon: 'moto',
-          label: 'Vehicle',
-          val: 'Yamaha Crypton · 12345-أ-40',
-          onPress: () => showToast('Vehicle information'),
+          title: 'Work',
+          rows: [
+            {
+              icon: 'gift',
+              label: 'Bonuses & incentives',
+              val: '3 active',
+              valColor: colors.accent700,
+              onPress: () => router.push('/bonuses'),
+            },
+            { icon: 'trend', label: 'Performance', onPress: () => router.push('/performance') },
+            {
+              icon: 'bell',
+              label: 'Notifications',
+              onPress: () => {
+                set({ notifRead: true });
+                router.push('/notifications');
+              },
+            },
+          ],
         },
         {
-          icon: 'doc',
-          label: 'Documents',
-          val: 'Approved',
-          valColor: colors.mint700,
-          onPress: () => showToast('All documents valid'),
+          title: 'Help',
+          rows: [
+            { icon: 'help', label: 'Help & support', onPress: () => router.push('/support') },
+            {
+              icon: 'file',
+              label: 'Terms & conditions',
+              onPress: () => showToast('Terms & conditions'),
+            },
+          ],
         },
-        {
-          icon: 'card',
-          label: 'Payment information',
-          val: 'CIH •••• 4417',
-          onPress: () => showToast('Payment information'),
-        },
-      ],
-    },
-    {
-      title: 'Work',
-      rows: [
-        {
-          icon: 'gift',
-          label: 'Bonuses & incentives',
-          val: '3 active',
-          valColor: colors.accent700,
-          onPress: () => router.push('/bonuses'),
-        },
-        { icon: 'trend', label: 'Performance', onPress: () => router.push('/performance') },
-        {
-          icon: 'bell',
-          label: 'Notifications',
-          onPress: () => {
-            set({ notifRead: true });
-            router.push('/notifications');
-          },
-        },
-      ],
-    },
-    {
-      title: 'Help',
-      rows: [
-        { icon: 'help', label: 'Help & support', onPress: () => router.push('/support') },
-        {
-          icon: 'file',
-          label: 'Terms & conditions',
-          onPress: () => showToast('Terms & conditions'),
-        },
-      ],
-    },
-  ];
+      ];
+
+  const name = live ? (me?.name ?? userName) : userName;
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join('');
+  const rating = live ? me?.rating : 4.8;
+  const facts = live
+    ? [me?.vehicle && t(me.vehicle), me?.zone].filter(Boolean).join(' · ')
+    : `${t('Motorcycle')} · Marrakech`;
+  const contact = live ? (me?.phone ?? '') : '+212 6 61 23 45 78 · karim.elamrani@gmail.com';
 
   return (
     <Screen>
@@ -103,59 +144,75 @@ export function Profile() {
         <View style={[styles.row, { gap: 16, paddingTop: 8 }]}>
           <Circle size={80} bg={colors.mint300}>
             <Txt h size={30} color={colors.mint900}>
-              KE
+              {initials}
             </Txt>
           </Circle>
           <View style={{ flex: 1 }}>
             <Txt title size={26}>
-              {userName}
+              {name}
             </Txt>
             <View style={[styles.row, { gap: 6, flexWrap: 'wrap' }]}>
-              <Icon name="star" size={15} color={colors.accent} />
-              <Txt size={14} weight={700}>
-                4.8
-              </Txt>
-              <Txt size={14} color={colors.neutral700}>
-                · {t('Motorcycle')} · Marrakech
-              </Txt>
+              {rating != null && (
+                <>
+                  <Icon name="star" size={15} color={colors.accent} />
+                  <Txt size={14} weight={700}>
+                    {rating.toFixed(1)}
+                  </Txt>
+                  {live && me?.ratingCount != null && (
+                    <Txt size={14} color={colors.neutral700}>
+                      ({me.ratingCount})
+                    </Txt>
+                  )}
+                </>
+              )}
+              {!!facts && (
+                <Txt size={14} color={colors.neutral700}>
+                  {rating != null ? '· ' : ''}
+                  {facts}
+                </Txt>
+              )}
             </View>
-            <Txt size={13} color={colors.neutral700}>
-              +212 6 61 23 45 78 · karim.elamrani@gmail.com
-            </Txt>
+            {!!contact && (
+              <Txt size={13} color={colors.neutral700}>
+                {contact}
+              </Txt>
+            )}
           </View>
         </View>
 
-        <PressCard
-          onPress={() => router.push('/performance')}
-          style={[card, { paddingVertical: 18, paddingHorizontal: 20, gap: 12 }]}>
-          <View style={[styles.row, { justifyContent: 'space-between' }]}>
-            <Txt size={16} weight={700}>
-              {t('Performance')}
-            </Txt>
-            <View style={[styles.row, { gap: 2 }]}>
-              <Txt size={14} weight={700} color={colors.accent700}>
-                {t('Details')}
+        {!live && (
+          <PressCard
+            onPress={() => router.push('/performance')}
+            style={[card, { paddingVertical: 18, paddingHorizontal: 20, gap: 12 }]}>
+            <View style={[styles.row, { justifyContent: 'space-between' }]}>
+              <Txt size={16} weight={700}>
+                {t('Performance')}
               </Txt>
-              <Icon name="chevR" size={14} color={colors.accent700} />
-            </View>
-          </View>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            {[
-              ['4.8', 'Rating'],
-              ['92%', 'Acceptance'],
-              ['98%', 'Completion'],
-            ].map(([v, l]) => (
-              <View key={l} style={{ flex: 1 }}>
-                <Txt h size={26}>
-                  {v}
+              <View style={[styles.row, { gap: 2 }]}>
+                <Txt size={14} weight={700} color={colors.accent700}>
+                  {t('Details')}
                 </Txt>
-                <Txt size={12} color={colors.neutral700}>
-                  {t(l)}
-                </Txt>
+                <Icon name="chevR" size={14} color={colors.accent700} />
               </View>
-            ))}
-          </View>
-        </PressCard>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {[
+                ['4.8', 'Rating'],
+                ['92%', 'Acceptance'],
+                ['98%', 'Completion'],
+              ].map(([v, l]) => (
+                <View key={l} style={{ flex: 1 }}>
+                  <Txt h size={26}>
+                    {v}
+                  </Txt>
+                  <Txt size={12} color={colors.neutral700}>
+                    {t(l)}
+                  </Txt>
+                </View>
+              ))}
+            </View>
+          </PressCard>
+        )}
 
         {groups.map((g) => (
           <View key={g.title} style={{ gap: 6 }}>
@@ -199,7 +256,7 @@ export function Profile() {
           style={{ marginTop: 6 }}
         />
         <Txt size={12} color={colors.neutral600} style={{ textAlign: 'center' }}>
-          Yallo Courier 2.4.0 · Marrakech
+          Yallo Courier {Constants.expoConfig?.version} · Marrakech
         </Txt>
       </Scroll>
     </Screen>

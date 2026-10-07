@@ -25,6 +25,7 @@ export function Deliveries() {
   const [tab, setTab] = useState<'active' | 'history'>('active');
   const phase = useCourier((s) => s.phase);
   const online = useCourier((s) => s.online);
+  const live = useCourier((s) => s.source === 'live');
   const history = useCourier((s) => s.history);
   const busy = inDelivery(phase);
   const tag = activeTag(phase);
@@ -75,25 +76,28 @@ export function Deliveries() {
                     </Txt>
                   </View>
                 </PressCard>
-                <View style={[card, styles.orderCard, { opacity: 0.92 }]}>
-                  <View style={styles.rowBetween}>
-                    <StatusTag tag={TAGS.waiting} label={t('Waiting for pickup')} />
-                    <Txt size={13} color={colors.neutral700}>
-                      {t('Next')} · #1289
+                {/* Design-only stacked job; live couriers carry one order at a time. */}
+                {!live && (
+                  <View style={[card, styles.orderCard, { opacity: 0.92 }]}>
+                    <View style={styles.rowBetween}>
+                      <StatusTag tag={TAGS.waiting} label={t('Waiting for pickup')} />
+                      <Txt size={13} color={colors.neutral700}>
+                        {t('Next')} · #1289
+                      </Txt>
+                    </View>
+                    <Txt size={17} weight={700}>
+                      Pharmacie Atlas → Salma
                     </Txt>
+                    <View style={styles.rowBetween}>
+                      <Txt size={14} color={colors.neutral700}>
+                        Hivernage · {t('starts after current')}
+                      </Txt>
+                      <Txt h size={20}>
+                        24 DH
+                      </Txt>
+                    </View>
                   </View>
-                  <Txt size={17} weight={700}>
-                    Pharmacie Atlas → Salma
-                  </Txt>
-                  <View style={styles.rowBetween}>
-                    <Txt size={14} color={colors.neutral700}>
-                      Hivernage · {t('starts after current')}
-                    </Txt>
-                    <Txt h size={20}>
-                      24 DH
-                    </Txt>
-                  </View>
-                </View>
+                )}
               </>
             ) : (
               <View style={[well, styles.empty]}>

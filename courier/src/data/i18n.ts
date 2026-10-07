@@ -189,6 +189,7 @@ const PHR: [string, string, string][] = [
   ],
   ['Submit for review', 'Envoyer pour vérification', 'إرسال للمراجعة'],
   ['Start delivering', 'Commencer à livrer', 'ابدأ التوصيل'],
+  ['Salam, {0}', 'Salam, {0}', 'السلام عليكم، {0}'],
   ['Salam, Karim', 'Salam, Karim', 'السلام عليكم، كريم'],
   ['Order', 'Commande', 'الطلب'],
   ['Restaurant', 'Restaurant', 'مطعم'],
@@ -668,6 +669,7 @@ const PHR: [string, string, string][] = [
   ['Sep 18', '18 sept.', '18 سبتمبر'],
   ['On a delivery', 'En livraison', 'في توصيل'],
   ['Online · Guéliz', 'En ligne · Guéliz', 'متصل · جليز'],
+  ['Online · {0}', 'En ligne · {0}', 'متصل · {0}'],
   ['Offline', 'Hors ligne', 'غير متصل'],
   [
     'New requests paused during delivery',

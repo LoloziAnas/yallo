@@ -113,6 +113,7 @@ export function applyLive(st: LiveState) {
     name: me.name,
     phone: me.phone,
     vehicle: me.vehicle,
+    zone: me.zone,
     rating: me.rating,
     ratingCount: me.ratingCount,
   };
