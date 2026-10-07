@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import { createYalloClient, type LiveState, type YalloClient } from '@yallo/shared';
 import { DISPATCH_RADIUS_KM, OFFER_SEC, courierPayFor, pickupKm, tripKm } from '@yallo/shared';
-import { AUTO_ACCEPT_SEC, AUTO_READY_SEC, STAND_IN_ACCEPT_SEC, Store } from '../src/store';
+import { AUTO_ACCEPT_SEC, AUTO_READY_SEC, STAND_IN_ACCEPT_SEC, STATE_VERSION, Store } from '../src/store';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createApi } from '../src/server';
 
 const order = (s: Store, id: string) => s.state.orders.find(o => o.id === id)!;
@@ -433,6 +436,49 @@ describe('Support tickets', () => {
     s.openTicket(open);
     s.reset();
     assert.equal(s.state.tickets.length, 6);
+  });
+});
+
+describe('Persistence', () => {
+  const tmpFile = () => join(mkdtempSync(join(tmpdir(), 'yallo-')), 'state.json');
+
+  test('state survives a restart: orders, clock, epoch and the stand-in merchant', () => {
+    const file = tmpFile();
+    const a = new Store({ file });
+    const placed = a.placeOrder({ merchantId: 'm1', customerName: 'Amal', zone: 'Guéliz', pay: 'cash', items: [{ productId: 'p1-6', qty: 1 }] });
+    tick(a, 5);
+    a.attachApp('c2');
+    a.flush();
+    const b = new Store({ file });
+    assert.equal(b.state.epoch, a.state.epoch);
+    assert.equal(b.state.t, 5);
+    assert.equal(order(b, placed.id).elapsedSec, 5);
+    assert.equal(courier(b, 'c2').app, false, 'apps re-attach when they reconnect');
+    tick(b, AUTO_ACCEPT_SEC);
+    assert.equal(order(b, placed.id).status, 'preparing', 'the stand-in merchant still owns the order');
+  });
+
+  test('changes are saved after a short delay, and reset saves at once', async () => {
+    const file = tmpFile();
+    const s = new Store({ file, saveDelayMs: 20 });
+    s.setMerchantOpen('m2', false);
+    await new Promise(r => setTimeout(r, 60));
+    assert.equal(JSON.parse(readFileSync(file, 'utf8')).state.merchants.find((m: { id: string }) => m.id === 'm2').open, false);
+    s.reset();
+    const saved = JSON.parse(readFileSync(file, 'utf8'));
+    assert.equal(saved.state.epoch, s.state.epoch);
+    assert.equal(saved.version, STATE_VERSION);
+  });
+
+  test('an unreadable or outdated file is set aside and the demo reseeds', () => {
+    for (const content of ['{ not json', JSON.stringify({ version: STATE_VERSION - 1, state: {}, auto: [] })]) {
+      const file = tmpFile();
+      writeFileSync(file, content);
+      const s = new Store({ file });
+      assert.equal(s.state.orders.length, 16);
+      assert.ok(readdirSync(join(file, '..')).some(f => f.startsWith('state.json.unreadable-')), 'the old file is kept for inspection');
+      assert.ok(existsSync(file), 'a fresh state file is written');
+    }
   });
 });
 

@@ -1,4 +1,6 @@
 import { randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 // In-memory state for the mock API: the shared demo seed plus the rules every app's actions go through.
 import {
   ACTIVE_STATUSES, COURIERS, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, MERCHANTS, clockAt, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
@@ -117,13 +119,69 @@ function seed(): LiveState {
   };
 }
 
+/** Bump when the saved state's shape changes; an older file is set aside and the demo reseeds. */
+export const STATE_VERSION = 1;
+type SavedState = { version: number; savedAt: string; state: LiveState; auto: string[] };
+
+export type StoreOptions = {
+  /** Keep the state in this JSON file and load it on start. Without it the state lives in memory only. */
+  file?: string;
+  /** Debounce for saving after a change, ms. */
+  saveDelayMs?: number;
+};
+
 export class Store {
-  private s: LiveState = seed();
+  private s: LiveState;
+  private readonly file?: string;
+  private readonly saveDelayMs: number;
+  private saveTimer?: ReturnType<typeof setTimeout>;
   /** Ids of orders placed through the API, which the stand-in merchant advances. */
   private auto = new Set<string>();
   private listeners = new Set<(s: LiveState) => void>();
   /** Open courier-app connections per courier id. */
   private apps = new Map<string, number>();
+
+  constructor(opts: StoreOptions = {}) {
+    this.file = opts.file;
+    this.saveDelayMs = opts.saveDelayMs ?? 1000;
+    this.s = this.load() ?? seed();
+    if (this.file) this.flush();
+  }
+
+  /** Reads the saved state, or returns undefined (no file, unreadable, or an older format, which is set aside). */
+  private load(): LiveState | undefined {
+    if (!this.file || !existsSync(this.file)) return undefined;
+    try {
+      const saved = JSON.parse(readFileSync(this.file, 'utf8')) as SavedState;
+      if (saved.version !== STATE_VERSION || !saved.state?.epoch || !Array.isArray(saved.state.orders)) throw new Error('version ' + saved.version);
+      saved.auto.forEach(id => this.auto.add(id));
+      // No courier app is connected yet; they re-attach when their sockets reconnect.
+      saved.state.couriers.forEach(c => { c.app = false; });
+      return saved.state;
+    } catch (e) {
+      const aside = this.file + '.unreadable-' + Date.now();
+      renameSync(this.file, aside);
+      console.warn(`Saved state at ${this.file} couldn't be used (${(e as Error).message}); moved it to ${aside} and reseeded.`);
+      return undefined;
+    }
+  }
+
+  /** Writes the state now (atomically: temp file, then rename). No-op without a file. */
+  flush() {
+    clearTimeout(this.saveTimer);
+    this.saveTimer = undefined;
+    if (!this.file) return;
+    mkdirSync(dirname(this.file), { recursive: true });
+    const saved: SavedState = { version: STATE_VERSION, savedAt: new Date().toISOString(), state: this.s, auto: [...this.auto] };
+    writeFileSync(this.file + '.tmp', JSON.stringify(saved));
+    renameSync(this.file + '.tmp', this.file);
+  }
+
+  private scheduleSave() {
+    if (!this.file || this.saveTimer) return;
+    this.saveTimer = setTimeout(() => this.flush(), this.saveDelayMs);
+    this.saveTimer.unref?.();
+  }
 
   get state(): LiveState { return this.s; }
 
@@ -132,7 +190,10 @@ export class Store {
     return () => { this.listeners.delete(fn); };
   }
 
-  private changed() { this.listeners.forEach(fn => fn(this.s)); }
+  private changed() {
+    this.scheduleSave();
+    this.listeners.forEach(fn => fn(this.s));
+  }
 
   /** Moves an order to a status and records when it first got there. */
   private setStatus(o: ApiOrder, status: OrderStatus) {
@@ -177,6 +238,7 @@ export class Store {
     this.auto.clear();
     for (const c of this.s.couriers) c.app = (this.apps.get(c.id) ?? 0) > 0;
     this.changed();
+    this.flush();
   }
 
   /** Advances the demo by one second: timers, the stand-in merchant, and courier movement. */

@@ -56,9 +56,14 @@ Typecheck the package with `cd shared && npm run typecheck`.
 
 ## Mock API
 
-One in-memory server holds the orders, couriers and merchants every app shares. Start it with
-`cd api && npm start` (port 5190, listening on all interfaces), and test with `npm test`. Restarting it,
-or calling `POST /api/reset`, restores the demo seed.
+One server holds the orders, couriers, merchants and tickets every app shares. Start it with
+`cd api && npm start` (port 5190, listening on all interfaces), and test with `npm test`. It saves its state to
+`api/data/state.json` (git-ignored) and resumes from it after a restart; `POST /api/reset` restores the demo seed.
+`STATE_FILE=off` keeps it in memory, and `PORT`/`STATE_FILE` run a private copy for testing (e.g. 5198).
+`LiveState.epoch` changes whenever the data is reseeded.
+
+Ports 5190 (API), 5191 (back office), 8090 (customer web) and 8091 (courier web) are the shared integration
+environment: test changes on private ports, and restart a shared server only to deploy a commit.
 
 - The live feed is `ws://HOST:5190/api/live`. Each message is `{ type: 'state', state: LiveState }`, pushed on
   every change and every second (the demo clock: timers and courier movement run on the server).
