@@ -16,18 +16,18 @@ export const ZONES: Record<ZoneName, MapPoint> = {
 };
 
 export const COURIERS: Courier[] = [
-  { id: "c1", name: "Karim El Amrani", phone: "+212 661 23 45 78", vehicle: "Motorcycle", zone: "Guéliz", status: "busy", pos: { x: 31, y: 29 }, rating: 4.8 },
-  { id: "c2", name: "Hamza Rachidi", phone: "+212 662 11 08 41", vehicle: "Motorcycle", zone: "Guéliz", status: "idle", pos: { x: 36, y: 33 }, rating: 4.9 },
-  { id: "c3", name: "Salma Bennani", phone: "+212 670 44 21 09", vehicle: "Bicycle", zone: "Guéliz", status: "idle", pos: { x: 26, y: 27 }, rating: 4.9 },
-  { id: "c4", name: "Mehdi Tazi", phone: "+212 661 90 33 12", vehicle: "Motorcycle", zone: "Hivernage", status: "busy", pos: { x: 42, y: 56 }, rating: 4.6 },
-  { id: "c5", name: "Yassine Ouali", phone: "+212 668 71 22 30", vehicle: "Car", zone: "Hivernage", status: "idle", pos: { x: 55, y: 55 }, rating: 4.4 },
-  { id: "c6", name: "Imane Chraibi", phone: "+212 677 03 55 64", vehicle: "Motorcycle", zone: "Médina", status: "busy", pos: { x: 63, y: 32 }, rating: 4.9 },
-  { id: "c7", name: "Omar Lahlou", phone: "+212 661 58 70 19", vehicle: "Motorcycle", zone: "Guéliz", status: "busy", pos: { x: 39, y: 42 }, rating: 4.7 },
-  { id: "c8", name: "Nabil Fassi", phone: "+212 664 19 82 07", vehicle: "Motorcycle", zone: "Daoudiate", status: "idle", pos: { x: 24, y: 76 }, rating: 4.3 },
-  { id: "c9", name: "Sara Idrissi", phone: "+212 675 62 14 93", vehicle: "Bicycle", zone: "Semlalia", status: "busy", pos: { x: 82, y: 58 }, rating: 4.8 },
-  { id: "c10", name: "Anas Berrada", phone: "+212 669 30 47 52", vehicle: "Motorcycle", zone: "Targa", status: "off", pos: { x: 13, y: 16 }, rating: 4.6 },
-  { id: "c11", name: "Rachid Alaoui", phone: "+212 663 88 01 26", vehicle: "Motorcycle", zone: "Médina", status: "idle", pos: { x: 66, y: 47 }, rating: 4.7 },
-  { id: "c12", name: "Hiba Kettani", phone: "+212 672 15 90 38", vehicle: "Car", zone: "Agdal", status: "off", pos: { x: 87, y: 18 }, rating: 4.5 },
+  { id: "c1", name: "Karim El Amrani", phone: "+212 661 23 45 78", vehicle: "Motorcycle", zone: "Guéliz", status: "busy", pos: { x: 31, y: 29 }, rating: 4.8, docsNote: "Valid", offerStats: { accepted: 92, declined: 5, expired: 3 }, onlineSince: -23040 },
+  { id: "c2", name: "Hamza Rachidi", phone: "+212 662 11 08 41", vehicle: "Motorcycle", zone: "Guéliz", status: "idle", pos: { x: 36, y: 33 }, rating: 4.9, docsNote: "Valid", offerStats: { accepted: 95, declined: 3, expired: 2 }, onlineSince: -25320 },
+  { id: "c3", name: "Salma Bennani", phone: "+212 670 44 21 09", vehicle: "Bicycle", zone: "Guéliz", status: "idle", pos: { x: 26, y: 27 }, rating: 4.9, docsNote: "Valid", offerStats: { accepted: 97, declined: 2, expired: 1 }, onlineSince: -15000 },
+  { id: "c4", name: "Mehdi Tazi", phone: "+212 661 90 33 12", vehicle: "Motorcycle", zone: "Hivernage", status: "busy", pos: { x: 42, y: 56 }, rating: 4.6, docsNote: "Insurance expires in 9 days", offerStats: { accepted: 89, declined: 7, expired: 4 }, onlineSince: -24660 },
+  { id: "c5", name: "Yassine Ouali", phone: "+212 668 71 22 30", vehicle: "Car", zone: "Hivernage", status: "idle", pos: { x: 55, y: 55 }, rating: 4.4, docsNote: "Valid", offerStats: { accepted: 84, declined: 10, expired: 6 }, onlineSince: -12600 },
+  { id: "c6", name: "Imane Chraibi", phone: "+212 677 03 55 64", vehicle: "Motorcycle", zone: "Médina", status: "busy", pos: { x: 63, y: 32 }, rating: 4.9, docsNote: "Valid", offerStats: { accepted: 96, declined: 2, expired: 2 }, onlineSince: -29700 },
+  { id: "c7", name: "Omar Lahlou", phone: "+212 661 58 70 19", vehicle: "Motorcycle", zone: "Guéliz", status: "busy", pos: { x: 39, y: 42 }, rating: 4.7, docsNote: "Valid", offerStats: { accepted: 90, declined: 6, expired: 4 }, onlineSince: -20400 },
+  { id: "c8", name: "Nabil Fassi", phone: "+212 664 19 82 07", vehicle: "Motorcycle", zone: "Daoudiate", status: "idle", pos: { x: 24, y: 76 }, rating: 4.3, docsNote: "Licence expired", offerStats: { accepted: 78, declined: 13, expired: 9 }, onlineSince: -7500 },
+  { id: "c9", name: "Sara Idrissi", phone: "+212 675 62 14 93", vehicle: "Bicycle", zone: "Semlalia", status: "busy", pos: { x: 82, y: 58 }, rating: 4.8, docsNote: "Valid", offerStats: { accepted: 94, declined: 4, expired: 2 }, onlineSince: -18720 },
+  { id: "c10", name: "Anas Berrada", phone: "+212 669 30 47 52", vehicle: "Motorcycle", zone: "Targa", status: "off", pos: { x: 13, y: 16 }, rating: 4.6, docsNote: "Valid", offerStats: { accepted: 91, declined: 5, expired: 4 } },
+  { id: "c11", name: "Rachid Alaoui", phone: "+212 663 88 01 26", vehicle: "Motorcycle", zone: "Médina", status: "idle", pos: { x: 66, y: 47 }, rating: 4.7, docsNote: "Valid", offerStats: { accepted: 93, declined: 4, expired: 3 }, onlineSince: -21600 },
+  { id: "c12", name: "Hiba Kettani", phone: "+212 672 15 90 38", vehicle: "Car", zone: "Agdal", status: "off", pos: { x: 87, y: 18 }, rating: 4.5, docsNote: "Valid", offerStats: { accepted: 88, declined: 7, expired: 5 } },
 ];
 
 type SeedOrder = Omit<Order, 'items' | 'fee' | 'serviceFee' | 'subtotal' | 'discount' | 'total'> & { lines: OrderLineInput[] };

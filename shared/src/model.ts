@@ -135,6 +135,12 @@ export type Courier = {
   status: CourierStatus;
   pos: MapPoint;
   rating: number;
+  /** Document status for ops, e.g. "Valid" or "Insurance expires in 9 days". */
+  docsNote?: string;
+  /** Offers answered so far: their acceptance rate is accepted / (accepted + declined + expired). */
+  offerStats?: { accepted: number; declined: number; expired: number };
+  /** Demo second the courier last came online; absent while offline. */
+  onlineSince?: number;
 };
 
 export type OrderItem = {

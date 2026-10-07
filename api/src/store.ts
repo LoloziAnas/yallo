@@ -96,7 +96,7 @@ function seed(): LiveState {
 }
 
 /** Bump when the saved state's shape changes; an older file is set aside and the demo reseeds. */
-export const STATE_VERSION = 4;
+export const STATE_VERSION = 5;
 
 /** Things worth telling someone about, e.g. with a push notification. */
 export type StoreEvent =
@@ -398,6 +398,7 @@ export class Store {
   }
 
   private assign(o: ApiOrder, c: ApiCourier) {
+    if (o.offer?.courierId === c.id) this.countOffer(c.id, 'accepted');
     if (o.courierId !== c.id) this.release(o.courierId);
     o.courierId = c.id;
     c.status = 'busy';
@@ -418,8 +419,17 @@ export class Store {
 
   private endOffer(o: ApiOrder, outcome: 'declined' | 'expired' | 'withdrawn') {
     if (!o.offer) return;
+    if (outcome !== 'withdrawn') this.countOffer(o.offer.courierId, outcome);
     o.lastOffer = { courierId: o.offer.courierId, outcome, at: this.s.t };
     delete o.offer;
+  }
+
+  /** Keeps each courier's offer tally, for their acceptance rate. */
+  private countOffer(courierId: string, outcome: 'accepted' | 'declined' | 'expired') {
+    const c = this.s.couriers.find(c => c.id === courierId);
+    if (!c) return;
+    c.offerStats ??= { accepted: 0, declined: 0, expired: 0 };
+    c.offerStats[outcome] += 1;
   }
 
   /** The order a courier is currently being offered, if any. */
@@ -560,6 +570,8 @@ export class Store {
     const c = this.courier(courierId);
     if (status !== 'idle' && status !== 'off') throw new ActionError("status must be 'idle' or 'off'");
     if (c.status === 'busy') throw new ActionError(c.name + ' is on a delivery', 409);
+    if (status === 'idle' && c.status === 'off') c.onlineSince = this.s.t;
+    if (status === 'off') delete c.onlineSince;
     c.status = status;
     const held = status === 'off' ? this.pendingOfferFor(c.id) : undefined;
     if (held) this.endOffer(held, 'declined');

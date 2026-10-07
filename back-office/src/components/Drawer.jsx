@@ -147,7 +147,7 @@ function Stop({ marker, name, addr, note, onCall, ic }) {
 
 function CourierDetail({ v }) {
   const { cd, ic } = v;
-  const tiles = [['Today', cd.dels + ' del.'], ['Earned', cd.earn + ' DH'], ['Rating', '★ ' + cd.rating], ['Acceptance', cd.acc + '%'], ['Cash held', cd.cash + ' DH'], ['Online', cd.online]];
+  const tiles = [['Today', cd.dels + ' del.'], ['Earned', cd.earn + ' DH'], ['Rating', '★ ' + cd.rating], ['Acceptance', cd.acc === null ? '—' : cd.acc + '%'], ['Cash held', cd.cash + ' DH'], ['Online', cd.online]];
   return (
     <>
       <div className="drawer-head" style={{ alignItems: 'center' }}>

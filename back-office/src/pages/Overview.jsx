@@ -23,7 +23,6 @@ export default function Overview({ v }) {
             <h3 className="card-title">Orders per hour</h3>
             <div className="muted" style={{ display: 'flex', gap: 14, fontSize: 12 }}>
               <Legend color="var(--color-accent)">Today</Legend>
-              <Legend color="var(--color-neutral-300)">Last Tuesday</Legend>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 200, paddingTop: 8 }}>
@@ -64,7 +63,7 @@ export default function Overview({ v }) {
           </div>
           {v.zones.map(z => (
             <div key={z.name} className="tr" style={{ gridTemplateColumns: ZONE_COLS, gap: 8, height: 42 }}>
-              <strong>{z.name}</strong><span>{z.orders}</span><span>{z.active}</span><span>{z.avg} min</span>
+              <strong>{z.name}</strong><span>{z.orders}</span><span>{z.active}</span><span>{z.avg === '—' ? '—' : z.avg + ' min'}</span>
               <span style={{ fontWeight: 600, color: z.lateFg }}>{z.late}%</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ flex: 1, height: 8, borderRadius: 999, background: 'var(--color-neutral-200)', overflow: 'hidden' }}>

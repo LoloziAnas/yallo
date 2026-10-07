@@ -29,7 +29,7 @@ function Fleet({ v }) {
           </span>
           <span className="muted">{f.veh}</span><span className="muted">{f.zone}</span>
           <span>{f.dels}</span><span>{f.earn} DH</span>
-          <span style={{ color: f.accFg, fontWeight: 600 }}>{f.acc}%</span>
+          <span style={{ color: f.accFg, fontWeight: 600 }}>{f.acc === null ? '—' : f.acc + '%'}</span>
           <Stars ic={v.ic} value={f.rating} />
           <span style={{ fontSize: 12, fontWeight: 600, color: f.docFg }}>{f.docs}</span>
         </button>

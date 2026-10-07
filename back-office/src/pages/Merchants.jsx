@@ -16,7 +16,7 @@ export default function Merchants({ v }) {
               <span style={{ minWidth: 0 }}><strong className="ellip" style={{ display: 'block' }}>{m.name}</strong><span className="faint" style={{ fontSize: 11 }}>{m.hoursLabel}</span></span>
             </span>
             <span className="muted">{m.cat}</span><span className="muted">{m.zone}</span><span>{m.orders}</span>
-            <span style={{ fontWeight: 600, color: m.prepFg }}>{m.prep} min</span><span>{m.acc}%</span>
+            <span style={{ fontWeight: 600, color: m.prepFg }}>{m.prep} min</span><span>{m.acc === null ? '—' : m.acc + '%'}</span>
             <Stars ic={v.ic} value={m.rating} />
             <button onClick={m.toggle} role="switch" aria-checked={m.open} style={{ justifySelf: 'start', height: 28, padding: '0 4px 0 10px', borderRadius: 999, border: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700, background: m.stBg, color: m.stFg }}>
               {m.stLabel}

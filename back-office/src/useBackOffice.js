@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { DISPATCH_RADIUS_KM, clockAt, pickupKm, storeAvailability } from '@yallo/shared';
 import { api } from './api.js';
+import { avgFirstReplyMin, ordersPerHour, overviewKpis, zoneStats } from './metrics.js';
 import { IC } from './icons.jsx';
 import { ZONES, STATUS, ACTIVE, DOCDEF, fromLive } from './data.js';
 
@@ -12,7 +13,7 @@ const pill = on => ({ bg:on ? 'var(--color-card)' : 'transparent', fg:on ? 'var(
 const chip = on => ({ bg:on ? 'var(--color-text)' : 'var(--color-card)', fg:on ? '#fff' : 'var(--color-text)', bd:on ? 'var(--color-text)' : 'var(--color-divider)' });
 
 const initialState = startPage => ({
-  page:startPage ?? 'live', t:0, orders:[], couriers:[], merchants:[], loaded:false, slow:false,
+  page:startPage ?? 'live', t:0, orders:[], couriers:[], merchants:[], rawOrders:[], rawCouriers:[], rawTickets:[], loaded:false, slow:false,
   drawer:startPage && startPage !== 'live' ? null : { type:'order', id:'#48214' }, assignOpen:true, qTab:'action', layers:{ couriers:true, merchants:true },
   oFilter:'all', oq:'', gq:'', cTab:'fleet', apps:[], payouts:null, appSel:null, tickets:[], tSel:null, tFilter:'open', draft:'',
   payTab:'couriers', paySel:{}, modal:null, reason:null, refundMode:'full', refundAmt:'', comp:true, toast:null, suspended:{}, connected:false,
@@ -99,30 +100,34 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
   const nav = NAV.map(([k, label, icon, badge, badgeBg]) => ({ label, icon:IC[icon], onClick:go(k), badge, badgeBg, hasBadge:!!badge,
     bg:s.page === k ? 'rgba(255,255,255,.12)' : 'transparent', fg:s.page === k ? '#fff' : 'var(--color-neutral-300)' }));
 
-  const TITLES = { overview:['Overview','Tuesday 6 October 2026 · Marrakech · all figures live'], live:['Live operations', active.length + ' active orders · ' + s.couriers.filter(c => c.st !== 'off').length + ' couriers online · ' + needs.length + ' need action'], orders:['Orders','Search, inspect and refund orders'], couriers:['Couriers','Fleet status, documents and new applications'], merchants:['Merchants','Store status, prep times and quality'], support:['Support', openT.length + ' open tickets · avg first reply 1m 48s'], payouts:['Payouts','Weekly settlement for couriers and merchants'] };
+  const firstReply = avgFirstReplyMin(s.rawTickets);
+  const TITLES = { overview:['Overview','Tuesday 6 October 2026 · Marrakech · all figures live'], live:['Live operations', active.length + ' active orders · ' + s.couriers.filter(c => c.st !== 'off').length + ' couriers online · ' + needs.length + ' need action'], orders:['Orders','Search, inspect and refund orders'], couriers:['Couriers','Fleet status, documents and new applications'], merchants:['Merchants','Store status, prep times and quality'], support:['Support', openT.length + ' open tickets' + (firstReply === null ? '' : ' · avg first reply ' + firstReply + ' min')], payouts:['Payouts','Weekly settlement for couriers and merchants'] };
   const nowMin = 18 * 60 + 34 + Math.floor(s.t / 60), clock = String(Math.floor(nowMin / 60)).padStart(2, '0') + ':' + String(nowMin % 60).padStart(2, '0') + ':' + String(s.t % 60).padStart(2, '0');
 
   // overview
   const lateCount = active.filter(o => lateInfo(o)).length;
+  const K = overviewKpis(s.rawOrders, s.rawCouriers);
   const kpis = [
-    { label:'Orders today', value:fmt(1284 + s.t / 30), delta:'+8.2%', note:'vs last Tue', good:true, onClick:go('orders') },
-    { label:'GMV today', value:'186,420 DH', delta:'+11.4%', note:'vs last Tue', good:true, onClick:go('payouts') },
-    { label:'Avg delivery time', value:'27 min', delta:'−2 min', note:'target 30', good:true, onClick:go('live') },
-    { label:'Late orders', value:'4.1%', delta:'+0.6 pt', note:lateCount + ' late now', good:false, onClick:go('live') },
-    { label:'Couriers online', value:'142 / 210', delta:'Tight', note:'peak 19–21h', good:false, onClick:go('couriers') }
+    { label:'Orders today', value:fmt(K.orders), delta:K.active + ' active', note:K.cancelled + ' cancelled', good:true, onClick:go('orders') },
+    { label:'GMV today', value:fmt(K.gmv) + ' DH', delta:K.delivered + ' delivered', note:'excl. cancelled', good:true, onClick:go('orders') },
+    { label:'Avg delivery time', value:K.avgDeliveryMin === null ? '—' : K.avgDeliveryMin + ' min', delta:K.avgDeliveryMin === null ? 'no deliveries yet' : K.avgDeliveryMin <= 30 ? 'on target' : 'over target', note:'target 30', good:K.avgDeliveryMin === null || K.avgDeliveryMin <= 30, onClick:go('orders') },
+    { label:'Late orders', value:K.latePct + '%', delta:K.lateNow + ' late now', note:'SLA 35 min', good:K.lateNow === 0, onClick:go('live') },
+    { label:'Couriers online', value:K.online + ' / ' + K.couriers, delta:K.free + ' free', note:'in Marrakech', good:K.free > 0, onClick:go('couriers') }
   ].map(k => ({ ...k, dBg:k.good ? 'var(--color-accent-2-100)' : 'var(--color-accent-100)', dFg:k.good ? 'var(--color-accent-2-700)' : 'var(--color-accent-800)' }));
-  const HR = [[8,22,25],[9,41,38],[10,58,52],[11,86,79],[12,164,150],[13,188,171],[14,121,118],[15,74,70],[16,69,72],[17,96,88],[18,131,140],[19,0,182],[20,0,196],[21,0,151]];
-  const hours = HR.map(([h, v, last]) => { const max = 200; const cur = h === 18; return { label:h + 'h', v:v || '', vOp:v ? 1 : 0, hLast:Math.round(Math.max(last, v) / max * 100) + '%', hRel:v ? Math.round(v / Math.max(last, v) * 100) + '%' : '0%', bg:cur ? 'var(--color-accent-500)' : 'var(--color-accent)' }; });
+  const perHour = ordersPerHour(s.rawOrders, s.t), maxHour = Math.max(1, ...perHour.map(h => h.count));
+  const hours = perHour.map(h => ({ label:h.hour + 'h', v:h.count || '', vOp:h.count ? 1 : 0, hLast:Math.max(4, Math.round(h.count / maxHour * 100)) + '%', hRel:h.count ? '100%' : '0%', bg:h.current ? 'var(--color-accent-500)' : 'var(--color-accent)' }));
+  const zoneRows = zoneStats(Object.keys(ZONES), s.rawOrders, s.rawCouriers);
+  const tightZone = zoneRows.filter(z => z.active && z.ratio > 2).sort((a, b) => b.ratio - a.ratio)[0];
+  const urgentT = s.tickets.find(tk => !tk.resolved && (tk.prio === 'Urgent' || tk.prio === 'High'));
   const alerts = [
-    { icon:IC.clock, title:needs.length + ' orders need action', body:'Ready without courier or over SLA · Guéliz, Hivernage', cta:'Open queue', tone:'hot', onClick:() => setState({ page:'live', qTab:'action' }) },
-    { icon:IC.headset, title:'Urgent: restaurant closed on arrival', body:'Karim E. at Dar Zitoun · #48213', cta:'Reply', tone:'hot', onClick:() => setState({ page:'support', tSel:'T-9011', drawer:null }) },
-    { icon:IC.bike, title:'Low supply in Médina', body:'3.4 orders per courier · consider a +8 DH surge', cta:'View map', tone:'warm', onClick:go('live') },
+    { icon:IC.clock, title:needs.length + ' orders need action', body:needs.length ? 'Ready without courier or over SLA · ' + [...new Set(needs.map(o => o.cz))].join(', ') : 'All clear', cta:'Open queue', tone:'hot', onClick:() => setState({ page:'live', qTab:'action' }) },
+    ...(urgentT ? [{ icon:IC.headset, title:urgentT.prio + ': ' + urgentT.subject, body:urgentT.name + (urgentT.order ? ' · ' + urgentT.order : ''), cta:'Reply', tone:'hot', onClick:() => setState({ page:'support', tSel:urgentT.id, drawer:null }) }] : []),
+    ...(tightZone ? [{ icon:IC.bike, title:'Low supply in ' + tightZone.name, body:tightZone.ratio.toFixed(1) + ' active orders per online courier · ' + tightZone.online + ' online there', cta:'View map', tone:'warm', onClick:go('live') }] : []),
     { icon:IC.file, title:pendingApps + ' courier applications waiting', body:pendingApps ? 'Oldest submitted ' + ago(Math.min(...pendingList.map(a => a.submittedAt))) : 'All reviewed', cta:'Review', tone:'calm', onClick:() => setState({ page:'couriers', cTab:'apps', drawer:null }) },
     { icon:IC.wallet, title:payWeekLabel + ' payouts ready', body:fmt(payDue) + ' DH to ' + payPending.length + ' recipients · due ' + s.payouts.payDate, cta:'Approve', tone:'calm', onClick:go('payouts') }
   ].map(a => ({ ...a, bg:a.tone === 'hot' ? 'var(--color-accent-100)' : a.tone === 'warm' ? 'var(--color-saffron-100)' : 'var(--color-surface)', iBg:a.tone === 'hot' ? 'var(--color-accent)' : a.tone === 'warm' ? 'var(--color-saffron)' : 'var(--color-card)', iFg:a.tone === 'calm' ? 'var(--color-text)' : '#fff' }));
-  const ZD = [['Guéliz',412,4,24,3.1,38,1.6],['Hivernage',268,4,26,4.8,24,2.1],['Médina',231,2,33,7.9,13,3.4],['Daoudiate',142,1,28,3.6,15,1.4],['Semlalia',118,1,25,2.4,16,1.1],['Targa',64,0,29,4.1,9,1.0],['Agdal',49,0,31,5.0,7,1.3]];
-  const zones = ZD.map(([name, orders, a, avg, late, cour, ratio]) => ({ name, orders, active:active.filter(o => o.cz === name).length, avg, late, ratio:ratio.toFixed(1), supW:Math.min(100, Math.round(ratio / 3.5 * 100)) + '%',
-    supBg:ratio > 3 ? 'var(--color-accent)' : ratio > 2 ? 'var(--color-saffron)' : 'var(--color-accent-2-500)', supFg:ratio > 3 ? 'var(--color-accent-700)' : 'var(--color-text)', lateFg:late > 5 ? 'var(--color-accent-700)' : 'var(--color-text)' }));
+  const zones = zoneRows.map(z => ({ name:z.name, orders:z.orders, active:z.active, avg:z.avgMin ?? '—', late:z.latePct, ratio:z.ratio.toFixed(1), supW:Math.min(100, Math.round(z.ratio / 3.5 * 100)) + '%',
+    supBg:z.ratio > 3 ? 'var(--color-accent)' : z.ratio > 2 ? 'var(--color-saffron)' : 'var(--color-accent-2-500)', supFg:z.ratio > 3 ? 'var(--color-accent-700)' : 'var(--color-text)', lateFg:z.latePct > 5 ? 'var(--color-accent-700)' : 'var(--color-text)' }));
   const topMerchants = s.merchants.slice().sort((a, b) => b.orders - a.orders).slice(0, 5);
 
   // live
@@ -161,7 +166,7 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
   const cTabs = [['fleet','Fleet',s.couriers.length],['apps','Applications',pendingApps]].map(([k, label, n]) => ({ label, n, onClick:set({ cTab:k }), ...pill(s.cTab === k), cBg:k === 'apps' ? 'var(--color-accent)' : 'var(--color-neutral-300)', cFg:k === 'apps' ? '#fff' : 'var(--color-neutral-800)' }));
   const CL = { idle:['Available','var(--color-accent-2-700)'], busy:['On delivery','var(--color-accent-700)'], off:['Offline','var(--color-neutral-600)'] };
   const stOf = c => s.suspended[c.id] ? ['Suspended','var(--color-accent-800)','var(--color-accent-800)'] : [CL[c.st][0], CL[c.st][1], CC[c.st]];
-  const fleetRows = s.couriers.map(c => { const st = stOf(c); return { ...c, ini:ini(c.name), stLabel:st[0], stFg:st[1], stDot:st[2], accFg:c.acc < 85 ? 'var(--color-accent-700)' : 'var(--color-text)', docFg:c.docs === 'Valid' ? 'var(--color-accent-2-700)' : 'var(--color-accent-700)', onClick:openCourier(c.id) }; });
+  const fleetRows = s.couriers.map(c => { const st = stOf(c); return { ...c, ini:ini(c.name), stLabel:st[0], stFg:st[1], stDot:st[2], accFg:c.acc !== null && c.acc < 85 ? 'var(--color-accent-700)' : 'var(--color-text)', docFg:c.docs === 'Valid' ? 'var(--color-accent-2-700)' : 'var(--color-accent-700)', onClick:openCourier(c.id) }; });
   const appCur = pendingList.find(a => a.id === s.appSel) || pendingList[0];
   const appTag = a => { const vals = Object.values(a.docs); if (vals.includes('bad')) return ['Needs re-upload','var(--color-accent-100)','var(--color-accent-800)']; if (vals.every(v => v === 'ok')) return ['Ready to activate','var(--color-accent-2-100)','var(--color-accent-2-700)']; if (vals.some(v => v)) return ['In review','var(--color-saffron-100)','var(--color-neutral-800)']; return ['New','var(--color-neutral-200)','var(--color-neutral-800)']; };
   const appView = a => ({ ...a, veh:a.vehicle, plate:a.plate ?? '—', sub:ago(a.submittedAt), ini:ini(a.name) });
@@ -251,7 +256,7 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
   if (dCourierObj) {
     const c = dCourierObj, st = stOf(c), co = s.orders.find(o => o.courier === c.id && ACTIVE.includes(o.st));
     cd = { ...c, ini:ini(c.name), stLabel:st[0], stFg:st[1], stDot:st[2], hasOrder:!!co, orderId:co && co.id, orderM:co && co.m, openOrder:co ? openOrder(co.id) : null,
-      rows:[{ k:'Phone', v:c.phone },{ k:'Vehicle', v:c.veh },{ k:'Zone', v:c.zone },{ k:'Documents', v:c.docs, fg:c.docs === 'Valid' ? 'var(--color-accent-2-700)' : 'var(--color-accent-700)' },{ k:'Member since', v:'March 2025' },{ k:'Lifetime deliveries', v:fmt(200 + c.dels * 41) }].map(r => ({ fg:'var(--color-text)', ...r })) };
+      rows:[{ k:'Phone', v:c.phone },{ k:'Vehicle', v:c.veh },{ k:'Zone', v:c.zone },{ k:'Documents', v:c.docs, fg:c.docs === 'Valid' ? 'var(--color-accent-2-700)' : 'var(--color-accent-700)' }].map(r => ({ fg:'var(--color-text)', ...r })) };
   }
 
   // modal

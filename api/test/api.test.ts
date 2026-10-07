@@ -2,7 +2,7 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import { createYalloClient, type LiveState, type YalloClient } from '@yallo/shared';
-import { DEV_OTP_CODE, DEV_TOKENS, DISPATCH_RADIUS_KM, GEO_ANCHOR, GPS_STALE_SEC, geoToMap, mapToGeo, OFFER_SEC, courierPayFor, normalizePhone, pickupKm, tripKm } from '@yallo/shared';
+import { COURIERS, DEV_OTP_CODE, DEV_TOKENS, DISPATCH_RADIUS_KM, GEO_ANCHOR, GPS_STALE_SEC, geoToMap, mapToGeo, OFFER_SEC, courierPayFor, normalizePhone, pickupKm, tripKm } from '@yallo/shared';
 import { AUTO_ACCEPT_SEC, AUTO_READY_SEC, STAND_IN_ACCEPT_SEC, STATE_VERSION, Store } from '../src/store';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -1034,5 +1034,24 @@ describe('Merchant side', () => {
     const o = s.placeOrder({ ...base, scheduledFor: '18:00' });
     tick(s, AUTO_ACCEPT_SEC);
     assert.equal(order(s, o.id).status, 'preparing');
+  });
+});
+
+describe('Courier stats', () => {
+  test('offers are tallied for the acceptance rate; going online starts the clock', () => {
+    const s = new Store();
+    const before = { ...courier(s, 'c2').offerStats! };
+    s.attachApp('c2');
+    s.offerOrder('#48214', 'c2'); s.declineOffer('#48214', 'c2');
+    s.offerOrder('#48214', 'c2'); tick(s, OFFER_SEC);
+    s.offerOrder('#48214', 'c2'); s.acceptOffer('#48214', 'c2');
+    s.offerOrder('#48218', 'c3'); s.withdrawOffer('#48218'); // withdrawn by ops: not the courier's doing
+    assert.deepEqual(courier(s, 'c2').offerStats, { accepted: before.accepted + 1, declined: before.declined + 1, expired: before.expired + 1 });
+    assert.deepEqual(courier(s, 'c3').offerStats, COURIERS.find(c => c.id === 'c3')!.offerStats);
+    tick(s, 30);
+    s.setCourierAvailability('c10', 'idle');
+    assert.equal(courier(s, 'c10').onlineSince, s.state.t);
+    s.setCourierAvailability('c10', 'off');
+    assert.equal(courier(s, 'c10').onlineSince, undefined);
   });
 });
