@@ -18,7 +18,7 @@ function OrderDetail({ v }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <h2 style={{ margin: 0, fontSize: 22 }}>{od.id}</h2><StatusPill st={od.st} height={24} />
           </div>
-          <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Placed {od.placed} · {od.timer} elapsed · {od.pay}</div>
+          <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Placed {od.placed} · {od.timer} elapsed · {od.pay}{od.pin ? ' · PIN ' + od.pin : ''}</div>
           {od.scheduled && <span className="tag tag-accent" style={{ marginTop: 6 }}>{od.scheduled}</span>}
         </div>
         <button className="btn btn-ghost btn-icon close-btn" onClick={v.closeDrawer} aria-label="Close">{ic.x}</button>

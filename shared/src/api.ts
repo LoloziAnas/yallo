@@ -12,6 +12,11 @@ export type ApiOrder = Order & {
   cancelReason?: string;
   /** Trip fee in DH paid to the courier when ops cancels with compensation. */
   courierCompensation?: number;
+  /**
+   * The 4-digit code the courier asks the customer for at the door. Sent only to the order's customer and ops;
+   * couriers never see it. Marking the order delivered requires it (except for ops).
+   */
+  deliveryPin?: string;
   /** A job offered to a courier who hasn't answered yet. Times are demo-clock seconds (compare with `LiveState.t`). */
   offer?: { courierId: string; offeredAt: number; expiresAt: number };
   /** How the most recent offer ended without an assignment, so ops can see it. */
@@ -261,7 +266,8 @@ export function createYalloClient(baseUrl: string, opts: { token?: string } = {}
     declineOffer: (orderId: string, courierId: string) => post(`/orders/${orderPath(orderId)}/offer/decline`, { courierId }),
     /** The courier drops the order (e.g. reassigned): it goes back to the queue without a courier. */
     unassignCourier: (orderId: string) => post(`/orders/${orderPath(orderId)}/unassign`),
-    setOrderStatus: (orderId: string, status: OrderStatus) => post(`/orders/${orderPath(orderId)}/status`, { status }),
+    /** `pin` is the customer's delivery PIN, required when a courier marks the order delivered. */
+    setOrderStatus: (orderId: string, status: OrderStatus, pin?: string) => post(`/orders/${orderPath(orderId)}/status`, { status, ...(pin ? { pin } : {}) }),
     cancelOrder: (orderId: string, reason: string, compensateCourier: boolean) =>
       post(`/orders/${orderPath(orderId)}/cancel`, { reason, compensateCourier }),
     refundOrder: (orderId: string, amount: number, reason: string) => post(`/orders/${orderPath(orderId)}/refund`, { amount, reason }),

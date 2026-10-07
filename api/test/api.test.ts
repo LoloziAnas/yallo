@@ -54,7 +54,7 @@ describe('Store', () => {
   test('a delivery runs through the lifecycle and frees the courier', () => {
     s.assignCourier('#48214', 'c2');
     s.setOrderStatus('#48214', 'delivering');
-    s.setOrderStatus('#48214', 'delivered');
+    s.setOrderStatus('#48214', 'delivered', order(s, '#48214').deliveryPin);
     assert.equal(courier(s, 'c2').status, 'idle');
     assert.throws(() => s.setOrderStatus('#48214', 'delivering'), /cannot go from delivered/);
   });
@@ -217,7 +217,7 @@ describe('Step times', () => {
     tick(s, 7);
     s.setOrderStatus(o.id, 'delivering');
     tick(s, 50);
-    s.setOrderStatus(o.id, 'delivered');
+    s.setOrderStatus(o.id, 'delivered', order(s, o.id).deliveryPin);
     assert.deepEqual(order(s, o.id).statusAt, { pending: 30, preparing: 50, picking: 90, delivering: 97, delivered: 147 });
   });
 
@@ -333,6 +333,38 @@ describe('Dispatch radius', () => {
       const near = s.state.couriers.filter(c => c.status === 'idle' && pickupKm(c.pos, m.pos) <= DISPATCH_RADIUS_KM);
       assert.ok(near.length > 0, `${o.id} at ${m.name} has no idle courier within ${DISPATCH_RADIUS_KM} km`);
     }
+  });
+});
+
+describe('Delivery PIN', () => {
+  let s: Store;
+  beforeEach(() => { s = new Store(); });
+  const toDoor = () => { s.assignCourier('#48214', 'c2'); s.setOrderStatus('#48214', 'delivering'); return order(s, '#48214'); };
+
+  test('every order has a 4-digit PIN, new ones included', () => {
+    assert.ok(s.state.orders.every(o => /^\d{4}$/.test(o.deliveryPin!)));
+    const o = s.placeOrder({ merchantId: 'm1', customerName: 'A', zone: 'Guéliz', pay: 'cash', items: [{ productId: 'p1-6', qty: 1 }] });
+    assert.match(o.deliveryPin!, /^\d{4}$/);
+  });
+
+  test('delivering needs the right PIN from the courier; ops can override', () => {
+    const o = toDoor();
+    const wrong = o.deliveryPin === '0000' ? '1111' : '0000';
+    assert.throws(() => s.setOrderStatus('#48214', 'delivered', wrong), /Wrong delivery PIN/);
+    assert.throws(() => s.setOrderStatus('#48214', 'delivered'), /Enter the customer's delivery PIN/);
+    s.setOrderStatus('#48214', 'delivered', ' ' + o.deliveryPin + ' ');
+    assert.equal(o.status, 'delivered');
+    s.assignCourier('#48215', 'c11'); s.setOrderStatus('#48215', 'delivering');
+    s.setOrderStatus('#48215', 'delivered', undefined, { byOps: true });
+    assert.equal(order(s, '#48215').status, 'delivered');
+  });
+
+  test('in warn mode a wrong PIN is only logged', () => {
+    const o = toDoor();
+    const warn = console.warn; const logged: string[] = []; console.warn = (m: string) => logged.push(m);
+    try { s.setOrderStatus('#48214', 'delivered', 'nope', { strictPin: false }); } finally { console.warn = warn; }
+    assert.equal(o.status, 'delivered');
+    assert.match(logged[0], /\[pin\] would refuse delivering #48214: wrong PIN/);
   });
 });
 
@@ -598,7 +630,7 @@ describe('Payouts and earnings', () => {
     s.setOrderStatus('#48219', 'ready'); // the seed's orders aren't moved by the stand-in merchant
     assert.equal(o.status, 'picking');
     s.setOrderStatus('#48219', 'delivering');
-    s.setOrderStatus('#48219', 'delivered');
+    s.setOrderStatus('#48219', 'delivered', o.deliveryPin);
     const e = s.courierEarnings('c3');
     assert.deepEqual([e.jobs, e.pay, e.cashHeld, e.history[0].km], [1, o.courierPay, o.total, o.courierKm]);
     s.unassignCourier('#48213');
@@ -769,6 +801,16 @@ describe('Authorization (enforce mode)', () => {
     assert.equal((await raw('POST', '/orders/48214/status', DEV_TOKENS.courier('c3'), { status: 'ready' })).status, 403, 'not their order');
     assert.equal((await raw('GET', '/couriers/c2/earnings', DEV_TOKENS.courier('c3'))).status, 403);
     assert.equal((await raw('GET', '/couriers/c3/earnings', DEV_TOKENS.courier('c3'))).status, 200);
+  });
+
+  test('couriers never see delivery PINs; the customer and ops do', async () => {
+    const o = await as(DEV_TOKENS.customer).placeOrder(tajine);
+    assert.match((await as(DEV_TOKENS.customer).getState()).orders[0].deliveryPin!, /^\d{4}$/);
+    const ops = as(DEV_TOKENS.ops);
+    await ops.assignCourier(o.id, 'c3');
+    const courierView = await as(DEV_TOKENS.courier('c3')).getState();
+    assert.equal(courierView.orders.find(x => x.id === o.id)!.deliveryPin, undefined);
+    assert.ok((await ops.getState()).orders.find(x => x.id === o.id)!.deliveryPin);
   });
 
   test('only the courier themself (or ops) posts their location', async () => {

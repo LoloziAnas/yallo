@@ -13,7 +13,7 @@ const MAX_BODY = 64 * 1024;
 export type AuthMode = 'warn' | 'enforce';
 
 /** Per-request context: the bearer token and who it belongs to, if anyone. */
-type Ctx = { token?: string; user?: AuthUser; query: URLSearchParams };
+type Ctx = { token?: string; user?: AuthUser; query: URLSearchParams; enforce: boolean };
 type Handler = (store: Store, params: string[], body: any, ctx: Ctx) => unknown;
 /** Returns true when allowed, or the reason it isn't. */
 type Rule = (ctx: Ctx, params: string[], body: any, store: Store) => true | string;
@@ -61,7 +61,8 @@ const ROUTES: [string, RegExp, Rule, Handler][] = [
   ['POST', /^\/api\/orders\/(\d+)\/offer\/accept$/, courierInBody, (s, [id], b) => (s.acceptOffer(id, String(b?.courierId)), s.state)],
   ['POST', /^\/api\/orders\/(\d+)\/offer\/decline$/, courierInBody, (s, [id], b) => (s.declineOffer(id, String(b?.courierId)), s.state)],
   ['POST', /^\/api\/orders\/(\d+)\/unassign$/, assignedCourier, (s, [id]) => (s.unassignCourier(id), s.state)],
-  ['POST', /^\/api\/orders\/(\d+)\/status$/, assignedCourier, (s, [id], b) => (s.setOrderStatus(id, b?.status), s.state)],
+  ['POST', /^\/api\/orders\/(\d+)\/status$/, assignedCourier, (s, [id], b, ctx) =>
+    (s.setOrderStatus(id, b?.status, b?.pin, { byOps: ctx.user?.role === 'ops', strictPin: ctx.enforce }), s.state)],
   ['POST', /^\/api\/orders\/(\d+)\/cancel$/, ops, (s, [id], b) => (s.cancelOrder(id, b?.reason, !!b?.compensateCourier), s.state)],
   ['POST', /^\/api\/orders\/(\d+)\/refund$/, ops, (s, [id], b) => (s.refundOrder(id, b?.amount, b?.reason), s.state)],
   ['POST', /^\/api\/merchants\/([\w-]+)\/open$/, ops, (s, [id], b) => (s.setMerchantOpen(id, b?.open), s.state)],
@@ -132,7 +133,7 @@ export function createApi({ tickMs = 1000, store = new Store(), authMode = 'warn
       const body = req.method === 'POST' ? await readJson(req) : undefined;
       const params = route[1].exec(path)!.slice(1).map(decodeURIComponent);
       const token = bearer(req.headers.authorization);
-      const ctx: Ctx = { token, user: store.userForToken(token), query: url.searchParams };
+      const ctx: Ctx = { token, user: store.userForToken(token), query: url.searchParams, enforce };
       const allowed = route[2](ctx, params, body, store);
       if (allowed !== true) {
         if (enforce) throw new ActionError(allowed, ctx.user ? 403 : 401);

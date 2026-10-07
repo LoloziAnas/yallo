@@ -26,6 +26,8 @@ const isActive = (s: OrderStatus) => ACTIVE_STATUSES.includes(s);
 /** Food that's ready goes to `picking` when a courier is already assigned, otherwise waits at `ready`. */
 const readyStatus = (o: ApiOrder): OrderStatus => (o.courierId ? 'picking' : 'ready');
 const clone = <T>(v: T): T => structuredClone(v);
+/** A random 4-digit delivery PIN. */
+const newPin = () => String(randomBytes(2).readUInt16BE(0) % 10000).padStart(4, '0');
 const SOURCES: TicketSource[] = ['customer', 'courier', 'merchant'];
 const PRIORITIES: TicketPriority[] = ['urgent', 'high', 'normal', 'low'];
 const MAX_TEXT = 2000;
@@ -86,7 +88,7 @@ function seed(): LiveState {
     t: 0,
     merchants: clone(MERCHANTS),
     couriers: COURIERS.map(c => ({ ...clone(c), suspended: false, app: false })),
-    orders: ORDERS.map(o => ({ ...clone(o), elapsedSec: DEMO_ELAPSED_SEC[o.id] ?? 0, statusAt: { ...DEMO_STATUS_AT[o.id] } })),
+    orders: ORDERS.map(o => ({ ...clone(o), elapsedSec: DEMO_ELAPSED_SEC[o.id] ?? 0, statusAt: { ...DEMO_STATUS_AT[o.id] }, deliveryPin: newPin() })),
     tickets: clone(TICKETS),
     applications: clone(APPLICATIONS),
     payouts: clone(PAYOUTS),
@@ -293,6 +295,7 @@ export class Store {
       dropoff: { x: Math.min(97, Math.max(3, centre.x + Math.cos(angle) * r)), y: Math.min(97, Math.max(3, centre.y + Math.sin(angle) * r)) },
       status: 'pending',
       statusAt: { pending: this.s.t },
+      deliveryPin: newPin(),
       courierId: null,
       items: priced.items,
       subtotal: priced.subtotal,
@@ -455,12 +458,20 @@ export class Store {
   }
 
   /** Moves an order one step along the lifecycle, e.g. the courier app reporting a pickup. */
-  setOrderStatus(orderId: string, status: OrderStatus) {
+  /**
+   * `pin` must match the order's delivery PIN when a courier marks it delivered. Ops skip the check (`byOps`).
+   * With `strictPin` off, a wrong PIN is only logged (the rollout's warn mode).
+   */
+  setOrderStatus(orderId: string, status: OrderStatus, pin?: string, { byOps = false, strictPin = true }: { byOps?: boolean; strictPin?: boolean } = {}) {
     const o = this.order(orderId);
     if (!canTransition(o.status, status)) throw new ActionError(`${o.id} cannot go from ${o.status} to ${status}`, 409);
     if (status === 'cancelled') throw new ActionError('Use the cancel action to cancel an order');
     if ((status === 'picking' || status === 'delivering' || status === 'delivered') && !o.courierId) {
       throw new ActionError(o.id + ' has no courier yet', 409);
+    }
+    if (status === 'delivered' && o.deliveryPin && !byOps && String(pin ?? '').trim() !== o.deliveryPin) {
+      if (strictPin) throw new ActionError(pin ? 'Wrong delivery PIN. Ask the customer again' : 'Enter the customer\'s delivery PIN', 409);
+      console.warn(`[pin] would refuse delivering ${o.id}: ${pin ? 'wrong PIN' : 'no PIN'}`);
     }
     this.setStatus(o, status === 'ready' ? readyStatus(o) : status);
     this.auto.delete(o.id);
@@ -798,7 +809,8 @@ export class Store {
     if (user?.role === 'courier') {
       const me = user.courierId!;
       return { ...base, couriers: s.couriers.filter(c => c.id === me),
-        orders: s.orders.filter(o => o.courierId === me || o.offer?.courierId === me),
+        // Couriers never see the delivery PIN: they ask the customer for it.
+        orders: s.orders.filter(o => o.courierId === me || o.offer?.courierId === me).map(({ deliveryPin: _pin, ...o }) => o),
         tickets: s.tickets.filter(tk => tk.requesterId === me),
         payouts: { ...s.payouts, lines: s.payouts.lines.filter(l => l.kind === 'courier' && l.partyId === me) } };
     }
