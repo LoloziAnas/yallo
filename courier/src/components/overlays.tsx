@@ -147,7 +147,7 @@ export function RequestOverlay() {
         {[
           [t('Distance'), `${order.km} ${t('km')}`],
           [t('Duration'), `${order.min} ${t('min')}`],
-          [t('Cash'), order.cash ? String(order.cash) : '—'],
+          [t('Cash'), order.cash ? `${order.cash} DH` : '—'],
         ].map(([l, v]) => (
           <View key={l} style={styles.darkTile}>
             <Txt size={12} color={muted}>

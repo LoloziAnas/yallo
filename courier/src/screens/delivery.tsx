@@ -914,6 +914,8 @@ function Done() {
   const order = useOrder();
   const t = useT();
   const challenge = useCourier((s) => s.challenge);
+  // The weekend challenge is the design's; there are no bonuses on the server yet (MVP).
+  const demo = useCourier((s) => s.source === 'demo');
   const set = useCourier((s) => s.set);
   const bottom = useBottomPad();
   const sum = useEarningsSummary();
@@ -956,31 +958,33 @@ function Done() {
             {t('Tip')} {order.tip} DH
           </Txt>
         </View>
-        <View style={styles.challenge}>
-          <View style={[styles.rowC, { justifyContent: 'space-between' }]}>
-            <Txt size={15} weight={600}>
-              {t('Weekend challenge')}
-            </Txt>
-            <Txt size={15} weight={600} color={colors.accent800}>
-              {challenge} / 15
+        {demo && (
+          <View style={styles.challenge}>
+            <View style={[styles.rowC, { justifyContent: 'space-between' }]}>
+              <Txt size={15} weight={600}>
+                {t('Weekend challenge')}
+              </Txt>
+              <Txt size={15} weight={600} color={colors.accent800}>
+                {challenge} / 15
+              </Txt>
+            </View>
+            <Progress
+              pct={(challenge / CHALLENGE_GOAL) * 100}
+              height={10}
+              track={colors.accent200}
+              fill={colors.accent}
+            />
+            <Txt size={13} color={colors.accent800}>
+              {t(`${Math.max(0, CHALLENGE_GOAL - challenge)} more for +100 DH`)}
             </Txt>
           </View>
-          <Progress
-            pct={(challenge / CHALLENGE_GOAL) * 100}
-            height={10}
-            track={colors.accent200}
-            fill={colors.accent}
-          />
-          <Txt size={13} color={colors.accent800}>
-            {t(`${Math.max(0, CHALLENGE_GOAL - challenge)} more for +100 DH`)}
-          </Txt>
-        </View>
+        )}
         <Txt size={15} color={colors.neutral700} style={{ marginTop: 12 }}>
           {t('Today')}:{' '}
           <Txt size={15} weight={700}>
             {fmt(sum.total)} DH
           </Txt>{' '}
-          · {sum.jobs} {t('deliveries')}
+          · {sum.jobs} {t(sum.jobs === 1 ? 'delivery' : 'deliveries')}
         </Txt>
         <Spacer />
         <Btn label={t('Back to dashboard')} height={62} fontSize={19} onPress={() => finish('/')} />

@@ -6,7 +6,7 @@ import { Platform } from 'react-native';
 
 import { DEMO_COURIER, api, isUnreachable, whileWaking, within } from '@/api/client';
 import { getPushToken } from '@/device/notifications';
-import { setRefusalHook, useCourier } from '@/store/courier-store';
+import { inDelivery, setRefusalHook, useCourier } from '@/store/courier-store';
 
 const KEY = 'yallo.courier.session';
 
@@ -143,6 +143,11 @@ export async function registerPush() {
 
 /** Ends the session on the server and on the phone; this device stops receiving the courier's pushes. */
 export async function signOut() {
+  // Go offline first: a courier left online without the app would be handed jobs (the demo's
+  // stand-in drives them). Not mid-delivery: that job stays theirs.
+  const s = useCourier.getState();
+  if (s.source === 'live' && s.online && !inDelivery(s.phase))
+    await api?.setCourierAvailability(s.courierId, 'off').catch(() => {});
   if (pushToken) await api?.unregisterPushToken(pushToken).catch(() => {});
   pushToken = null;
   await api?.signOut().catch(() => {});

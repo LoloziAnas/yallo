@@ -236,6 +236,7 @@ const PHR: [string, string, string][] = [
   ['ETA', 'Arrivée', 'الوصول'],
   ['No active deliveries', 'Aucune livraison active', 'لا توجد توصيلات نشطة'],
   ['deliveries', 'livraisons', 'توصيلة'],
+  ['delivery', 'livraison', 'توصيلة'],
   ['online', 'en ligne', 'اتصال'],
   ['Total', 'Total', 'المجموع'],
   ['Available for payout', 'Disponible au virement', 'متاح للسحب'],
