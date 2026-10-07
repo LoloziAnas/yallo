@@ -133,8 +133,9 @@ How it fits together:
    - customer: `cd mobile && npm run apk -- --config https://lolozianas.github.io/yallo/api.json`. It is signed with
      `~/yallo-keys/yallo-customer.jks` (outside git; back it up, updates must use the same key; fingerprint in
      `~/yallo-keys/yallo-customer.README.txt`).
-   - courier: see `courier/README.md` (`npm run apk`, signed with the courier key in `~/yallo-keys`; the first build
-     takes about 45 minutes).
+   - courier: `cd courier && npm run apk -- --config https://lolozianas.github.io/yallo/api.json` →
+     `courier/dist/yallo-courier-1.0.0-<sha>.apk` (signed with the courier key in `~/yallo-keys`; the first build takes
+     about 45 minutes; see `courier/README.md`).
 
 ### Keeping the laptop available
 
