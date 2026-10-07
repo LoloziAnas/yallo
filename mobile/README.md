@@ -53,7 +53,17 @@ The app finds the API on the machine serving the JS bundle (`src/api/client.ts`)
 
 ## Builds
 
-**Android APK, locally (no EAS):** `npm run apk -- --api https://<api host>`
+**Where the API is.** Every build either pins the API or finds it at runtime:
+- `--api <url>` (EXPO_PUBLIC_API_URL) pins it. Use it for dev, the e2e and the :8090 integration build
+  (`--api http://localhost:5190`).
+- `--config <url>` (EXPO_PUBLIC_API_CONFIG_URL) is for the public demo. The app reads the API's address from that
+  file (`https://lolozianas.github.io/yallo/api.json`, `{"api": "https://….trycloudflare.com"}`) through the shared
+  client's `configUrl`, and reads it again when the API stops answering. So one APK or site keeps working when the
+  tunnel restarts with a new address. The app also remembers the last good address for cold starts when the file
+  can't be read (`src/api/client.ts`).
+- Neither (`npx expo start`): the machine serving the JS bundle, port 5190.
+
+**Android APK, locally (no EAS):** `npm run apk -- --config https://lolozianas.github.io/yallo/api.json` (or `--api <url>`)
 - Runs a clean `expo prebuild` and `gradlew assembleRelease` (needs a JDK 17+; the script finds one).
 - Output: `apk/yallo-<version>-<commit>.apk` (git-ignored).
 - The API URL and the commit are built in. Profile shows them, e.g. `YALLO 1.0.0 (b188125)`, so we know which
@@ -65,7 +75,10 @@ The app finds the API on the machine serving the JS bundle (`src/api/client.ts`)
 - It refuses to build with uncommitted changes in `mobile/` unless you pass `--allow-dirty`.
 - An `http://` API works for testing (plain HTTP is then allowed), but shared APKs should use https.
 
-**Web, for a static host:** `npm run web:build -- --api https://<api host>`
+**Web, for a static host:** `npm run web:build -- --api <url>` or `--config <url>`, optionally `--base /yallo/app`
+- From env instead, as the GitHub Pages workflow does: `YALLO_API_CONFIG_URL=… YALLO_BASE_PATH=/yallo/app npm run web:build`.
+- `--base` serves the app from a sub-path (`experiments.baseUrl`). GitHub Pages has no rewrites: its root `404.html`
+  redirects `/yallo/app/<path>` to `/yallo/app/?p=<path>`, and the app opens that path (`src/utils/restore-deep-link.ts`).
 - Output: `web-dist/`, a single-page app. The live feed follows the API URL (`https` → `wss`).
 - Unknown paths must serve `index.html`. The build includes `_redirects` (Netlify, Cloudflare Pages),
   `404.html` (GitHub Pages) and `serve.json` (`npx serve web-dist`), plus `version.txt`.
