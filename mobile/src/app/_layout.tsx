@@ -55,13 +55,15 @@ export default function RootLayout() {
   const ready = fontsLoaded && hydrated;
   const signedIn = useApp((s) => s.signedIn);
   const connectLive = useApp((s) => s.connectLive);
+  // Resubscribe when the session changes, so the live feed carries the customer's token.
+  const token = useApp((s) => s.token);
 
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();
   }, [ready]);
 
   // Live state from the shared mock API (orders, couriers, merchants), pushed every second.
-  useEffect(() => connectLive(), [connectLive]);
+  useEffect(() => connectLive(), [connectLive, token]);
 
   if (!ready) return null;
 
@@ -89,6 +91,7 @@ export default function RootLayout() {
             <Stack.Screen name="help" options={sheet} />
           </Stack.Protected>
           {/* Address sheets are also used during onboarding ("Enter address manually"). */}
+          <Stack.Screen name="login" options={{ presentation: 'modal' }} />
           {/* Legal pages are reachable signed out (from sign-in) and signed in. */}
           <Stack.Screen name="terms" />
           <Stack.Screen name="privacy" />

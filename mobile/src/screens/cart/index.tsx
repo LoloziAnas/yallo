@@ -18,6 +18,7 @@ import { AddressCard } from './address-card';
 import { CartLineRow } from './cart-line-row';
 
 export function CartScreen() {
+  const token = useApp((s) => s.token);
   const t = useT();
   const bottomPad = useBottomPad(16);
   const cart = useApp((s) => s.cart);
@@ -148,7 +149,12 @@ export function CartScreen() {
             }}>
             <Button
               disabled={belowMin}
-              onPress={() => router.push('/checkout')}
+              // Ordering needs an account: guests sign in here and continue to checkout.
+              onPress={() =>
+                token
+                  ? router.push('/checkout')
+                  : router.push({ pathname: '/login', params: { then: 'checkout' } })
+              }
               accessibilityLabel={`${t.placeOrder}, ${fmt(tt.total)}`}
               style={{ height: 56, justifyContent: 'space-between', paddingHorizontal: 18 }}>
               <Txt w={600} size={18} lh={1.2} color={colors.white}>

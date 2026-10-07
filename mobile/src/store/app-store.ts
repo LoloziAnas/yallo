@@ -1,7 +1,14 @@
 // App state and actions, ported from the Yallo design's logic class.
 // Orders go to the shared mock API, and the live feed drives tracking.
 // Screen-local UI state (product options, store tab, form fields) lives in the screens instead.
-import type { ApiOrder, DeliveryAddress, LiveState, PlaceOrderBody, ZoneName } from '@yallo/shared';
+import type {
+  ApiOrder,
+  AuthSession,
+  DeliveryAddress,
+  LiveState,
+  PlaceOrderBody,
+  ZoneName,
+} from '@yallo/shared';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useSyncExternalStore } from 'react';
@@ -39,8 +46,8 @@ import {
   unitPrice,
 } from '@/store/derive';
 
-/** The customer's name on orders; the design's profile is Salma's. */
-const CUSTOMER_NAME = 'Salma El Amrani';
+/** Name on orders and tickets: the account's name, else its phone number. */
+const customerName = (s: Pick<State, 'userName' | 'phone'>) => s.userName || s.phone || 'Guest';
 
 /** The order being tracked: what the customer saw at checkout, plus the API's id for it. */
 export type ActiveOrder = Omit<Order, 'date' | 'status'> & {
@@ -59,8 +66,12 @@ type State = {
   lang: Lang;
   /** Set once the user has finished onboarding and signed in (or continued as guest). */
   signedIn: boolean;
-  /** Phone number verified at sign-in ("+212661234567"); null for guests and social sign-in. */
+  /** Phone number verified at sign-in ("+212661234567"); null for guests. */
   phone: string | null;
+  /** API session token from OTP sign-in; null for guests (who can browse but not order). */
+  token: string | null;
+  /** Name on the account, if the customer gave one. */
+  userName: string | null;
   addresses: Address[];
   addrId: string;
   cart: Cart;
@@ -119,7 +130,9 @@ type Actions = {
   showToast: (msg: string) => void;
   toggleFav: (kind: 'favStores' | 'favProducts', id: string) => void;
 
-  enterApp: (phone?: string) => void;
+  enterApp: () => void;
+  /** Stores an OTP sign-in (the API client already holds the token). */
+  signIn: (session: AuthSession) => void;
   logout: () => void;
   retryHome: () => void;
 
@@ -204,7 +217,9 @@ let searchTimer: ReturnType<typeof setTimeout> | undefined;
 /** The signed-in person's data: the demo starting point, and what logging out returns to. */
 const userDefaults = () => ({
   signedIn: false,
-  phone: null,
+  phone: null as string | null,
+  token: null as string | null,
+  userName: null as string | null,
   addresses: seedAddresses,
   addrId: 'a1',
   cart: { storeId: null, lines: [] },
@@ -227,6 +242,8 @@ const persisted = [
   'lang',
   'signedIn',
   'phone',
+  'token',
+  'userName',
   'addresses',
   'addrId',
   'cart',
@@ -288,14 +305,20 @@ export const useApp = create<State & Actions>()(
           [kind]: s[kind].includes(id) ? s[kind].filter((x) => x !== id) : [...s[kind], id],
         })),
 
-      enterApp: (phone) => {
-        set({ signedIn: true, homeLoading: true, phone: phone ?? null });
+      enterApp: () => {
+        set({ signedIn: true, homeLoading: true });
         router.replace('/');
         setTimeout(() => set({ homeLoading: false }), 900);
       },
 
+      signIn: ({ token, user }) => {
+        api.setToken(token);
+        set({ token, phone: user.phone, userName: user.name ?? null });
+      },
+
       logout: () => {
-        // Clear this person's data from the device; keep only the language.
+        // End the API session and clear this person's data from the device; keep only the language.
+        api.signOut().catch(() => {});
         set(userDefaults());
         router.dismissAll();
         router.replace('/sign-in');
@@ -368,11 +391,16 @@ export const useApp = create<State & Actions>()(
       placeOrder: async () => {
         const s = get();
         if (s.placing || !s.cart.storeId) return;
+        // Ordering needs an account: guests sign in first, then come back to checkout.
+        if (!s.token) {
+          router.push({ pathname: '/login', params: { then: 'checkout' } });
+          return;
+        }
         const store = storeById[s.cart.storeId];
         const addr = s.addresses.find((a) => a.id === s.addrId) ?? s.addresses[0];
         const body: PlaceOrderBody = {
           merchantId: store.id,
-          customerName: CUSTOMER_NAME,
+          customerName: customerName(s),
           zone: (addr.zone as ZoneName | undefined) ?? zoneForDistrict(addr.district),
           // The API prices catalogue lines itself (options, fees, promo); it names items "Product (choice · choice)".
           items: s.cart.lines.map((l) => ({ productId: l.pid, qty: l.qty, options: l.sel })),
@@ -453,7 +481,7 @@ export const useApp = create<State & Actions>()(
         try {
           const ticket = await api.openTicket({
             source: 'customer',
-            requesterName: CUSTOMER_NAME,
+            requesterName: customerName(get()),
             subject: tp.subject,
             orderId: apiOrder,
             priority: tp.priority,
@@ -468,7 +496,7 @@ export const useApp = create<State & Actions>()(
 
       replyTicket: async (ticketId, text) => {
         try {
-          await api.addTicketMessage(ticketId, 'requester', CUSTOMER_NAME, text.trim());
+          await api.addTicketMessage(ticketId, 'requester', customerName(get()), text.trim());
           return true;
         } catch {
           return false;
@@ -576,6 +604,10 @@ export const useApp = create<State & Actions>()(
       name: 'yallo-customer',
       version: 2,
       storage: createJSONStorage(() => AsyncStorage),
+      // Give the API client the saved session before anything talks to the API.
+      onRehydrateStorage: () => (state) => {
+        if (state?.token) api.setToken(state.token);
+      },
       // v1 used the app's own store ids (s1–s10); the shared catalogue uses m1–m10.
       migrate: (saved, version) => {
         const st = saved as Persisted;

@@ -1,5 +1,5 @@
 import type { Ticket } from '@yallo/shared';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
@@ -43,6 +43,7 @@ export function HelpSheet() {
   const [sent, setSent] = useState<string | null>(null);
 
   const ticket = findTicket(allTickets, mine, orderId);
+  const token = useApp((s) => s.token);
 
   const send = async () => {
     setSending(true);
@@ -127,6 +128,26 @@ export function HelpSheet() {
           })}
         </View>
         {ticket && composer}
+      </Sheet>
+    );
+  }
+
+  // Support tickets belong to an account: guests sign in first (the sheet stays open underneath).
+  if (!token) {
+    return (
+      <Sheet>
+        <Txt heading size={27} style={{ marginBottom: 8 }}>
+          {t.helpT}
+        </Txt>
+        <Txt color={colors.neutral700} style={{ marginBottom: 16 }}>
+          {t.phoneHint}
+        </Txt>
+        <Button
+          label={t.signInCta}
+          fontSize={16}
+          onPress={() => router.push('/login')}
+          style={{ height: 50 }}
+        />
       </Sheet>
     );
   }

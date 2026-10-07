@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
+import { Button } from '@/components/button';
 import { Icon, type IconName } from '@/components/icon';
 import { Screen } from '@/components/screen';
 import { Segmented } from '@/components/segmented';
@@ -24,9 +25,25 @@ export function Profile() {
   const favStores = useApp((s) => s.favStores);
   const favProducts = useApp((s) => s.favProducts);
   const soon = () => showToast(t.soon);
+  const token = useApp((s) => s.token);
+  const phone = useApp((s) => s.phone);
+  const userName = useApp((s) => s.userName);
+  const signIn = () => router.push('/login');
+  const displayName = userName || (token ? phone : null) || t.guestName;
+  const initials = (userName ?? '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('');
 
   const rows: [IconName, string, string, () => void][] = [
-    ['user', t.personal, 'Salma El Amrani · salma.amrani@gmail.com', soon],
+    [
+      'user',
+      t.personal,
+      [userName, token ? phone : null].filter(Boolean).join(' · ') || t.guestName,
+      token ? soon : signIn,
+    ],
     ['pin', t.addresses, addresses.map((a) => a.label).join(' · '), () => router.push('/address')],
     ['card', t.payments, t.cash, () => router.push('/payments')],
     [
@@ -70,17 +87,30 @@ export function Profile() {
               borderRadius: radius.lg,
               boxShadow: shadow.sm,
             }}>
-            <Txt heading size={26} color={colors.accent700}>
-              SE
-            </Txt>
+            {initials ? (
+              <Txt heading size={26} color={colors.accent700}>
+                {initials}
+              </Txt>
+            ) : (
+              <Icon name="user" size={28} color={colors.accent700} />
+            )}
           </View>
           <View style={{ flex: 1 }}>
             <Txt heading size={26}>
-              Salma El Amrani
+              {displayName}
             </Txt>
-            <Txt size={14} color={colors.neutral700} style={{ writingDirection: 'ltr' }}>
-              {'\u2066'}+212 6 61 23 45 67{'\u2069'}
-            </Txt>
+            {token && userName && phone ? (
+              <Txt size={14} color={colors.neutral700} style={{ writingDirection: 'ltr' }}>
+                {'\u2066' + phone + '\u2069'}
+              </Txt>
+            ) : !token ? (
+              <Button
+                variant="ghost"
+                label={t.signInCta}
+                onPress={signIn}
+                style={{ alignSelf: 'flex-start', paddingHorizontal: 0, height: 32 }}
+              />
+            ) : null}
           </View>
         </View>
 
