@@ -1,6 +1,7 @@
 # Yallo
 
 Delivery platform for Marrakech. Several Claude sessions work here in parallel, one per app.
+How to run it all, the demo accounts and every setting: [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
 | Folder | What | Stack | Owner session |
 |---|---|---|---|
@@ -11,6 +12,7 @@ Delivery platform for Marrakech. Several Claude sessions work here in parallel, 
 | `shared/` | `@yallo/shared`: domain model, order lifecycle, design tokens, demo seed, API client | plain TypeScript | back office |
 | `api/` | Mock API: the shared live state for all apps | Node + `ws`, run with `tsx` | back office |
 | `e2e/` | Joint end-to-end run across all three apps | Playwright (system Chrome) | back office |
+| `docs/`, `deploy/` | Runbook; deploy script for the integration servers | | back office |
 
 ## Rules for parallel sessions
 
