@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { BackButton, Btn } from '@/components/button';
@@ -124,10 +125,19 @@ const SUPPORT_CATS: [IconName, string][] = [
   ['globe', 'Technical problem'],
   ['card', 'Account issue'],
 ];
-const FAQS = [
-  'How are delivery fees calculated?',
-  'When do I get paid?',
-  'What if a customer pays with a large bill?',
+const FAQS: [string, string][] = [
+  [
+    'How are delivery fees calculated?',
+    'Each job pays 12 DH plus 3 DH per km of the whole trip (to the store, then to the customer), with a minimum of 15 DH. Tips come on top and are all yours. You see the amount before you accept.',
+  ],
+  [
+    'When do I get paid?',
+    'Your earnings are paid every Monday to the bank account in your profile. You can also withdraw your balance from Earnings.',
+  ],
+  [
+    'What if a customer pays with a large bill?',
+    "Carry change for up to 200 DH. If you can't break a bill, tell the customer before handing over the order and contact support from the delivery screen. Never leave an order unpaid.",
+  ],
 ];
 
 export function Support() {
@@ -143,12 +153,21 @@ export function Support() {
     if (live) router.push({ pathname: '/ticket/[id]', params: { id: 'new', subject } });
     else showToast(`${subject} · opening chat`);
   };
-  // Emergency numbers really dial: Morocco's ambulance (15) and police (19).
+  // Emergency numbers really dial (Morocco: ambulance 15, police 19), and live an urgent ticket
+  // puts the safety alert in front of the Yallo team.
+  const reportProblem = useCourier((s) => s.reportProblem);
   const sos = (n: string) => {
     haptic.alert();
-    showToast('Calling emergency services · Safety team alerted');
+    if (live) {
+      reportProblem(
+        'Accident / emergency',
+        `Courier called ${n === '15' ? 'an ambulance (15)' : 'the police (19)'} from the app.`,
+      );
+      showToast('Calling emergency services · Safety team alerted');
+    } else showToast('Calling emergency services');
     Linking.openURL(`tel:${n}`).catch(() => {});
   };
+  const [openFaq, setOpenFaq] = useState<string | null>(null);
   return (
     <Page title={t('Help & support')}>
       <View style={styles.sos}>
@@ -248,16 +267,28 @@ export function Support() {
         ))}
       </ListCard>
       <SectionLabel style={{ marginTop: 8, marginStart: 4 }}>{t('Popular articles')}</SectionLabel>
-      {FAQS.map((q) => (
-        <View
-          key={q}
-          style={[card, styles.row, { paddingVertical: 14, paddingHorizontal: 18, gap: 10 }]}>
-          <Txt size={15} weight={600} style={{ flex: 1 }}>
-            {t(q)}
-          </Txt>
-          <Icon name="chevR" size={18} color={colors.neutral500} />
-        </View>
-      ))}
+      {FAQS.map(([q, a]) => {
+        const open = openFaq === q;
+        return (
+          <PressCard
+            key={q}
+            onPress={() => setOpenFaq(open ? null : q)}
+            accessibilityLabel={t(q)}
+            style={[card, { paddingVertical: 14, paddingHorizontal: 18, gap: 8 }]}>
+            <View style={[styles.row, { gap: 10 }]}>
+              <Txt size={15} weight={600} style={{ flex: 1 }}>
+                {t(q)}
+              </Txt>
+              <Icon name={open ? 'chevD' : 'chevR'} size={18} color={colors.neutral500} />
+            </View>
+            {open && (
+              <Txt size={14} color={colors.neutral800}>
+                {t(a)}
+              </Txt>
+            )}
+          </PressCard>
+        );
+      })}
       <Btn
         icon="msg"
         iconSize={20}
@@ -417,18 +448,26 @@ export function HistoryDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const history = useCourier((s) => s.history);
   const hd = history.find((h) => historyKey(h.id) === id) ?? history[0];
-  const rows = [
-    ['Delivery fee', hd.earn - 4 + ' DH'],
-    ['Tip', '4 DH'],
-    ['Payment', 'Paid online'],
-  ];
+  // Live jobs carry their real pay, tip and payment method; demo history keeps the design's split.
+  const rows =
+    hd.pay !== undefined
+      ? [
+          ['Delivery fee', `${hd.pay} DH`],
+          ['Tip', `${hd.tip ?? 0} DH`],
+          ['Payment', hd.payMethod === 'cash' ? 'Cash' : 'Paid online'],
+        ]
+      : [
+          ['Delivery fee', hd.earn - 4 + ' DH'],
+          ['Tip', '4 DH'],
+          ['Payment', 'Paid online'],
+        ];
   return (
     <Page title={t(`Order ${hd.id}`)}>
       <View style={[well, { paddingVertical: 18, paddingHorizontal: 20, gap: 14 }]}>
         <View style={[styles.row, { justifyContent: 'space-between' }]}>
           <View style={styles.deliveredTag}>
             <Txt size={11} weight={700} color={colors.mint700}>
-              {t('Delivered')}
+              {t(hd.outcome === 'cancelled' ? 'Cancelled' : 'Delivered')}
             </Txt>
           </View>
           <Txt size={14} color={colors.neutral700}>

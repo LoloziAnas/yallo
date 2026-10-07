@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
 
 import { Btn, Spacer } from '@/components/button';
+import { openUrl, smsUrl, telUrl } from '@/data/contact';
 import { requestForegroundLocation } from '@/device/tracking';
 import { Icon, type IconName } from '@/components/icon';
 import { useBottomPad, useDirection } from '@/components/screen';
@@ -271,6 +272,14 @@ export function EdgeOverlay({ kind }: { kind: EdgeKind }) {
   const direction = useDirection();
 
   const go = (edge: EdgeKind | null) => () => set({ edge, edgeT: 0 });
+  // Live, the customer can only be reached with a number; otherwise support takes it from here.
+  const demo = useCourier((s) => s.source === 'demo');
+  const canReach = demo || !!order.phone;
+  const toSupport = () => {
+    set({ edge: null });
+    if (demo) showToast('Connecting you to support…');
+    else router.push('/support');
+  };
   // The copy below is the design's, written for its order (#1284, Café Marrakech, Youssef, 35 DH)
   // so it matches the translation table; swap in the real job after translating.
   const personal = (text: string) =>
@@ -309,8 +318,15 @@ export function EdgeOverlay({ kind }: { kind: EdgeKind }) {
       title: 'Customer unavailable',
       body: "We're calling Youssef too. If there's no answer when the timer ends, you can mark the delivery as failed and still get paid.",
       timer: { label: 'Wait time remaining', value: mmss(300 - edgeT) },
-      primary: 'Call Youssef again',
-      onPrimary: () => showToast(`Calling ${order.cust}…`),
+      ...(canReach
+        ? {
+            primary: 'Call Youssef again',
+            onPrimary: () => {
+              showToast(`Calling ${order.cust}…`);
+              if (order.phone) openUrl(telUrl(order.phone));
+            },
+          }
+        : { primary: 'Chat with support', onPrimary: toSupport }),
       secondary: 'Mark as failed delivery',
       onSecondary: go('failed'),
     },
@@ -331,11 +347,16 @@ export function EdgeOverlay({ kind }: { kind: EdgeKind }) {
       icon: 'pin',
       title: 'Checking the address',
       body: "Support is contacting Youssef to confirm his location. Stay where you are — we'll update the pin on your map.",
-      primary: 'Message Youssef',
-      onPrimary: () => {
-        set({ edge: null });
-        showToast(`Message sent to ${order.cust}`);
-      },
+      ...(canReach
+        ? {
+            primary: 'Message Youssef',
+            onPrimary: () => {
+              set({ edge: null });
+              showToast(`Message sent to ${order.cust}`);
+              if (order.phone) openUrl(smsUrl(order.phone, "I'm at your address"));
+            },
+          }
+        : { primary: 'Chat with support', onPrimary: toSupport }),
       secondary: 'Back to delivery',
       onSecondary: go(null),
     },
@@ -345,10 +366,7 @@ export function EdgeOverlay({ kind }: { kind: EdgeKind }) {
       title: "Customer can't pay",
       body: `Don't hand over the order. Support can take a card payment over the phone, or you can return the order and still be paid 35 DH.`,
       primary: 'Call support',
-      onPrimary: () => {
-        set({ edge: null });
-        showToast('Connecting you to support…');
-      },
+      onPrimary: toSupport,
       secondary: 'Mark as failed delivery',
       onSecondary: go('failed'),
     },

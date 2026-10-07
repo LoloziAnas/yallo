@@ -12,6 +12,83 @@ const PHR: [string, string, string][] = [
   ['+ {0} DH tip', '+ {0} DH de pourboire', '+ {0} درهم بقشيش'],
   ['Minimum fare', 'Tarif minimum', 'الحد الأدنى للأجرة'],
   ['Pharmacy', 'Pharmacie', 'صيدلية'],
+  ['Calling emergency services', 'Appel des secours', 'جارٍ الاتصال بالطوارئ'],
+  // Help articles.
+  [
+    'Each job pays 12 DH plus 3 DH per km of the whole trip (to the store, then to the customer), with a minimum of 15 DH. Tips come on top and are all yours. You see the amount before you accept.',
+    'Chaque course rapporte 12 DH plus 3 DH par km sur tout le trajet (jusqu’au commerce, puis jusqu’au client), avec un minimum de 15 DH. Les pourboires s’ajoutent et sont entièrement à vous. Vous voyez le montant avant d’accepter.',
+    'كل توصيلة تُدفع 12 درهماً زائد 3 دراهم لكل كيلومتر من الرحلة كاملة (إلى المتجر ثم إلى الزبون)، بحد أدنى 15 درهماً. البقشيش يُضاف وهو لك بالكامل. ترى المبلغ قبل أن تقبل.',
+  ],
+  [
+    'Your earnings are paid every Monday to the bank account in your profile. You can also withdraw your balance from Earnings.',
+    'Vos gains sont versés chaque lundi sur le compte bancaire de votre profil. Vous pouvez aussi retirer votre solde depuis Gains.',
+    'تُحوَّل أرباحك كل يوم إثنين إلى الحساب البنكي في ملفك. يمكنك أيضاً سحب رصيدك من صفحة الأرباح.',
+  ],
+  [
+    "Carry change for up to 200 DH. If you can't break a bill, tell the customer before handing over the order and contact support from the delivery screen. Never leave an order unpaid.",
+    'Ayez de la monnaie jusqu’à 200 DH. Si vous ne pouvez pas rendre la monnaie, prévenez le client avant de remettre la commande et contactez le support depuis l’écran de livraison. Ne laissez jamais une commande impayée.',
+    'احمل فكّة حتى 200 درهم. إن لم تستطع صرف الورقة، أخبر الزبون قبل تسليم الطلب وتواصل مع الدعم من شاشة التوصيل. لا تترك طلباً دون دفع.',
+  ],
+  // Live earnings and payouts.
+  ['This week · {0}', 'Cette semaine · {0}', 'هذا الأسبوع · {0}'],
+  ['Next payout', 'Prochain virement', 'التحويل القادم'],
+  ['Next payout · {0}', 'Prochain virement · {0}', 'التحويل القادم · {0}'],
+  ['On hold', 'En attente de validation', 'معلّق'],
+  ['Cash held', 'Espèces détenues', 'نقد بحوزتك'],
+  ['Cash you collected: {0} DH', 'Espèces encaissées : {0} DH', 'النقد الذي حصّلته: {0} درهم'],
+  [
+    'Hand in the cash you hold to release this payout.',
+    'Remettez les espèces que vous détenez pour débloquer ce virement.',
+    'سلّم النقد الذي بحوزتك لتحرير هذا التحويل.',
+  ],
+  ['Cancelled', 'Annulée', 'ملغاة'],
+  [
+    'Your session ended. Sign in again',
+    'Votre session a expiré. Reconnectez-vous',
+    'انتهت جلستك. سجّل الدخول مجدداً',
+  ],
+  // Delivery PIN checked by the API.
+  [
+    'Ask the customer for the PIN shown in their app',
+    'Demandez au client le code affiché dans son app',
+    'اطلب من الزبون الرمز الظاهر في تطبيقه',
+  ],
+  [
+    'Wrong delivery PIN. Ask the customer again',
+    'Code de livraison incorrect. Redemandez-le au client',
+    'رمز التسليم خاطئ. اطلبه من الزبون مجدداً',
+  ],
+  [
+    "Enter the customer's delivery PIN",
+    'Saisissez le code de livraison du client',
+    'أدخل رمز التسليم الخاص بالزبون',
+  ],
+  // Courier applications.
+  ['Plate number', 'Immatriculation', 'رقم اللوحة'],
+  ['Application not approved', 'Candidature non retenue', 'لم تتم الموافقة على الطلب'],
+  ['Back to start', "Retour à l'accueil", 'العودة إلى البداية'],
+  [
+    'This number already belongs to a Yallo courier. Sign in instead',
+    'Ce numéro appartient déjà à un livreur Yallo. Connectez-vous plutôt',
+    'هذا الرقم مسجّل لموصّل في يالو. سجّل الدخول بدلاً من ذلك',
+  ],
+  [
+    'An application for this number is already in review',
+    'Une candidature pour ce numéro est déjà en cours d’examen',
+    'هناك طلب لهذا الرقم قيد المراجعة',
+  ],
+  // Phone sign-in.
+  ['Resend code', 'Renvoyer le code', 'إعادة إرسال الرمز'],
+  ['Resend in {0}', 'Renvoyer dans {0}', 'إعادة الإرسال بعد {0}'],
+  ['Code sent', 'Code envoyé', 'تم إرسال الرمز'],
+  ['Development code: {0}', 'Code de développement : {0}', 'رمز التطوير: {0}'],
+  [
+    'No courier account for this number',
+    'Aucun compte livreur pour ce numéro',
+    'لا يوجد حساب موصّل لهذا الرقم',
+  ],
+  ['Wrong code', 'Code incorrect', 'رمز خاطئ'],
+  ['Welcome back, {0}', 'Bon retour, {0}', 'مرحباً بعودتك، {0}'],
   // Support conversations.
   ['Your conversations', 'Vos conversations', 'محادثاتك'],
   ['Resolved', 'Résolu', 'تم الحل'],
