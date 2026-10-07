@@ -1,7 +1,13 @@
-import type { OrderStatus as SharedOrderStatus, Ticket } from '@yallo/shared';
+import type {
+  CourierEarnings,
+  OrderStatus as SharedOrderStatus,
+  PayoutLine,
+  PayoutRun,
+  Ticket,
+} from '@yallo/shared';
 import { create } from 'zustand';
 
-import { COURIER_ID, DEMO_ALLOWED, api, errorText } from '@/api/client';
+import { DEMO_ALLOWED, DEMO_COURIER, api, errorText } from '@/api/client';
 import { CHALLENGE_GOAL, HIST0, PAYOUTS0, fmt, type HistoryEntry, type Payout } from '@/data/demo';
 import { makeT, type Lang } from '@/data/i18n';
 import { DEMO_ORDER, type OrderView } from '@/data/order-view';
@@ -37,6 +43,9 @@ export const inDelivery = (p: Phase | null) => !!p && DELIVERY_PHASES.includes(p
 export const isPickupPhase = (p: Phase | null) => p === 'toPickup' || p === 'atPickup';
 
 export interface Data {
+  /** Who is signed in: the courier record this app drives, and their name. */
+  courierId: string;
+  userName: string;
   /** `demo` runs everything on the phone; `live` follows the Yallo API. */
   source: 'demo' | 'live';
   /** The live feed is currently connected. */
@@ -50,6 +59,9 @@ export interface Data {
   dropped: string[];
   /** Distance to the current leg's target when the leg began, to turn position into progress. */
   leg: { key: string; start: number } | null;
+  /** Live: earnings worked out from the server's orders, and this courier's line in the payout run. */
+  earnings: CourierEarnings | null;
+  payout: (Omit<PayoutRun, 'lines'> & { line: PayoutLine | null }) | null;
   /** This courier's support conversations (live), and how many ops replies were read in each. */
   tickets: Ticket[];
   repliesSeen: Record<string, number>;
@@ -58,6 +70,8 @@ export interface Data {
   /** Latest GPS fix from this phone, and where tracking stands. */
   gps: { lat: number; lon: number; accuracy: number | null; at: number } | null;
   tracking: 'off' | 'foreground' | 'background' | 'foreground-only';
+  /** The job this app is handing over right now (live), so its disappearance isn't read as a loss. */
+  completing: string | null;
   /** Trip compensation ops granted when cancelling the job (live). */
   opsComp: number;
   /** Demo clock from the server, "HH:MM". */
@@ -86,7 +100,9 @@ export interface Data {
   photoAdded: boolean;
   docs: Record<string, boolean>;
   loginPhone: string;
-  form: { name: string; phone: string; email: string };
+  form: { name: string; phone: string; email: string; plate: string };
+  /** Live: the courier application this phone submitted, followed on the review screen. */
+  application: { id: string; phone: string } | null;
   checked: Record<number, boolean>;
   notifRead: boolean;
   today: { earn: number; dels: number; fees: number; tips: number; adj: number };
@@ -112,7 +128,8 @@ interface Actions {
   pickUp: () => void;
   /** Leave the current order early (closed / failed / cancelled) and credit `pay` DH. */
   endOrder: (pay: number, msg: string, reason: string) => void;
-  complete: () => void;
+  /** Hands the order over. Live, the server checks the customer's PIN; a refusal rejects with its reason. */
+  complete: (pin?: string) => Promise<void>;
   /** Tell ops about a problem with the current job (live: opens a support ticket). */
   reportProblem: (subject: string, text: string) => void;
   /** Writes to support: opens a conversation (no `ticketId`) or continues one. Resolves to its id. */
@@ -131,6 +148,8 @@ const TOAST_MS = 2600;
 export const mkToast = (text: string) => ({ text, until: Date.now() + TOAST_MS });
 
 const INITIAL: Data = {
+  courierId: DEMO_COURIER.id,
+  userName: DEMO_COURIER.name,
   // Release builds never show demo data: they start live and wait for the API.
   source: DEMO_ALLOWED ? 'demo' : 'live',
   connected: false,
@@ -140,6 +159,9 @@ const INITIAL: Data = {
   dropped: [],
   leg: null,
   opsComp: 0,
+  completing: null,
+  earnings: null,
+  payout: null,
   tickets: [],
   repliesSeen: {},
   locationOk: false,
@@ -165,8 +187,10 @@ const INITIAL: Data = {
   city: 'Marrakech',
   photoAdded: false,
   docs: {},
-  loginPhone: '6 61 23 45 78',
-  form: { name: '', phone: '', email: '' },
+  // Prefilled with the demo courier only in development / demo builds.
+  loginPhone: DEMO_ALLOWED ? '6 61 23 45 78' : '',
+  form: { name: '', phone: '', email: '', plate: '' },
+  application: null,
   checked: {},
   notifRead: false,
   today: { earn: 210.5, dels: 7, fees: 180, tips: 5.5, adj: 0 },
@@ -254,11 +278,11 @@ export const useCourier = create<CourierState>()((set, get) => {
       if (!force && get().simulate === 'location-denied')
         return set({ edge: 'location', edgeT: 0 });
       set({ online: true, toast: mkToast("You're online") });
-      if (live()) call(api?.setCourierAvailability(COURIER_ID, 'idle'), { online: false });
+      if (live()) call(api?.setCourierAvailability(get().courierId, 'idle'), { online: false });
     },
     goOffline: () => {
       set({ online: false, toast: mkToast("You're offline") });
-      if (live()) call(api?.setCourierAvailability(COURIER_ID, 'off'), { online: true });
+      if (live()) call(api?.setCourierAvailability(get().courierId, 'off'), { online: true });
     },
 
     accept: () => {
@@ -272,7 +296,7 @@ export const useCourier = create<CourierState>()((set, get) => {
       });
       // Refused if the offer ended first ("No pending offer…"): back to the dashboard with the reason.
       if (live() && offerId)
-        call(api?.acceptOffer(offerId, COURIER_ID), { phase: null, offerId: null });
+        call(api?.acceptOffer(offerId, get().courierId), { phase: null, offerId: null });
     },
     decline: () => {
       const { offerId } = get();
@@ -282,7 +306,7 @@ export const useCourier = create<CourierState>()((set, get) => {
         toast: mkToast('Request declined'),
         dropped: offerId ? [...s.dropped, offerId] : s.dropped,
       }));
-      if (live() && offerId) call(api?.declineOffer(offerId, COURIER_ID));
+      if (live() && offerId) call(api?.declineOffer(offerId, get().courierId));
     },
 
     pickUp: () => {
@@ -304,8 +328,18 @@ export const useCourier = create<CourierState>()((set, get) => {
       }));
     },
 
-    complete: () => {
+    complete: async (pin) => {
       const { jobId, order: o, clock } = get();
+      // Live, nothing is marked delivered until the server accepts the PIN. The feed can report the
+      // order delivered before this request returns; `completing` keeps that from looking like a loss.
+      if (live() && jobId) {
+        set({ completing: jobId });
+        try {
+          await api!.setOrderStatus(jobId, 'delivered', pin);
+        } finally {
+          set({ completing: null });
+        }
+      }
       set((s) => ({
         phase: 'done',
         today: {
@@ -335,7 +369,6 @@ export const useCourier = create<CourierState>()((set, get) => {
           ...s.history,
         ],
       }));
-      if (live() && jobId) call(api?.setOrderStatus(jobId, 'delivered'));
     },
 
     reportProblem: (subject, text) => {
@@ -344,8 +377,8 @@ export const useCourier = create<CourierState>()((set, get) => {
       call(
         api?.openTicket({
           source: 'courier',
-          requesterName: 'Karim El Amrani',
-          requesterId: COURIER_ID,
+          requesterName: get().userName,
+          requesterId: get().courierId,
           subject,
           orderId: jobId,
           priority: 'urgent',
@@ -361,13 +394,13 @@ export const useCourier = create<CourierState>()((set, get) => {
       }
       try {
         if (ticketId) {
-          await api.addTicketMessage(ticketId, 'requester', 'Karim El Amrani', text);
+          await api.addTicketMessage(ticketId, 'requester', get().userName, text);
           return ticketId;
         }
         const ticket = await api.openTicket({
           source: 'courier',
-          requesterName: 'Karim El Amrani',
-          requesterId: COURIER_ID,
+          requesterName: get().userName,
+          requesterId: get().courierId,
           subject,
           orderId: get().jobId,
           text,

@@ -238,3 +238,16 @@ describe('support conversations', () => {
     expect(s().toast).toBeNull();
   });
 });
+
+describe('handing over', () => {
+  it('does not read a just-delivered job as taken away', () => {
+    applyLive(live([order({ status: 'delivering', courierId: 'c1' })], courier('busy')));
+    useCourier.setState({ phase: 'confirm', completing: '#50001' });
+    applyLive(live([order({ status: 'delivered', courierId: 'c1' })]));
+    expect(s().edge).toBeNull();
+    // Even once the request settled, a delivered order is not a cancellation.
+    useCourier.setState({ completing: null });
+    applyLive(live([order({ status: 'delivered', courierId: 'c1' })]));
+    expect(s().edge).toBeNull();
+  });
+});

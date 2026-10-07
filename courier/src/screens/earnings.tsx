@@ -10,10 +10,104 @@ import { Circle, SegBar, card, well } from '@/components/ui';
 import { fmt } from '@/data/demo';
 import { totals, useCourier, useT } from '@/store/courier-store';
 import { colors, radius } from '@/theme';
+import { useEarningsSummary } from './shared';
 
 type Period = 'today' | 'week' | 'month';
 
+/** Live: this week's earnings from the server's orders, and the courier's next weekly payout. */
+function LiveEarnings() {
+  const t = useT();
+  const sum = useEarningsSummary();
+  const payout = useCourier((s) => s.payout);
+  if (!sum.live) return null;
+  const line = payout?.line;
+  const STATUS = { pending: 'Pending', approved: 'Approved', on_hold: 'On hold' } as const;
+  return (
+    <Screen>
+      <Scroll>
+        <Txt title size={32} accessibilityRole="header" style={{ marginTop: 6 }}>
+          {t('Earnings')}
+        </Txt>
+        <View style={styles.summary}>
+          <Txt size={14} color={colors.mint300}>
+            {payout ? t(`This week · ${payout.period}`) : t('This week')}
+          </Txt>
+          <Txt h size={48} lh={1.1} color={colors.mint100}>
+            {fmt(sum.total)}{' '}
+            <Txt h size={24} color={colors.mint100}>
+              DH
+            </Txt>
+          </Txt>
+          <Txt size={15} color={colors.mint200}>
+            {sum.jobs} {t('deliveries')}
+          </Txt>
+        </View>
+        <View style={[card, { paddingVertical: 8, paddingHorizontal: 20 }]}>
+          {[
+            ['Delivery fees', sum.pay],
+            ['Tips', sum.tips],
+            ['Adjustments', sum.compensation],
+          ].map(([label, val]) => (
+            <View key={label} style={[styles.rowBetween, styles.breakdownRow]}>
+              <Txt size={15} color={colors.neutral800}>
+                {t(label as string)}
+              </Txt>
+              <Txt size={15} weight={700}>
+                {fmt(val as number)} DH
+              </Txt>
+            </View>
+          ))}
+          <View style={[styles.rowBetween, { paddingVertical: 14 }]}>
+            <Txt size={16} weight={700}>
+              {t('Total')}
+            </Txt>
+            <Txt h size={22}>
+              {fmt(sum.total)} DH
+            </Txt>
+          </View>
+        </View>
+        <View style={[well, { padding: 20, gap: 8 }]}>
+          <View style={[styles.rowBetween, { alignItems: 'flex-start' }]}>
+            <View style={{ flex: 1 }}>
+              <Txt size={14} color={colors.neutral700}>
+                {payout ? t(`Next payout · ${payout.payDate}`) : t('Next payout')}
+              </Txt>
+              <Txt h size={32} lh={1.15}>
+                {fmt(Math.max(0, line?.net ?? 0))} DH
+              </Txt>
+              {line && (
+                <Txt size={13} color={colors.neutral700}>
+                  {line.method} · {t(STATUS[line.status])}
+                </Txt>
+              )}
+            </View>
+            <Circle size={48} bg={colors.accent200}>
+              <Icon name="wallet" size={22} color={colors.accent800} />
+            </Circle>
+          </View>
+          {sum.cashHeld > 0 && (
+            <Txt size={14} color={colors.neutral800}>
+              {t(`Cash you collected: ${fmt(sum.cashHeld)} DH`)}
+            </Txt>
+          )}
+          {line?.status === 'on_hold' && (
+            <Txt size={14} weight={600} color={colors.accent700}>
+              {t('Hand in the cash you hold to release this payout.')}
+            </Txt>
+          )}
+        </View>
+      </Scroll>
+    </Screen>
+  );
+}
+
 export function Earnings() {
+  const live = useCourier((s) => s.source === 'live' && s.earnings !== null);
+  return live ? <LiveEarnings /> : <DemoEarnings />;
+}
+
+/** The design's earnings screen, for the offline demo. */
+function DemoEarnings() {
   const t = useT();
   const [period, setPeriod] = useState<Period>('today');
   const today = useCourier((s) => s.today);

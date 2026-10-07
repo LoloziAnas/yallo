@@ -16,10 +16,10 @@ import { Screen, Scroll } from '@/components/screen';
 import { SectionLabel, Txt } from '@/components/txt';
 import { Circle, Dot, PressCard, Progress, StatusTag, card, well } from '@/components/ui';
 import { CHALLENGE_GOAL, fmt } from '@/data/demo';
-import { inDelivery, totals, useCourier, useT, useOrder } from '@/store/courier-store';
+import { inDelivery, useCourier, useT, useOrder } from '@/store/courier-store';
 import { colors, radius, shadow } from '@/theme';
 import { goOnlineWithLocation } from '@/device/tracking';
-import { activeTag } from './shared';
+import { activeTag, useEarningsSummary } from './shared';
 
 function ActiveOrderCard() {
   const order = useOrder();
@@ -102,7 +102,7 @@ export function Home() {
   const t = useT();
   const s = useCourier();
   const busy = inDelivery(s.phase);
-  const tot = totals(s.today);
+  const sum = useEarningsSummary();
   const sim = s.simulate;
   return (
     <Screen>
@@ -220,7 +220,7 @@ export function Home() {
                 {t('Earnings')}
               </Txt>
               <Txt h size={40} lh={1.1}>
-                {fmt(tot.today)}{' '}
+                {fmt(sum.total)}{' '}
                 <Txt h size={22}>
                   DH
                 </Txt>
@@ -230,9 +230,16 @@ export function Home() {
           </PressCard>
           <View style={{ flexDirection: 'row', gap: 10 }}>
             {[
-              [t('Deliveries'), String(s.today.dels)],
-              [t('Online'), '6h 24m'],
-              [t('This week'), fmt(Math.round(tot.week))],
+              [t('Deliveries'), String(sum.jobs)],
+              ...(sum.live
+                ? [
+                    [t('Tips'), `${fmt(sum.tips)} DH`],
+                    [t('Cash held'), `${fmt(sum.cashHeld)} DH`],
+                  ]
+                : [
+                    [t('Online'), '6h 24m'],
+                    [t('This week'), fmt(Math.round(sum.week))],
+                  ]),
             ].map(([label, val]) => (
               <View key={label} style={[card, { flex: 1, padding: 14 }]}>
                 <Txt size={13} color={colors.neutral700} numberOfLines={1}>

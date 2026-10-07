@@ -6,7 +6,7 @@ import * as TaskManager from 'expo-task-manager';
 import { useEffect } from 'react';
 import { Linking, Platform } from 'react-native';
 
-import { COURIER_ID, api } from '@/api/client';
+import { api } from '@/api/client';
 import { inDelivery, useCourier, type Data } from '@/store/courier-store';
 
 const BG_TASK = 'yallo-courier-location';
@@ -18,18 +18,15 @@ export type Tracking = 'off' | 'foreground' | 'background' | 'foreground-only';
 
 let lastReport = 0;
 
-/** Optional on the shared client until the server's location endpoint lands. */
-type WithLocation = {
-  reportCourierLocation?: (id: string, lat: number, lon: number) => Promise<unknown>;
-};
-
 function onFix(l: Location.LocationObject) {
   const { latitude: lat, longitude: lon, accuracy } = l.coords;
   useCourier.setState({ gps: { lat, lon, accuracy: accuracy ?? null, at: l.timestamp } });
   if (Date.now() - lastReport < REPORT_MS) return;
   lastReport = Date.now();
-  // Positions from a real phone override the server's simulated movement once it accepts them.
-  (api as WithLocation | null)?.reportCourierLocation?.(COURIER_ID, lat, lon)?.catch(() => {});
+  // While fixes keep coming, the server stops simulating this courier and follows the phone.
+  const s = useCourier.getState();
+  if (s.source === 'live' && s.signedIn)
+    api?.setCourierLocation(s.courierId, lat, lon).catch(() => {});
 }
 
 // Background updates arrive here even while the UI is suspended; must be defined at module scope.
@@ -68,21 +65,22 @@ async function startBackground(): Promise<Tracking> {
     // background location on top of foreground location, so ask for that first.
     if (!(await requestForegroundLocation())) return 'off';
     if (!(await Location.requestBackgroundPermissionsAsync()).granted) return 'foreground-only';
-    if (!(await Location.hasStartedLocationUpdatesAsync(BG_TASK))) {
-      await Location.startLocationUpdatesAsync(BG_TASK, {
-        accuracy: Location.Accuracy.High,
-        timeInterval: 5000,
-        distanceInterval: 15,
-        pausesUpdatesAutomatically: false,
-        showsBackgroundLocationIndicator: true,
-        activityType: Location.LocationActivityType.OtherNavigation,
-        foregroundService: {
-          notificationTitle: 'Yallo · delivery in progress',
-          notificationBody: 'Sharing your location until the order is delivered.',
-          notificationColor: '#cf4520',
-        },
-      });
-    }
+    // Always (re)start: after the app is killed, the task registry can still report the task as
+    // started while Android has stopped its service; starting again just replaces the options.
+    await Location.startLocationUpdatesAsync(BG_TASK, {
+      accuracy: Location.Accuracy.High,
+      timeInterval: 5000,
+      distanceInterval: 15,
+      pausesUpdatesAutomatically: false,
+      showsBackgroundLocationIndicator: true,
+      activityType: Location.LocationActivityType.OtherNavigation,
+      foregroundService: {
+        notificationTitle: 'Yallo · delivery in progress',
+        notificationBody: 'Sharing your location until the order is delivered.',
+        notificationColor: '#cf4520',
+      },
+    });
+
     return 'background';
   } catch {
     // Expo Go on Android, or a build without the background capability.

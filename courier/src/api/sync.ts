@@ -1,9 +1,18 @@
 // Follows the live feed: this courier's availability, offers, assigned job and position.
-import { ACTIVE_STATUSES, clockAt, OFFER_SEC, type LiveState, type MapPoint } from '@yallo/shared';
+import {
+  ACTIVE_STATUSES,
+  clockAt,
+  courierEarnings,
+  OFFER_SEC,
+  type EarningEntry,
+  type LiveState,
+  type MapPoint,
+} from '@yallo/shared';
 import { useEffect } from 'react';
 
-import { COURIER_ID, api } from '@/api/client';
+import { api } from '@/api/client';
 import { makeT } from '@/data/i18n';
+import type { HistoryEntry } from '@/data/demo';
 import { fromApi } from '@/data/order-view';
 import { notifyCourier } from '@/device/notifications';
 import {
@@ -27,10 +36,34 @@ const rank = (status: string | null) =>
   status === 'delivering' ? 2 : status && ACTIVE_STATUSES.includes(status as never) ? 1 : 0;
 const localRank = (s: Data) => (isPickupPhase(s.phase) ? 1 : inDelivery(s.phase) ? 2 : 0);
 
+/** A finished job as the Deliveries history and its detail screen show it. */
+function historyEntry(e: EarningEntry, st: LiveState): HistoryEntry {
+  const o = st.orders.find((x) => x.id === e.orderId);
+  const pickedAt = o?.statusAt?.delivering;
+  const endedAt = o?.statusAt?.delivered ?? o?.statusAt?.cancelled ?? e.at;
+  return {
+    id: e.orderId,
+    store: e.merchantName,
+    cust: o?.customerName.split(' ')[0] ?? '',
+    area: o?.address?.district ?? o?.zone ?? '',
+    earn: e.pay + e.tip + e.compensation,
+    time: e.time,
+    pickT: pickedAt !== undefined ? clockAt(pickedAt) : '—',
+    date: 'Today',
+    km: e.km ?? 0,
+    dur: pickedAt !== undefined ? Math.max(1, Math.round((endedAt - pickedAt) / 60)) : 0,
+    g: 'Today',
+    items: o?.items.map((i) => `${i.qty}× ${i.name}`) ?? [],
+    pay: e.pay,
+    tip: e.tip,
+    payMethod: o?.pay,
+    outcome: e.outcome,
+  };
+}
+
 export function applyLive(st: LiveState) {
   const s = useCourier.getState();
-  const me = st.couriers.find((c) => c.id === COURIER_ID);
-  if (!me) return;
+  const ME = s.courierId;
   const p: Partial<Data> = { connected: true, clock: clockAt(st.t) };
 
   // Switch from the offline demo to live data, but never in the middle of a demo order.
@@ -38,18 +71,19 @@ export function applyLive(st: LiveState) {
     if (s.phase || s.edge) return useCourier.setState(p);
     p.source = 'live';
   }
+  // Signed out, the feed is anonymous and has no courier record: nothing more to follow yet.
+  const me = st.couriers.find((c) => c.id === ME);
+  if (!me || !s.signedIn) return useCourier.setState(p);
   if (!s.phase && !s.edge) p.online = me.status !== 'off';
 
   const active = st.orders.filter((o) => ACTIVE_STATUSES.includes(o.status));
   const isMine = (id: string) =>
-    active.some(
-      (o) => o.id === id && (o.courierId === COURIER_ID || o.offer?.courierId === COURIER_ID),
-    );
+    active.some((o) => o.id === id && (o.courierId === ME || o.offer?.courierId === ME));
   // Forget handed-back orders once the server agrees they're no longer ours.
   if (s.dropped.some((id) => !isMine(id))) p.dropped = s.dropped.filter(isMine);
 
-  const job = active.find((o) => o.courierId === COURIER_ID && !s.dropped.includes(o.id));
-  const offer = active.find((o) => o.offer?.courierId === COURIER_ID && !s.dropped.includes(o.id));
+  const job = active.find((o) => o.courierId === ME && !s.dropped.includes(o.id));
+  const offer = active.find((o) => o.offer?.courierId === ME && !s.dropped.includes(o.id));
 
   if (job) {
     // Assigned to this courier means accepted: straight into the delivery flow.
@@ -86,9 +120,11 @@ export function applyLive(st: LiveState) {
   } else {
     p.jobStatus = null;
     const ownJob = s.jobId && !s.dropped.includes(s.jobId);
-    if (ownJob && inDelivery(s.phase) && !s.edge) {
+    const was = st.orders.find((o) => o.id === s.jobId);
+    // Delivered from this app (the request may still be in flight): completion, not a loss.
+    const handedOver = s.completing === s.jobId || was?.status === 'delivered';
+    if (ownJob && inDelivery(s.phase) && !s.edge && !handedOver) {
       // Ops took the job back mid-delivery: cancelled outright, or reassigned / returned to the queue.
-      const was = st.orders.find((o) => o.id === s.jobId);
       if (was?.status === 'cancelled') {
         Object.assign(p, { edge: 'opsCancelled', opsComp: was.courierCompensation ?? 0 });
       } else Object.assign(p, { edge: 'cancelled' });
@@ -96,8 +132,21 @@ export function applyLive(st: LiveState) {
     }
   }
 
+  // Earnings and history come from the server's orders, worked out like the API does.
+  const earnings = courierEarnings(st.orders, ME);
+  p.earnings = earnings;
+  p.history = earnings.history.map((e) => historyEntry(e, st));
+  // A restricted feed may carry no payout run (or only this courier's line).
+  if (st.payouts) {
+    const { lines, ...run } = st.payouts;
+    p.payout = {
+      ...run,
+      line: lines.find((l) => l.kind === 'courier' && l.partyId === ME) ?? null,
+    };
+  } else p.payout = null;
+
   // Support conversations: a new reply from ops is announced once.
-  const tickets = st.tickets.filter((tk) => tk.requesterId === COURIER_ID);
+  const tickets = st.tickets.filter((tk) => tk.requesterId === ME);
   p.tickets = tickets;
   const opsReplies = (tk: (typeof tickets)[number]) =>
     tk.messages.filter((m) => m.from === 'ops').length;
@@ -135,15 +184,19 @@ export function applyLive(st: LiveState) {
 }
 
 /**
- * Subscribes to the live feed for the app's lifetime, as courier c1: the server then waits for
- * this app to answer c1's offers instead of auto-accepting them. Without an API URL the offline
- * demo runs.
+ * Subscribes to the live feed for the app's lifetime. Once signed in it subscribes as that courier
+ * (with the session token), so the server waits for this app to answer the courier's offers instead
+ * of auto-accepting them. Without an API URL the offline demo runs.
  */
 export function useLiveSync() {
+  const signedIn = useCourier((s) => s.signedIn);
+  const courierId = useCourier((s) => s.courierId);
   useEffect(() => {
     if (!api) return;
-    return api.subscribe(applyLive, (connected) => useCourier.setState({ connected }), {
-      courierId: COURIER_ID,
-    });
-  }, []);
+    return api.subscribe(
+      applyLive,
+      (connected) => useCourier.setState({ connected }),
+      signedIn ? { courierId } : {},
+    );
+  }, [signedIn, courierId]);
 }

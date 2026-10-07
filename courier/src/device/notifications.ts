@@ -28,7 +28,7 @@ export async function setUpNotifications(): Promise<boolean> {
     await Notifications.setNotificationChannelAsync(OFFERS_CHANNEL, {
       name: 'Delivery offers',
       importance: Notifications.AndroidImportance.MAX,
-      sound: 'default',
+      // No `sound` here: on a channel it names a bundled file; leaving it out plays the default.
       vibrationPattern: [0, 400, 200, 400],
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     });

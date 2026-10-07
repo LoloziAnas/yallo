@@ -131,6 +131,11 @@ export interface HistoryEntry {
   dur: number;
   g: string;
   items: string[];
+  /** Live: the job's pay and tip, how the customer paid, and how it ended. */
+  pay?: number;
+  tip?: number;
+  payMethod?: 'cash' | 'card';
+  outcome?: 'delivered' | 'cancelled';
 }
 
 export const HIST0: HistoryEntry[] = [

@@ -5,6 +5,7 @@ import Animated, { ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { G, Path, Polyline, Rect, Text as SvgText } from 'react-native-svg';
 
+import { errorText } from '@/api/client';
 import { BackButton, Btn, RoundButton, Spacer } from '@/components/button';
 import { Icon } from '@/components/icon';
 import { Screen, useBottomPad } from '@/components/screen';
@@ -25,9 +26,9 @@ import { CHALLENGE_GOAL, DEMO_PIN, ROUTES, along, fmt } from '@/data/demo';
 import { mapsUrl, openUrl, smsUrl, telUrl } from '@/data/contact';
 import { isWeakGps } from '@/device/tracking';
 import { etaMin } from '@/data/order-view';
-import { totals, useCourier, useT, useOrder } from '@/store/courier-store';
+import { useCourier, useT, useOrder } from '@/store/courier-store';
 import { colors, radius, shadow } from '@/theme';
-import { activeTag } from './shared';
+import { activeTag, useEarningsSummary } from './shared';
 
 /** The active order, full screen. Which view shows follows the order's phase. */
 export function Delivery() {
@@ -69,6 +70,7 @@ function MapView() {
   const nav = useCourier((s) => s.nav);
   const prog = useCourier((s) => s.prog);
   const weakGps = useCourier(isWeakGps);
+  const demo = useCourier((s) => s.source === 'demo');
   const set = useCourier((s) => s.set);
   const showToast = useCourier((s) => s.showToast);
   const { width: W, height: H } = useWindowDimensions();
@@ -126,6 +128,8 @@ function MapView() {
     openUrl(mapsUrl(isPick ? order.navTo.store : order.navTo.customer, app));
   };
   // Calls really dial the store or the customer when the number is known; demo orders stay simulated.
+  // Live, a call button only appears when there's a number to dial; the demo keeps the design's.
+  const canCall = demo || !!(isPick ? order.storePhone : order.phone);
   const callSheet = () => {
     showToast(sheet.call);
     const phone = isPick ? order.storePhone : order.phone;
@@ -319,17 +323,19 @@ function MapView() {
               fontSize={19}
             />
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Btn
-                variant="secondary"
-                stacked
-                icon="phone"
-                iconSize={18}
-                label={t(sheet.callLabel)}
-                fontSize={14}
-                height={52}
-                style={{ flex: 1 }}
-                onPress={callSheet}
-              />
+              {canCall && (
+                <Btn
+                  variant="secondary"
+                  stacked
+                  icon="phone"
+                  iconSize={18}
+                  label={t(sheet.callLabel)}
+                  fontSize={14}
+                  height={52}
+                  style={{ flex: 1 }}
+                  onPress={callSheet}
+                />
+              )}
               <Btn
                 variant="secondary"
                 stacked
@@ -597,6 +603,7 @@ function AtPickup() {
 function AtCustomer() {
   const order = useOrder();
   const t = useT();
+  const demo = useCourier((s) => s.source === 'demo');
   const set = useCourier((s) => s.set);
   const showToast = useCourier((s) => s.showToast);
   const bottom = useBottomPad();
@@ -645,34 +652,36 @@ function AtCustomer() {
             </Txt>
           )}
         </View>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Btn
-            variant="secondary"
-            icon="phone"
-            iconSize={20}
-            label={t('Call')}
-            fontSize={16}
-            height={64}
-            style={{ flex: 1 }}
-            onPress={() => {
-              showToast(`Calling ${order.cust}…`);
-              if (order.phone) openUrl(telUrl(order.phone));
-            }}
-          />
-          <Btn
-            variant="secondary"
-            icon="msg"
-            iconSize={20}
-            label={t('Message')}
-            fontSize={16}
-            height={64}
-            style={{ flex: 1 }}
-            onPress={() => {
-              showToast("Message sent: “I'm outside”");
-              if (order.phone) openUrl(smsUrl(order.phone, "I'm outside"));
-            }}
-          />
-        </View>
+        {(demo || !!order.phone) && (
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Btn
+              variant="secondary"
+              icon="phone"
+              iconSize={20}
+              label={t('Call')}
+              fontSize={16}
+              height={64}
+              style={{ flex: 1 }}
+              onPress={() => {
+                showToast(`Calling ${order.cust}…`);
+                if (order.phone) openUrl(telUrl(order.phone));
+              }}
+            />
+            <Btn
+              variant="secondary"
+              icon="msg"
+              iconSize={20}
+              label={t('Message')}
+              fontSize={16}
+              height={64}
+              style={{ flex: 1 }}
+              onPress={() => {
+                showToast("Message sent: “I'm outside”");
+                if (order.phone) openUrl(smsUrl(order.phone, "I'm outside"));
+              }}
+            />
+          </View>
+        )}
         <Btn
           variant="ghost"
           icon="alert"
@@ -692,7 +701,8 @@ function AtCustomer() {
           fontSize={19}
           onPress={() => {
             set({ phase: 'confirm' });
-            showToast(`${order.cust} has been notified`);
+            // Nothing tells the customer yet; only the design's demo shows this.
+            if (demo) showToast(`${order.cust} has been notified`);
           }}
         />
       </View>
@@ -713,19 +723,39 @@ function Confirm() {
   const [pinErr, setPinErr] = useState(0);
   const [photo, setPhoto] = useState(false);
   const [cash, setCash] = useState(false);
+  const demo = useCourier((s) => s.source === 'demo');
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const pinBad = pinErr > 0 && pin.length === 0;
+  const pinBad = (pinErr > 0 || !!serverError) && pin.length === 0;
   // Card orders have nothing to collect.
-  const ready = (cash || order.cash === 0) && (method === 'pin' ? pin.length === 4 : photo);
-  const confirm = () => {
-    if (method === 'pin' && pin !== DEMO_PIN) {
-      haptic.error();
-      setPin('');
-      setPinErr((n) => n + 1);
+  const ready =
+    !busy && (cash || order.cash === 0) && (method === 'pin' ? pin.length === 4 : photo);
+  const confirm = async () => {
+    if (demo) {
+      // The design's demo checks its own PIN; live, the server checks the customer's.
+      if (method === 'pin' && pin !== DEMO_PIN) {
+        haptic.error();
+        setPin('');
+        setPinErr((n) => n + 1);
+        return;
+      }
+      haptic.success();
+      await complete();
       return;
     }
-    haptic.success();
-    complete();
+    setBusy(true);
+    setServerError(null);
+    try {
+      await complete(pin);
+      haptic.success();
+    } catch (e) {
+      haptic.error();
+      setPin('');
+      setServerError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -741,14 +771,17 @@ function Confirm() {
             {order.id}
           </Txt>
         </View>
-        <SegBar
-          options={[
-            { key: 'pin', label: t('PIN code'), icon: 'file' },
-            { key: 'photo', label: t('Photo'), icon: 'camera' },
-          ]}
-          value={method}
-          onChange={setMethod}
-        />
+        {/* Photo proof is demo-only for now: the API verifies deliveries by the customer's PIN. */}
+        {demo && (
+          <SegBar
+            options={[
+              { key: 'pin', label: t('PIN code'), icon: 'file' },
+              { key: 'photo', label: t('Photo'), icon: 'camera' },
+            ]}
+            value={method}
+            onChange={setMethod}
+          />
+        )}
         {method === 'pin' ? (
           <View style={{ gap: 12, alignItems: 'center' }}>
             <Txt size={17} weight={600}>
@@ -761,11 +794,15 @@ function Confirm() {
               color={pinBad ? colors.accent700 : colors.neutral700}
               accessibilityLiveRegion="polite"
               style={{ minHeight: 20 }}>
-              {t(
-                pinBad
-                  ? `PIN doesn't match — ${Math.max(0, 3 - pinErr)} attempts left`
-                  : `Demo PIN: ${DEMO_PIN}`,
-              )}
+              {serverError
+                ? t(serverError)
+                : demo
+                  ? t(
+                      pinBad
+                        ? `PIN doesn't match — ${Math.max(0, 3 - pinErr)} attempts left`
+                        : `Demo PIN: ${DEMO_PIN}`,
+                    )
+                  : t('Ask the customer for the PIN shown in their app')}
             </Txt>
           </View>
         ) : (
@@ -850,10 +887,9 @@ function Done() {
   const order = useOrder();
   const t = useT();
   const challenge = useCourier((s) => s.challenge);
-  const today = useCourier((s) => s.today);
   const set = useCourier((s) => s.set);
   const bottom = useBottomPad();
-  const tot = totals(today);
+  const sum = useEarningsSummary();
 
   useEffect(() => {
     // Leaving by swipe-back also closes out the order.
@@ -915,9 +951,9 @@ function Done() {
         <Txt size={15} color={colors.neutral700} style={{ marginTop: 12 }}>
           {t('Today')}:{' '}
           <Txt size={15} weight={700}>
-            {fmt(tot.today)} DH
+            {fmt(sum.total)} DH
           </Txt>{' '}
-          · {today.dels} {t('deliveries')}
+          · {sum.jobs} {t('deliveries')}
         </Txt>
         <Spacer />
         <Btn label={t('Back to dashboard')} height={62} fontSize={19} onPress={() => finish('/')} />
