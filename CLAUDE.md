@@ -129,7 +129,6 @@ back office deploy with `deploy/prepare.sh` (builds the commit into `.deploy/<sh
     `/api/couriers/:id/availability {status: 'idle'|'off'}`, `/api/reset`.
 - Use `createYalloClient(url)` rather than calling these by hand. The back office uses `''`, because Vite
   proxies `/api`. On a phone, use the dev machine's LAN IP, not `localhost`.
-- Courier applications and payouts are still local to the back office.
 
 ## Joint end-to-end run
 
