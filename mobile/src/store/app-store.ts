@@ -65,7 +65,7 @@ export type ActiveOrder = Omit<Order, 'date' | 'status'> & {
 };
 
 /** An order from the account history as a receipt. Lines priced outside the catalogue can't be reordered, so they're left out. */
-function historyOrder(o: ApiOrder, addrId: string): Order {
+export function historyOrder(o: ApiOrder, addrId: string): Order {
   const lines: CartLine[] = o.items
     .filter((i) => i.productId && productById[i.productId])
     .map((i) => {
