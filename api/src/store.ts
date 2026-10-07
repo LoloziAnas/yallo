@@ -114,6 +114,12 @@ type AuthData = {
 type SavedState = { version: number; savedAt: string; state: LiveState; auto: string[]; auth: AuthData };
 const emptyAuth = (): AuthData => ({ users: [], sessions: [], nextCustomer: 1 });
 
+/** Limits on what one request or one record can hold. */
+export const MAX_ORDER_LINES = 50;
+export const MAX_THREAD_MESSAGES = 200;
+export const MAX_OPEN_TICKETS = 20;
+export const MAX_PENDING_APPLICATIONS = 1000;
+
 /** One-time codes expire after this long, allow this many tries, and can be re-sent after the cooldown. */
 export const OTP_TTL_MS = 5 * 60_000;
 export const OTP_MAX_ATTEMPTS = 5;
@@ -127,17 +133,48 @@ export type StoreOptions = {
   /** Accept the fixed DEV_TOKENS (on by default; turn off in production). */
   devTokens?: boolean;
   /**
+   * 'dev': every one-time code is DEV_OTP_CODE (default outside production). 'random': a fresh random code per request,
+   * written to the server log until an SMS provider sends it (always the case in production).
+   */
+  otpMode?: 'dev' | 'random';
+  /** Sessions older than this are refused. Default 30 days. */
+  sessionTtlMs?: number;
+  /**
    * Play the merchants: accept new orders after AUTO_ACCEPT_SEC (scheduled ones when it's time to start cooking)
    * and have them ready AUTO_READY_SEC − AUTO_ACCEPT_SEC later. On by default; ops can always do it by hand.
    */
   standInMerchant?: boolean;
 };
 
+/**
+ * A courier's view of an order: never the delivery PIN; the customer's phone and GPS fix only once the job is
+ * theirs and still in progress (not on an offer they haven't taken, nor after it ends).
+ */
+function forCourier(o: ApiOrder, me: string): ApiOrder {
+  const { deliveryPin: _pin, ...rest } = o;
+  if (o.courierId === me && isActive(o.status)) return rest;
+  const { customerPhone: _phone, location: _loc, ...noContact } = rest;
+  return noContact;
+}
+
+/** A customer's view of their order: no courier pay, offers or compensation. */
+function forCustomer(o: ApiOrder): ApiOrder {
+  const { courierPay: _pay, courierKm: _km, offer: _offer, lastOffer: _last, courierCompensation: _comp, ...rest } = o;
+  return rest;
+}
+
+/** What a customer may know about the courier bringing their order. */
+function publicCourier(c: ApiCourier): ApiCourier {
+  return { id: c.id, name: c.name, phone: c.phone, vehicle: c.vehicle, zone: c.zone, status: c.status, pos: c.pos, rating: c.rating, suspended: false, app: c.app };
+}
+
 export class Store {
   private s: LiveState;
   private readonly file?: string;
   private readonly saveDelayMs: number;
   private readonly devTokens: boolean;
+  private readonly otpMode: 'dev' | 'random';
+  private readonly sessionTtlMs: number;
   private readonly standIn: boolean;
   private saveTimer?: ReturnType<typeof setTimeout>;
   /** Ids of orders placed through the API, which the stand-in merchant advances. */
@@ -154,6 +191,8 @@ export class Store {
     this.file = opts.file;
     this.saveDelayMs = opts.saveDelayMs ?? 1000;
     this.devTokens = opts.devTokens ?? true;
+    this.otpMode = opts.otpMode ?? 'dev';
+    this.sessionTtlMs = opts.sessionTtlMs ?? 30 * 24 * 3600_000;
     this.standIn = opts.standInMerchant ?? true;
     this.s = this.load() ?? seed();
     if (this.file) this.flush();
@@ -319,6 +358,7 @@ export class Store {
     // MVP: cash on delivery only.
     if (body.pay === 'card') throw new ActionError("Card payment isn't available yet. Pay cash on delivery", 409);
     if (!Array.isArray(body.items) || !body.items.length) throw new ActionError('items must not be empty');
+    if (body.items.length > MAX_ORDER_LINES) throw new ActionError(`An order can have at most ${MAX_ORDER_LINES} lines`);
     if (!body.items.every(i => typeof i?.productId === 'string')) throw new ActionError('Each item needs a productId: send catalogue lines { productId, qty, options }');
     const priced = this.quote(m.id, body.items, body.promoCode);
     const details = deliveryDetails(body);
@@ -589,7 +629,14 @@ export class Store {
     const text = cleanText(body.text, 'text');
     const priority = body.priority ?? 'normal';
     if (!PRIORITIES.includes(priority)) throw new ActionError('Unknown priority ' + priority);
-    if (body.orderId) this.order(body.orderId);
+    if (body.orderId) {
+      const o = this.order(body.orderId);
+      if (by?.role === 'customer' && o.customerId !== by.id) throw new ActionError('That order is not yours', 403);
+      if (by?.role === 'courier' && o.courierId !== by.courierId) throw new ActionError('That job is not yours', 403);
+    }
+    if (by && by.role !== 'ops' && this.s.tickets.filter(tk => !tk.resolved && tk.requesterId === (by.courierId ?? by.id)).length >= MAX_OPEN_TICKETS) {
+      throw new ActionError(`You already have ${MAX_OPEN_TICKETS} open tickets. Add to one of them instead`, 429);
+    }
     // Courier and merchant requesters must exist; customers have no ids yet.
     if (body.requesterId && body.source === 'courier') this.courier(body.requesterId);
     if (body.requesterId && body.source === 'merchant') this.merchant(body.requesterId);
@@ -617,6 +664,7 @@ export class Store {
   addTicketMessage(ticketId: string, from: 'requester' | 'ops', author: string, text: string) {
     const tk = this.ticket(ticketId);
     if (from !== 'requester' && from !== 'ops') throw new ActionError("from must be 'requester' or 'ops'");
+    if (tk.messages.length >= MAX_THREAD_MESSAGES) throw new ActionError('This ticket is full. Open a new one', 429);
     tk.messages.push({ from, author: cleanText(author, 'author'), text: cleanText(text, 'text'), at: clockAt(this.s.t) });
     if (from === 'requester') tk.resolved = false;
     this.changed();
@@ -656,8 +704,10 @@ export class Store {
     const pending = this.otps.get(phone);
     const wait = pending ? Math.ceil((pending.sentAt + OTP_RESEND_MS - Date.now()) / 1000) : 0;
     if (wait > 0) throw new ActionError(`Wait ${wait} s before asking for a new code`, 429);
-    this.otps.set(phone, { role, code: DEV_OTP_CODE, sentAt: Date.now(), attempts: 0 });
-    console.log(`[otp] ${role} ${phone}: code ${DEV_OTP_CODE}`);
+    const code = this.otpMode === 'dev' ? DEV_OTP_CODE : String(randomBytes(4).readUInt32BE(0) % 1_000_000).padStart(6, '0');
+    this.otps.set(phone, { role, code, sentAt: Date.now(), attempts: 0 });
+    // No SMS provider yet: the code goes to the server log, for whoever runs the demo to pass on.
+    console.log(`[otp] ${role} ${phone}: code ${code}`);
     return { sent: true as const, phone, expiresInSec: OTP_TTL_MS / 1000 };
   }
 
@@ -730,6 +780,7 @@ export class Store {
 
   private sessionUser(token: string): AuthUser | undefined {
     const session = this.auth.sessions.find(x => x.token === token);
+    if (session && Date.now() - Date.parse(session.createdAt) > this.sessionTtlMs) return undefined;
     return session && this.auth.users.find(u => u.id === session.userId);
   }
 
@@ -771,6 +822,9 @@ export class Store {
     const missing = docs.filter(d => !sent.includes(d));
     if (missing.length) throw new ActionError('Missing documents: ' + missing.join(', '));
     if (this.courierByPhone(phone)) throw new ActionError('This number already belongs to a Yallo courier. Sign in instead', 409);
+    if (this.s.applications.filter(a => a.status === 'pending').length >= MAX_PENDING_APPLICATIONS) {
+      throw new ActionError('We are not taking new applications right now. Please try again later', 503);
+    }
     if (this.s.applications.some(a => a.status === 'pending' && normPhone(a.phone) === phone)) {
       throw new ActionError('An application for this number is already in review', 409);
     }
@@ -785,11 +839,14 @@ export class Store {
   }
 
   /** The latest application for a phone number, as the applicant may see it. */
-  applicationStatus(rawPhone: string): ApplicationStatus {
+  applicationStatus(rawPhone: string, by?: AuthUser): ApplicationStatus {
     const phone = normPhone(rawPhone);
     if (!phone) throw new ActionError('Enter a valid phone number');
     const a = this.s.applications.find(a => normPhone(a.phone) === phone);
     if (!a) throw new ActionError('No application for this number', 404);
+    // Anyone can see whether a number's application is pending, approved or rejected; the reasons and document notes
+    // only go to someone signed in with that number (or ops).
+    if (by?.role !== 'ops' && by?.phone !== phone) return { id: a.id, status: a.status };
     return { id: a.id, status: a.status, docs: a.docs, ...(a.docNotes ? { docNotes: a.docNotes } : {}), ...(a.rejectReason ? { rejectReason: a.rejectReason } : {}), ...(a.courierId ? { courierId: a.courierId } : {}) };
   }
 
@@ -863,18 +920,19 @@ export class Store {
     if (user?.role === 'courier') {
       const me = user.courierId!;
       return { ...base, couriers: s.couriers.filter(c => c.id === me),
-        // Couriers never see the delivery PIN: they ask the customer for it.
-        orders: s.orders.filter(o => o.courierId === me || o.offer?.courierId === me).map(({ deliveryPin: _pin, ...o }) => o),
+        orders: s.orders.filter(o => o.courierId === me || o.offer?.courierId === me).map(o => forCourier(o, me)),
         tickets: s.tickets.filter(tk => tk.requesterId === me),
         payouts: { ...s.payouts, lines: s.payouts.lines.filter(l => l.kind === 'courier' && l.partyId === me) } };
     }
     if (user?.role === 'customer') {
       const orders = s.orders.filter(o => o.customerId === user.id);
       const riders = new Set(orders.filter(o => ACTIVE_STATUSES.includes(o.status)).map(o => o.courierId));
-      return { ...base, orders, couriers: s.couriers.filter(c => riders.has(c.id)), tickets: s.tickets.filter(tk => tk.requesterId === user.id) };
+      return { ...base, orders: orders.map(forCustomer), couriers: s.couriers.filter(c => riders.has(c.id)).map(publicCourier),
+        tickets: s.tickets.filter(tk => tk.requesterId === user.id) };
     }
     return { ...base, couriers: [], orders: [], tickets: [] };
   }
+
 
   /** A GPS fix from the courier's app. The courier is placed on the demo map and the simulation stops moving them. */
   setCourierLocation(courierId: string, lat: number, lon: number) {
@@ -979,6 +1037,7 @@ export class Store {
     } else if (by?.role === 'customer' || (!by && claimedFrom === 'customer')) {
       from = 'customer'; author = (by?.name || o.customerName).split(' ')[0];
     } else throw new ActionError("Say who is writing: from 'customer' or 'courier'");
+    if ((o.chat?.length ?? 0) >= MAX_THREAD_MESSAGES) throw new ActionError('This chat is full. Contact support', 429);
     const message: OrderMessage = { from, author, text: body, at: clockAt(this.s.t) };
     (o.chat ??= []).push(message);
     this.emit({ type: 'chat', order: o, message });

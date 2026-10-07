@@ -14,7 +14,7 @@ const MAX_BODY = 64 * 1024;
 export type AuthMode = 'warn' | 'enforce';
 
 /** Per-request context: the bearer token and who it belongs to, if anyone. */
-type Ctx = { token?: string; user?: AuthUser; query: URLSearchParams; enforce: boolean };
+type Ctx = { token?: string; user?: AuthUser; query: URLSearchParams; enforce: boolean; allowReset: boolean };
 type Handler = (store: Store, params: string[], body: any, ctx: Ctx) => unknown;
 /** Returns true when allowed, or the reason it isn't. */
 type Rule = (ctx: Ctx, params: string[], body: any, store: Store) => true | string;
@@ -47,6 +47,13 @@ const orderParty: Rule = (c, [n], _, s) => {
   if (!o) return true;
   return isCourier(c, o.courierId) || (c.user?.role === 'customer' && o.customerId === c.user.id) || "Only this order's customer or courier can write here";
 };
+/** Status changes: ops any; the assigned courier only their own steps, picked up and delivered. */
+const statusChange: Rule = (c, params, b, s) => {
+  if (isOps(c)) return true;
+  const assigned = assignedCourier(c, params, b, s);
+  if (assigned !== true) return assigned;
+  return b?.status === 'delivering' || b?.status === 'delivered' || 'Couriers can only mark an order picked up or delivered';
+};
 /** The courier in the path, acting on themself. */
 const selfCourier: Rule = (c, [id]) => isOps(c) || isCourier(c, id) || 'Couriers can only do this for themselves';
 /** Ops, or the ticket's requester writing as the requester. */
@@ -76,7 +83,7 @@ const ROUTES: [string, RegExp, Rule, Handler][] = [
   ['POST', /^\/api\/orders\/(\d+)\/offer\/accept$/, courierInBody, (s, [id], b) => (s.acceptOffer(id, String(b?.courierId)), s.state)],
   ['POST', /^\/api\/orders\/(\d+)\/offer\/decline$/, courierInBody, (s, [id], b) => (s.declineOffer(id, String(b?.courierId)), s.state)],
   ['POST', /^\/api\/orders\/(\d+)\/unassign$/, assignedCourier, (s, [id]) => (s.unassignCourier(id), s.state)],
-  ['POST', /^\/api\/orders\/(\d+)\/status$/, assignedCourier, (s, [id], b, ctx) =>
+  ['POST', /^\/api\/orders\/(\d+)\/status$/, statusChange, (s, [id], b, ctx) =>
     (s.setOrderStatus(id, b?.status, b?.pin, { byOps: ctx.user?.role === 'ops', strictPin: ctx.enforce }), s.state)],
   ['POST', /^\/api\/orders\/(\d+)\/cancel$/, ops, (s, [id], b) => (s.cancelOrder(id, b?.reason, !!b?.compensateCourier), s.state)],
   ['POST', /^\/api\/orders\/(\d+)\/cancel-by-customer$/, orderCustomer, (s, [id], _, ctx) => (s.cancelOrderAsCustomer(id, ctx.user), s.state)],
@@ -89,11 +96,13 @@ const ROUTES: [string, RegExp, Rule, Handler][] = [
   ['POST', /^\/api\/couriers\/([\w-]+)\/location$/, selfCourier, (s, [id], b) => (s.setCourierLocation(id, b?.lat, b?.lon), s.state)],
   ['POST', /^\/api\/couriers\/([\w-]+)\/availability$/, selfCourier, (s, [id], b) => (s.setCourierAvailability(id, b?.status), s.state)],
   ['POST', /^\/api\/tickets$/, signedIn, (s, _, b, ctx) => s.openTicket(b, ctx.user)],
-  ['POST', /^\/api\/tickets\/(T-\d+)\/messages$/, ticketParty, (s, [id], b) => (s.addTicketMessage(id, b?.from, b?.author, b?.text), s.state)],
+  // A signed-in writer is named from their account, not from the request.
+  ['POST', /^\/api\/tickets\/(T-\d+)\/messages$/, ticketParty, (s, [id], b, ctx) =>
+    (s.addTicketMessage(id, b?.from, ctx.user ? (ctx.user.role === 'ops' ? (ctx.user.name ?? 'Yallo').split(' ')[0] : ctx.user.name ?? b?.author) : b?.author, b?.text), s.state)],
   ['POST', /^\/api\/tickets\/(T-\d+)\/resolve$/, ops, (s, [id]) => (s.resolveTicket(id), s.state)],
   ['POST', /^\/api\/tickets\/(T-\d+)\/escalate$/, ops, (s, [id]) => (s.escalateTicket(id), s.state)],
   ['POST', /^\/api\/courier-applications$/, anyone, (s, _, b) => s.applyAsCourier(b)],
-  ['GET', /^\/api\/courier-applications\/status$/, anyone, (s, _, __, ctx) => s.applicationStatus(ctx.query.get('phone') ?? '')],
+  ['GET', /^\/api\/courier-applications\/status$/, anyone, (s, _, __, ctx) => s.applicationStatus(ctx.query.get('phone') ?? '', ctx.user)],
   ['POST', /^\/api\/courier-applications\/(a\d+)\/documents\/(cin|lic|veh|rib)$/, ops, (s, [id, doc], b) => (s.reviewDocument(id, doc as never, b?.verdict, b?.note), s.state)],
   ['POST', /^\/api\/courier-applications\/(a\d+)\/approve$/, ops, (s, [id]) => (s.approveApplication(id), s.state)],
   ['POST', /^\/api\/courier-applications\/(a\d+)\/reject$/, ops, (s, [id], b) => (s.rejectApplication(id, b?.reason), s.state)],
@@ -101,7 +110,10 @@ const ROUTES: [string, RegExp, Rule, Handler][] = [
   ['GET', /^\/api\/couriers\/([\w-]+)\/earnings$/, selfCourier, (s, [id]) => s.courierEarnings(id)],
   ['POST', /^\/api\/push-token$/, signedIn, (s, _, b, ctx) => (s.registerPushToken(...pushRecipient(b, ctx), b?.token), { ok: true })],
   ['POST', /^\/api\/push-token\/remove$/, signedIn, (s, _, b, ctx) => (s.unregisterPushToken(...pushRecipient(b, ctx), b?.token), { ok: true })],
-  ['POST', /^\/api\/reset$/, ops, s => (s.reset(), s.state)],
+  ['POST', /^\/api\/reset$/, ops, (s, _, __, ctx) => {
+    if (!ctx.allowReset) throw new ActionError('Reset is disabled on this server', 403);
+    return (s.reset(), s.state);
+  }],
 ];
 
 function send(res: ServerResponse, status: number, body: unknown) {
@@ -135,6 +147,29 @@ function pushRecipient(b: any, ctx: Ctx): ['courier' | 'customer', string] {
   throw new ActionError('Only couriers and customers get push notifications');
 }
 
+/** Requests per window and per client address, by route (method + path pattern). */
+export const DEFAULT_LIMITS: Record<string, { max: number; windowMs: number }> = {
+  ['POST ' + /^\/api\/auth\/otp$/.source]: { max: 5, windowMs: 60_000 },
+  ['POST ' + /^\/api\/auth\/verify$/.source]: { max: 20, windowMs: 60_000 },
+  ['POST ' + /^\/api\/courier-applications$/.source]: { max: 5, windowMs: 60_000 },
+  ['GET ' + /^\/api\/courier-applications\/status$/.source]: { max: 30, windowMs: 60_000 },
+};
+
+/** A fixed-window counter. Returns 0 when allowed, else the seconds to wait. */
+function createLimiter(limits: typeof DEFAULT_LIMITS) {
+  const hits = new Map<string, { start: number; n: number }>();
+  return (route: string, ip: string) => {
+    const rule = limits[route];
+    if (!rule) return 0;
+    const key = route + '|' + ip, now = Date.now();
+    const h = hits.get(key);
+    if (!h || now - h.start >= rule.windowMs) { hits.set(key, { start: now, n: 1 }); return 0; }
+    if (h.n >= rule.max) return Math.ceil((h.start + rule.windowMs - now) / 1000);
+    h.n += 1;
+    return 0;
+  };
+}
+
 const bearer = (header: string | undefined) => (header?.startsWith('Bearer ') ? header.slice(7).trim() : undefined);
 
 /**
@@ -147,7 +182,8 @@ const bearer = (header: string | undefined) => (header?.startsWith('Bearer ') ? 
  *   Unset allows any origin (development). Requests without an Origin (mobile apps, curl) are always allowed.
  */
 export function createApi({ tickMs = 1000, store = new Store(), authMode = 'warn' as AuthMode, push = createPush('log') as PushSender,
-  corsOrigins = undefined as string[] | undefined } = {}) {
+  corsOrigins = undefined as string[] | undefined, allowReset = true, trustProxy = false, limits = {} as typeof DEFAULT_LIMITS } = {}) {
+  const limiter = createLimiter(limits);
   const originAllowed = (origin: string | undefined) => !origin || !corsOrigins || corsOrigins.includes(origin);
   const enforce = authMode === 'enforce';
   /** The state this viewer gets: everything in warn mode, their own view when enforcing. */
@@ -171,7 +207,11 @@ export function createApi({ tickMs = 1000, store = new Store(), authMode = 'warn
       const body = req.method === 'POST' ? await readJson(req) : undefined;
       const params = route[1].exec(path)!.slice(1).map(decodeURIComponent);
       const token = bearer(req.headers.authorization);
-      const ctx: Ctx = { token, user: store.userForToken(token), query: url.searchParams, enforce };
+      // Public endpoints that cost something (codes, sign-ups) are rate-limited per client address.
+      const ip = (trustProxy && String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim()) || req.socket.remoteAddress || '?';
+      const wait = limiter(req.method + ' ' + route[1].source, ip);
+      if (wait) { res.setHeader('retry-after', String(wait)); throw new ActionError(`Too many requests. Try again in ${wait} s`, 429); }
+      const ctx: Ctx = { token, user: store.userForToken(token), query: url.searchParams, enforce, allowReset };
       const allowed = route[2](ctx, params, body, store);
       if (allowed !== true) {
         if (enforce) throw new ActionError(allowed, ctx.user ? 403 : 401);

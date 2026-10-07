@@ -145,6 +145,10 @@ Tell the app owners before changing their screen text, because the run asserts o
   `api/.env.example`: `PORT`, `HOST`, `STATE_FILE`, `AUTH_MODE`, `CORS_ORIGINS` (browser allowlist; apps send no
   Origin and are always allowed), `PUSH=expo`, `EXPO_ACCESS_TOKEN`, `STAND_IN_MERCHANT=off`, `YALLO_VERSION`.
   `GET /api/health` → `{ ok, version, auth, epoch, t }` for deploy checks.
+  Production also: one-time codes are random and written to the server log (no SMS provider yet: `OTP_MODE=dev`, i.e.
+  always 123456, is refused in production); `/api/reset` is off unless `ALLOW_RESET=1`; public endpoints are
+  rate-limited per client address (`TRUST_PROXY=1` behind a reverse proxy; `RATE_LIMITS=on` locally); sessions last
+  30 days.
 - Back office: build with `VITE_API_URL=https://<api host> npm run build` (see `back-office/.env.example`) and serve
   `back-office/dist/` as static files (any path → `index.html`). Without `VITE_API_URL` it calls its own origin, so a
   reverse proxy must route `/api` (REST and the `/api/live` WebSocket) to the API.

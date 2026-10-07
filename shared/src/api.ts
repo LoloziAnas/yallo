@@ -155,8 +155,12 @@ export type ApplyBody = {
   documents: DocKey[];
 };
 
-/** What an applicant sees about their application. */
-export type ApplicationStatus = Pick<CourierApplication, 'id' | 'status' | 'docs' | 'docNotes' | 'rejectReason' | 'courierId'>;
+/**
+ * An application's status. Anyone gets id and status; the details (documents, notes, reason, courier id) only come
+ * back to someone signed in with that phone number (e.g. a customer sign-in from the courier app), or to ops.
+ */
+export type ApplicationStatus = Pick<CourierApplication, 'id' | 'status'> &
+  Partial<Pick<CourierApplication, 'docs' | 'docNotes' | 'rejectReason' | 'courierId'>>;
 
 export type CustomerHistory = { orders: ApiOrder[]; tickets: Ticket[] };
 

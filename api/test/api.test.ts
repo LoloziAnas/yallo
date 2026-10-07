@@ -7,7 +7,7 @@ import { AUTO_ACCEPT_SEC, AUTO_READY_SEC, STAND_IN_ACCEPT_SEC, STATE_VERSION, St
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createApi, notifications } from '../src/server';
+import { createApi, notifications, DEFAULT_LIMITS } from '../src/server';
 import { createPush, type PushMessage } from '../src/push';
 
 const order = (s: Store, id: string) => s.state.orders.find(o => o.id === id)!;
@@ -596,7 +596,9 @@ describe('Courier applications', () => {
   test('rejection needs a reason and is visible to the applicant', () => {
     assert.throws(() => s.rejectApplication('a3', ' '), /reason is required/);
     s.rejectApplication('a3', 'Expired documents');
-    assert.deepEqual([s.applicationStatus('0668059233').status, s.applicationStatus('0668059233').rejectReason], ['rejected', 'Expired documents']);
+    assert.deepEqual(s.applicationStatus('0668059233'), { id: 'a3', status: 'rejected' }, 'anyone: status only');
+    const applicant = { id: 'u9', role: 'customer' as const, phone: '+212668059233' };
+    assert.deepEqual([s.applicationStatus('0668059233', applicant).status, s.applicationStatus('0668059233', applicant).rejectReason], ['rejected', 'Expired documents']);
     assert.throws(() => s.reviewDocument('a3', 'rib', 'ok'), /already rejected/);
   });
 });
@@ -1169,5 +1171,98 @@ describe('Deployment', () => {
     } finally {
       await new Promise<void>(r => api.http.close(() => r()));
     }
+  });
+});
+
+describe('Security (production settings)', () => {
+  let api: ReturnType<typeof createApi>;
+  let base: string;
+  const as = (token?: string) => createYalloClient(base, { token });
+  const raw = async (method: string, path: string, token?: string, body?: unknown) => {
+    const res = await fetch(base + '/api' + path, { method, headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: body ? JSON.stringify(body) : undefined });
+    return { status: res.status, body: await res.json() };
+  };
+  const tajine = { merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz' as const, pay: 'cash' as const, items: [{ productId: 'p1-6', qty: 1 }] };
+
+  before(async () => {
+    // Dev tokens stay on here only so the test can act as each role without OTP round trips.
+    api = createApi({ tickMs: 0, authMode: 'enforce', allowReset: false, limits: DEFAULT_LIMITS, store: new Store({ otpMode: 'random' }) });
+    await new Promise<void>(r => api.http.listen(0, '127.0.0.1', r));
+    base = `http://127.0.0.1:${(api.http.address() as AddressInfo).port}`;
+  });
+  after(() => new Promise<void>(r => api.http.close(() => r())));
+
+  test('one-time codes are random, so 123456 does not sign anyone in', async () => {
+    const log = console.log; let logged = ''; console.log = (m: string) => { logged += m; };
+    try { await as().requestOtp('0661234578', 'courier'); } finally { console.log = log; }
+    const code = /code (\d{6})/.exec(logged)![1];
+    if (code !== DEV_OTP_CODE) await assert.rejects(as().verifyOtp('0661234578', DEV_OTP_CODE), /Wrong code/);
+    assert.equal((await as().verifyOtp('0661234578', code)).user.courierId, 'c1');
+  });
+
+  test('reset is disabled, even for ops', async () => {
+    assert.deepEqual(await raw('POST', '/reset', DEV_TOKENS.ops), { status: 403, body: { error: 'Reset is disabled on this server' } });
+  });
+
+  test('couriers can only mark their job picked up or delivered', async () => {
+    await as(DEV_TOKENS.ops).assignCourier('#48219', 'c3');
+    assert.equal((await raw('POST', '/orders/48219/status', DEV_TOKENS.courier('c3'), { status: 'ready' })).status, 403);
+    await as(DEV_TOKENS.ops).setOrderStatus('#48219', 'ready');
+    assert.equal((await raw('POST', '/orders/48219/status', DEV_TOKENS.courier('c3'), { status: 'delivering' })).status, 200);
+  });
+
+  test('views: customers never see courier pay or courier internals; couriers see contact details only on their active job', async () => {
+    const o = await as(DEV_TOKENS.customer).placeOrder({ ...tajine, customerPhone: '+212 600 11 22 33', location: { lat: 31.63, lon: -8.01 } });
+    await as(DEV_TOKENS.ops).offerOrder(o.id, 'c2');
+    const offered = (await as(DEV_TOKENS.courier('c2')).getState()).orders.find(x => x.id === o.id)!;
+    assert.deepEqual([offered.customerPhone, offered.location, offered.deliveryPin], [undefined, undefined, undefined], 'not before accepting');
+    await as(DEV_TOKENS.courier('c2')).acceptOffer(o.id, 'c2');
+    const taken = (await as(DEV_TOKENS.courier('c2')).getState()).orders.find(x => x.id === o.id)!;
+    assert.equal(taken.customerPhone, '+212 600 11 22 33');
+    const mine = await as(DEV_TOKENS.customer).getState();
+    const order = mine.orders.find(x => x.id === o.id)!;
+    assert.deepEqual([order.courierPay, order.courierKm, order.offer, typeof order.deliveryPin], [undefined, undefined, undefined, 'string']);
+    assert.deepEqual(Object.keys(mine.couriers[0]).sort(), ['app', 'id', 'name', 'phone', 'pos', 'rating', 'status', 'suspended', 'vehicle', 'zone']);
+  });
+
+  test('tickets: only your own order, signed with your own name, and not too many open', async () => {
+    const r = await raw('POST', '/tickets', DEV_TOKENS.customer, { source: 'customer', requesterName: 'X', subject: 'Late', orderId: '#48213', text: 'Hi' });
+    assert.deepEqual(r, { status: 403, body: { error: 'That order is not yours' } });
+    const tk = await as(DEV_TOKENS.customer).openTicket({ source: 'customer', requesterName: 'X', subject: 'Late', text: 'Hi' });
+    const s = await as(DEV_TOKENS.ops).addTicketMessage(tk.id, 'ops', 'Totally Leila', 'Looking into it');
+    assert.equal(s.tickets.find(x => x.id === tk.id)!.messages.at(-1)!.author, 'Leila');
+    await as(DEV_TOKENS.customer).addTicketMessage(tk.id, 'requester', 'Yallo Support', 'Thanks');
+    assert.equal((await as(DEV_TOKENS.ops).getState()).tickets.find(x => x.id === tk.id)!.messages.at(-1)!.author, 'Test customer');
+  });
+
+  test('size limits: order lines, and one customer never sees another\'s history', async () => {
+    const lines = Array.from({ length: 51 }, () => ({ productId: 'p1-7', qty: 1 }));
+    assert.match((await raw('POST', '/orders', DEV_TOKENS.customer, { ...tajine, items: lines })).body.error, /at most 50 lines/);
+    const theirs = await as(DEV_TOKENS.customer).myHistory();
+    assert.ok(theirs.orders.every(o => o.customerId === 'u-dev'));
+  });
+});
+
+describe('Rate limits', () => {
+  test('sign-in codes are limited per client address', async () => {
+    const api = createApi({ tickMs: 0, limits: { ...DEFAULT_LIMITS, ['POST ' + /^\/api\/auth\/otp$/.source]: { max: 2, windowMs: 60_000 } } });
+    await new Promise<void>(r => api.http.listen(0, '127.0.0.1', r));
+    const c = createYalloClient(`http://127.0.0.1:${(api.http.address() as AddressInfo).port}`);
+    const log = console.log; console.log = () => {};
+    try {
+      await c.requestOtp('0611111111', 'customer');
+      await c.requestOtp('0622222222', 'customer');
+      await assert.rejects(c.requestOtp('0633333333', 'customer'), /Too many requests. Try again in \d+ s/);
+    } finally {
+      console.log = log;
+      await new Promise<void>(r => api.http.close(() => r()));
+    }
+  });
+
+  test('sessions expire', () => {
+    const s = new Store({ sessionTtlMs: -1 });
+    s.requestOtp('0612345678', 'customer');
+    const { token } = s.verifyOtp('0612345678', DEV_OTP_CODE);
+    assert.equal(s.userForToken(token), undefined);
   });
 });

@@ -1,6 +1,6 @@
 import { API_PORT } from '@yallo/shared';
 import { fileURLToPath } from 'node:url';
-import { createApi } from './server';
+import { createApi, DEFAULT_LIMITS } from './server';
 import { Store } from './store';
 import { createPush } from './push';
 
@@ -23,15 +23,25 @@ const devTokens = process.env.DEV_TOKENS !== 'off' && !production;
 
 // STAND_IN_MERCHANT=off: nobody moves new orders through accepted → ready except ops.
 const standInMerchant = process.env.STAND_IN_MERCHANT !== 'off';
-const store = new Store({ file, devTokens, standInMerchant });
+// OTP_MODE=dev makes every one-time code 123456; never in production, where codes are random (logged until SMS exists).
+const otpMode = !production && process.env.OTP_MODE !== 'random' ? 'dev' : 'random';
+// /api/reset wipes everything: off in production unless ALLOW_RESET=1.
+const allowReset = !production || process.env.ALLOW_RESET === '1';
+const store = new Store({ file, devTokens, standInMerchant, otpMode });
 // PUSH=expo sends notifications through the Expo push service; anything else only logs them.
 const pushMode = process.env.PUSH === 'expo' ? 'expo' : 'log';
-const { http } = createApi({ store, authMode, corsOrigins, push: createPush(pushMode, process.env.EXPO_ACCESS_TOKEN) });
+// Rate limits on public endpoints: on in production (or RATE_LIMITS=on). Locally every app shares one address.
+const rateLimits = production || process.env.RATE_LIMITS === 'on' ? DEFAULT_LIMITS : {};
+// TRUST_PROXY=1 behind a reverse proxy, so limits use X-Forwarded-For instead of the proxy's address.
+const trustProxy = process.env.TRUST_PROXY === '1';
+const { http } = createApi({ store, authMode, corsOrigins, allowReset, limits: rateLimits, trustProxy, push: createPush(pushMode, process.env.EXPO_ACCESS_TOKEN) });
 
 http.listen(port, host, () => {
   console.log(`Yallo mock API on http://localhost:${port}  (live feed: ws://localhost:${port}/api/live)`);
   console.log(file ? `State: ${file} (epoch ${store.state.epoch}, demo clock t=${store.state.t}s)` : 'State: in memory only');
   console.log(`CORS: ${corsOrigins ? corsOrigins.join(', ') : 'any origin'}`);
+  console.log(`Rate limits: ${Object.keys(rateLimits).length ? 'on' : 'off'}${trustProxy ? ' (X-Forwarded-For)' : ''}`);
+  console.log(`OTP codes: ${otpMode === 'dev' ? 'always 123456 (dev)' : 'random, logged'}${allowReset ? '' : ' · reset disabled'}`);
   console.log(`Auth: ${authMode}${devTokens ? ', dev tokens on' : ''} · Push: ${pushMode} · Stand-in merchant: ${standInMerchant ? 'on' : 'off'}`);
 });
 
