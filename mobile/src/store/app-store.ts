@@ -47,7 +47,7 @@ import {
   type SortKey,
   demoClock,
   storeState,
-  SCHEDULE_SLOTS,
+  scheduleSlots,
   unitPrice,
 } from '@/store/derive';
 
@@ -296,7 +296,7 @@ function deliveryDetails(s: State, addr: Address) {
       ? { location: { lat: addr.lat, lon: addr.lon } }
       : {}),
     ...(instructions ? { instructions } : {}),
-    ...(s.when === 'sched' ? { scheduledFor: SCHEDULE_SLOTS[s.slot] } : {}),
+    ...(s.when === 'sched' ? { scheduledFor: scheduleSlots(s.live?.t)[s.slot] } : {}),
     ...(s.phone ? { customerPhone: s.phone } : {}),
   };
 }
@@ -590,7 +590,7 @@ export const useApp = create<State & Actions>()(
           disc: placed.discount ?? 0,
           total: placed.total,
           placedAt: Date.now(),
-          ...(s.when === 'sched' ? { scheduledFor: SCHEDULE_SLOTS[s.slot] } : {}),
+          ...(s.when === 'sched' ? { scheduledFor: scheduleSlots(s.live?.t)[s.slot] } : {}),
           addrId: s.addrId,
           pay: s.pay,
           ...(placed.deliveryPin ? { pin: placed.deliveryPin } : {}),

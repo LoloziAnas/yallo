@@ -53,9 +53,34 @@ The app finds the API on the machine serving the JS bundle (`src/api/client.ts`)
 
 ## Builds
 
-`eas.json` has `development` (dev client), `preview` (internal APK) and `production` profiles. Each reads
-`EXPO_PUBLIC_API_URL` from its EAS environment; `app.config.ts` refuses a preview or production build without it,
-and allows plain HTTP only when that URL isn't HTTPS. App ids: `ma.yallo.app` (iOS and Android).
+**Android APK, locally (no EAS):** `npm run apk -- --api https://<api host>`
+- Runs a clean `expo prebuild` and `gradlew assembleRelease` (needs a JDK 17+; the script finds one).
+- Output: `apk/yallo-<version>-<commit>.apk` (git-ignored).
+- The API URL and the commit are built in. Profile shows them, e.g. `YALLO 1.0.0 (b188125)`, so we know which
+  APK someone has. versionCode is the commit count, so a newer APK installs over an older one.
+- Signed with the release keystore **outside git**, in `~/yallo-keys/yallo-customer.jks` plus
+  `yallo-customer.properties` (passwords). Override the folder with `YALLO_KEYS_DIR`. Create it once with
+  `npm run apk -- --init-keystore`; `plugins/release-signing.js` wires it into Gradle.
+- **Back up `~/yallo-keys/`.** Without the same key, an update can't install over an existing APK.
+- It refuses to build with uncommitted changes in `mobile/` unless you pass `--allow-dirty`.
+- An `http://` API works for testing (plain HTTP is then allowed), but shared APKs should use https.
+
+**Web, for a static host:** `npm run web:build -- --api https://<api host>`
+- Output: `web-dist/`, a single-page app. The live feed follows the API URL (`https` → `wss`).
+- Unknown paths must serve `index.html`. The build includes `_redirects` (Netlify, Cloudflare Pages),
+  `404.html` (GitHub Pages) and `serve.json` (`npx serve web-dist`), plus `version.txt`.
+- The API must allow the site's origin in `CORS_ORIGINS`.
+
+Both release builds use their own fresh Metro cache (`metro.config.js`), because Metro's cache doesn't notice a
+changed `EXPO_PUBLIC_API_URL`.
+
+**A sleeping API** (free hosts take about a minute to wake): Home shows "Connecting to Yallo…" for up to
+90 s before "Can't reach Yallo", and sign-in or placing an order waits for the connection instead of failing.
+
+**EAS** (once there's an account): `eas.json` has `development`, `preview` (internal APK) and `production`
+profiles. Each reads `EXPO_PUBLIC_API_URL` from its EAS environment; `app.config.ts` refuses a preview or
+production build without it, and allows plain HTTP only when that URL isn't HTTPS. App ids: `ma.yallo.app`
+(iOS and Android).
 
 ## What's in it
 

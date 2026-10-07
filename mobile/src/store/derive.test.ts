@@ -1,7 +1,7 @@
 import { type LiveState, MERCHANTS } from '@yallo/shared';
 
 import { lineKey } from '@/data/catalog';
-import { customerStep, fmt, riderNames, storeState, totals } from '@/store/derive';
+import { customerStep, fmt, riderNames, scheduleSlots, storeState, totals } from '@/store/derive';
 
 const line = (pid: string, unit: number, qty: number) => ({
   key: lineKey(pid, {}),
@@ -73,5 +73,20 @@ describe('storeState', () => {
 
   it('reports stores paused by ops', () => {
     expect(storeState('m1', live(false))).toBe('paused');
+  });
+});
+
+describe('scheduleSlots', () => {
+  it('offers the next three half hours at least an hour ahead', () => {
+    // t = 0 is 18:34 on the default demo clock.
+    expect(scheduleSlots(0)).toEqual(['20:00', '20:30', '21:00']);
+  });
+
+  it('wraps past midnight', () => {
+    expect(scheduleSlots((23 * 60 + 10 - (18 * 60 + 34)) * 60)).toEqual([
+      '00:30',
+      '01:00',
+      '01:30',
+    ]);
   });
 });

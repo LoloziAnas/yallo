@@ -21,16 +21,32 @@ const fail = (msg) => {
   console.error('\n✖ ' + msg + '\n');
   process.exit(1);
 };
-const git = (...a) => execFileSync('git', a, { cwd: root, encoding: 'utf8' }).trim();
+/** git output, or null where there's no repository (some hosts build from a plain checkout). */
+const git = (...a) => {
+  try {
+    return execFileSync('git', a, {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return null;
+  }
+};
+// Hosted builds (Render, Netlify…) name the commit they build; their checkouts are never dirty on purpose.
+const hostedSha = process.env.RENDER_GIT_COMMIT || process.env.COMMIT_REF || process.env.GITHUB_SHA;
+const ci = !!(process.env.CI || process.env.RENDER || hostedSha);
 
 const api = option('--api')?.replace(/\/$/, '');
 if (!api || !/^https?:\/\//.test(api))
   fail('Pass the API: npm run web:build -- --api https://<api host>');
 const out = path.resolve(root, option('--out') ?? 'web-dist');
-const dirty = git('status', '--porcelain', '--', '.') !== '';
-if (dirty && !args.includes('--allow-dirty'))
+const dirty = !!git('status', '--porcelain', '--', '.');
+if (dirty && !ci && !args.includes('--allow-dirty'))
   fail('mobile/ has uncommitted changes. Commit first, or pass --allow-dirty.');
-const sha = git('rev-parse', '--short', 'HEAD') + (dirty ? '-dirty' : '');
+const sha =
+  (hostedSha?.slice(0, 7) ?? git('rev-parse', '--short', 'HEAD') ?? 'unknown') +
+  (dirty ? '-dirty' : '');
 
 rmSync(out, { recursive: true, force: true });
 const r = spawnSync('npx', ['expo', 'export', '--platform', 'web', '--output-dir', out], {

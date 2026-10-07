@@ -17,6 +17,7 @@ import {
   FREE_GROCERY_DELIVERY_FROM,
   type LiveState,
   merchantById,
+  minuteOfDayAt,
   type Order as ApiOrderBase,
   SERVICE_FEE,
   storeAvailability,
@@ -29,8 +30,19 @@ export type Cart = { storeId: string | null; lines: CartLine[] };
 export type Promo = 'MARHABA' | 'LIVRAISON' | null;
 export type SortKey = 'rec' | 'fast' | 'rating' | 'fee';
 
-/** Delivery slots offered at checkout under "Schedule" (demo-clock times). */
-export const SCHEDULE_SLOTS = ['21:30', '22:00', '22:30'] as const;
+/**
+ * Delivery slots offered at checkout under "Schedule": the next three half hours at least an hour from now on
+ * the API's clock (`t` from the live feed; the device clock before it arrives). The demo runs on real time.
+ */
+export function scheduleSlots(t: number | undefined): string[] {
+  const now =
+    t !== undefined ? minuteOfDayAt(t) : new Date().getHours() * 60 + new Date().getMinutes();
+  const first = Math.ceil((now + 60) / 30) * 30;
+  return [0, 30, 60].map((d) => {
+    const m = (first + d) % 1440;
+    return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+  });
+}
 
 /** 85 → "85 DH", 19.6 → "19,60 DH". */
 export function fmt(n: number) {

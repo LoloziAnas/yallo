@@ -14,10 +14,8 @@ import { TextField } from '@/components/text-field';
 import { Txt } from '@/components/txt';
 import { type PayMethod, productById } from '@/data/catalog';
 import { useApp, useT, selectAddress } from '@/store/app-store';
-import { clock, demoClock, fmt, SCHEDULE_SLOTS, sumRows, totals } from '@/store/derive';
+import { clock, demoClock, fmt, scheduleSlots, sumRows, totals } from '@/store/derive';
 import { colors, radius, shadow } from '@/theme';
-
-const slots = SCHEDULE_SLOTS;
 
 export function CheckoutScreen() {
   const t = useT();
@@ -26,6 +24,7 @@ export function CheckoutScreen() {
   // Time the screen opened; the ETA is quoted from this moment.
   const [openedAt] = useState(() => Date.now());
   const tt = totals(s.cart, s.promo);
+  const slots = scheduleSlots(s.live?.t);
   const cs = tt.store;
   const addr = selectAddress(s);
 

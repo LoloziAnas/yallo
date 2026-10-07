@@ -35,6 +35,8 @@ export function SignIn({ mode = 'onboarding' }: { mode?: 'onboarding' | 'login' 
   // The number as the API normalised it ("+212612345678"), shown on the code step.
   const [sentTo, setSentTo] = useState('');
   const [otp, setOtp] = useState('');
+  // The API's fixed code on dev and demo servers (never in production), shown as a hint.
+  const [fixedCode, setFixedCode] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -58,6 +60,7 @@ export function SignIn({ mode = 'onboarding' }: { mode?: 'onboarding' | 'login' 
     try {
       const r = await api.requestOtp(digits, 'customer');
       setSentTo(r.phone);
+      setFixedCode(r.fixedCode);
       setOtp('');
       setStep('otp');
     } catch (e) {
@@ -244,6 +247,11 @@ export function SignIn({ mode = 'onboarding' }: { mode?: 'onboarding' | 'login' 
                   fontFamily: fontFamily('heading', 600, false),
                 }}
               />
+              {!!fixedCode && (
+                <Txt size={13} color={colors.neutral700} style={{ marginTop: 10 }}>
+                  {t.fixedCode.replace('%s', fixedCode)}
+                </Txt>
+              )}
               {busy && (
                 <Txt size={13} color={colors.neutral600} style={{ marginTop: 10 }}>
                   {t.checking}
