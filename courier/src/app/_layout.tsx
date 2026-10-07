@@ -20,6 +20,8 @@ import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { useLiveSync } from '@/api/sync';
+import { setUpNotifications } from '@/device/notifications';
+import { useTracking } from '@/device/tracking';
 import {
   EdgeOverlay,
   NoNetBanner,
@@ -68,6 +70,12 @@ export default function RootLayout() {
   const pathname = usePathname();
 
   useLiveSync();
+  useTracking();
+
+  // Offer alerts need notification permission; ask once the courier is signed in.
+  useEffect(() => {
+    if (signedIn) setUpNotifications().catch(() => {});
+  }, [signedIn]);
 
   // The delivery screen only exists while there's a job: close it once the job ends,
   // however it ended (completed, dropped, or taken back by ops).
@@ -114,6 +122,7 @@ export default function RootLayout() {
             <Stack.Screen name="performance" />
             <Stack.Screen name="bonuses" />
             <Stack.Screen name="history/[id]" />
+            <Stack.Screen name="ticket/[id]" />
             <Stack.Screen name="problem" options={sheet} />
             <Stack.Screen name="cancel-delivery" options={sheet} />
             <Stack.Screen name="withdraw" options={sheet} />

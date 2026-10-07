@@ -135,6 +135,14 @@ export function Support() {
   const t = useT();
   const busy = useCourier((s) => inDelivery(s.phase));
   const showToast = useCourier((s) => s.showToast);
+  const live = useCourier((s) => s.source === 'live');
+  const tickets = useCourier((s) => s.tickets);
+  const seen = useCourier((s) => s.repliesSeen);
+  // Live, each topic opens a conversation with ops; the offline demo only simulates it.
+  const openThread = (subject: string) => {
+    if (live) router.push({ pathname: '/ticket/[id]', params: { id: 'new', subject } });
+    else showToast(`${subject} · opening chat`);
+  };
   // Emergency numbers really dial: Morocco's ambulance (15) and police (19).
   const sos = (n: string) => {
     haptic.alert();
@@ -194,6 +202,36 @@ export function Support() {
           <Icon name="chevR" size={18} color={colors.mint900} />
         </PressCard>
       )}
+      {tickets.length > 0 && (
+        <>
+          <SectionLabel style={{ marginTop: 8, marginStart: 4 }}>
+            {t('Your conversations')}
+          </SectionLabel>
+          <ListCard>
+            {tickets.map((tk, i) => {
+              const replies = tk.messages.filter((m) => m.from === 'ops').length;
+              const unread = replies - (seen[tk.id] ?? 0);
+              const last = tk.messages.at(-1);
+              return (
+                <ListRow
+                  key={tk.id}
+                  icon={tk.resolved ? 'check' : 'msg'}
+                  label={t(tk.subject)}
+                  sub={
+                    last
+                      ? `${last.from === 'ops' ? last.author : t('You')}: ${last.text}`
+                      : undefined
+                  }
+                  value={unread > 0 ? t(`${unread} new`) : tk.resolved ? t('Resolved') : undefined}
+                  valueColor={unread > 0 ? colors.accent700 : colors.mint700}
+                  last={i === tickets.length - 1}
+                  onPress={() => router.push({ pathname: '/ticket/[id]', params: { id: tk.id } })}
+                />
+              );
+            })}
+          </ListCard>
+        </>
+      )}
       <SectionLabel style={{ marginTop: 8, marginStart: 4 }}>
         {t('What do you need help with?')}
       </SectionLabel>
@@ -205,7 +243,7 @@ export function Support() {
             label={t(label)}
             minHeight={56}
             last={i === SUPPORT_CATS.length - 1}
-            onPress={() => showToast(`${label} · opening chat`)}
+            onPress={() => openThread(label)}
           />
         ))}
       </ListCard>
@@ -227,7 +265,7 @@ export function Support() {
         height={58}
         fontSize={18}
         style={{ marginTop: 6 }}
-        onPress={() => showToast('Connecting you to a support agent…')}
+        onPress={() => openThread('Something else')}
       />
       <Txt size={13} color={colors.neutral700} style={{ textAlign: 'center' }}>
         {t('Average reply: 2 min · Français, العربية, English')}

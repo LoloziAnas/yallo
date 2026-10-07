@@ -12,6 +12,19 @@ const PHR: [string, string, string][] = [
   ['+ {0} DH tip', '+ {0} DH de pourboire', '+ {0} درهم بقشيش'],
   ['Minimum fare', 'Tarif minimum', 'الحد الأدنى للأجرة'],
   ['Pharmacy', 'Pharmacie', 'صيدلية'],
+  // Support conversations.
+  ['Your conversations', 'Vos conversations', 'محادثاتك'],
+  ['Resolved', 'Résolu', 'تم الحل'],
+  ['{0} new', '{0} nouveau(x)', '{0} جديد'],
+  ['You', 'Vous', 'أنت'],
+  ['Yallo support', 'Support Yallo', 'دعم يالو'],
+  ['Write a message', 'Écrire un message', 'اكتب رسالة'],
+  ['Send', 'Envoyer', 'إرسال'],
+  [
+    'Tell us what happened. Average reply: 2 min.',
+    'Dites-nous ce qui se passe. Réponse moyenne : 2 min.',
+    'أخبرنا بما حدث. متوسط الرد: 2 د.',
+  ],
   ['Scheduled for {0}', 'Prévue pour {0}', 'مجدولة لـ {0}'],
   ['Groceries', 'Courses', 'بقالة'],
   // Added for the live API: arriving before the food is ready.

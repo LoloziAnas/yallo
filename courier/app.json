@@ -35,6 +35,22 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Yallo uses your location to send you nearby deliveries and guide you to the store and the customer.",
+          "locationAlwaysAndWhenInUsePermission": "Yallo keeps sharing your location during a delivery, even with the screen off, so the customer and the Yallo team can follow the order.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#cf4520"
+        }
       ]
     ],
     "experiments": {

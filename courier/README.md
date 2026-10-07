@@ -24,7 +24,8 @@ Karim El Amrani**, and the back office sees every step live:
   seeded #48213 does on sign-in). Dropping it hands it back (`unassignCourier`).
 - Going online / offline → `setCourierAvailability`. Picked up → `delivering`; confirmed → `delivered`.
 - The map's progress and arrival follow c1's position as the server moves it.
-- "Report a problem" options open an urgent courier ticket in ops' Support queue. "Restaurant closed"
+- "Report a problem" options open an urgent courier ticket in ops' Support queue. Help & support
+  lists the courier's conversations; each opens a chat thread with ops, replies arrive live. "Restaurant closed"
   or dropping the job returns it to the queue; a failed delivery after pickup cancels it with a reason.
 - Ops cancelling or taking back the job mid-delivery shows on the phone, with any trip compensation.
 
@@ -33,6 +34,36 @@ your computer). Override with `EXPO_PUBLIC_API_URL=http://<ip>:5190`, or `EXPO_P
 to force the offline demo. When the API isn't reachable the app runs the offline demo instead: going
 online brings a made-up request after a few seconds. Plain-HTTP API access is fine in Expo Go and
 development builds; a release build would need HTTPS (or cleartext allowed for the dev host).
+
+## Builds and configuration
+
+- `eas.json` has `development` (dev client), `preview` (internal APK / ad-hoc) and `production`
+  profiles. Each pulls the matching EAS environment, where `EXPO_PUBLIC_API_URL` is set
+  (`eas env:create --environment production --name EXPO_PUBLIC_API_URL --value https://…`).
+- Release builds never show demo data: without an API they stay on "Reconnecting…". The on-device
+  demo runs only in development, or in a build with `EXPO_PUBLIC_DEMO=1`.
+- `app.config.ts` allows plain-HTTP traffic only when the API URL isn't `https://` (dev and
+  LAN-preview builds against the mock API); production on HTTPS keeps the platform defaults.
+- Identifiers: `ma.yallo.courier` on iOS and Android.
+
+## Device features
+
+- **GPS**: going online asks for location ("Location is off" screen and Settings if refused). While
+  online the app tracks in the foreground; during a delivery it keeps tracking in the background
+  (foreground-service notification on Android, location indicator on iOS). Background tracking
+  needs a development or store build — Expo Go and the web preview are foreground-only, which
+  Profile → Demo controls shows. Fixes are sent to the API once its location endpoint exists; weak
+  accuracy (> 100 m) shows the weak-GPS banner.
+- **Offer alerts**: a new offer or a support reply while the app is in the background raises a
+  local notification with sound (Android "Delivery offers" channel, max importance). Push-token
+  registration (`getPushToken`) returns null until EAS push credentials exist.
+
+## Tests
+
+```sh
+npm test               # unit tests: live-sync state machine, store, order view, i18n, links
+npx tsc --noEmit && npx expo lint
+```
 
 ## Layout
 
@@ -43,7 +74,9 @@ development builds; a release build would need HTTPS (or cleartext allowed for t
 - `src/components/overlays.tsx` — layers that timers can raise over any screen: the incoming request,
   edge-case screens (restaurant closed, customer unavailable, location off…), toast, offline banner,
   brand splash.
-- `src/api/` — `client.ts` (API address, courier id) and `sync.ts` (maps the live feed onto the store).
+- `src/api/` — `client.ts` (API address, courier id, demo gating) and `sync.ts` (maps the live feed
+  onto the store: offers, the job, position, tickets).
+- `src/device/` — `tracking.ts` (GPS, background task) and `notifications.ts` (offer alerts, push token).
 - `src/store/courier-store.ts` — zustand store: courier state, the 100 ms tick (dispatch search,
   request countdown, navigation progress, wait timers), and `orderStatus()` / `availability()` which
   map the UI phase to the `@yallo/shared` lifecycle values.

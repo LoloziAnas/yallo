@@ -7,12 +7,20 @@ import { Platform } from 'react-native';
 export const COURIER_ID = 'c1';
 
 /**
- * `EXPO_PUBLIC_API_URL` wins (set it to `off` to force the offline demo). Otherwise the API is
- * assumed to run on the same machine as the Expo dev server, which is how a phone reaches it.
+ * The on-device demo (invented requests, nothing sent anywhere) only runs in development, or in a
+ * build made with `EXPO_PUBLIC_DEMO=1`. Release builds always work against the API.
+ */
+export const DEMO_ALLOWED = __DEV__ || process.env.EXPO_PUBLIC_DEMO === '1';
+
+/**
+ * `EXPO_PUBLIC_API_URL` wins: EAS sets it per build environment (development / preview /
+ * production), and `off` forces the offline demo. In development without it, the API is assumed to
+ * run on the same machine as the Expo dev server, which is how a phone reaches it.
  */
 function resolveApiUrl(): string | null {
   const env = process.env.EXPO_PUBLIC_API_URL;
   if (env !== undefined) return env === '' || env === 'off' ? null : env.replace(/\/$/, '');
+  if (!__DEV__) return null;
   if (Platform.OS === 'web') {
     return typeof location === 'undefined'
       ? null

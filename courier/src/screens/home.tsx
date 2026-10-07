@@ -18,6 +18,7 @@ import { Circle, Dot, PressCard, Progress, StatusTag, card, well } from '@/compo
 import { CHALLENGE_GOAL, fmt } from '@/data/demo';
 import { inDelivery, totals, useCourier, useT, useOrder } from '@/store/courier-store';
 import { colors, radius, shadow } from '@/theme';
+import { goOnlineWithLocation } from '@/device/tracking';
 import { activeTag } from './shared';
 
 function ActiveOrderCard() {
@@ -159,7 +160,7 @@ export function Home() {
               icon="power"
               iconSize={22}
               label={t('Go online')}
-              onPress={() => s.goOnline()}
+              onPress={goOnlineWithLocation}
               height={68}
               fontSize={21}
             />

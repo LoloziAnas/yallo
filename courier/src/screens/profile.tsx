@@ -213,6 +213,13 @@ const SIMULATIONS: [Simulate, string][] = [
   ['no-demand', 'No demand'],
 ];
 
+const TRACKING_LABEL = {
+  off: 'off (offline or no permission)',
+  foreground: 'on while the app is open',
+  background: 'on, including in the background',
+  'foreground-only': 'on while the app is open (background needs a development build)',
+} as const;
+
 /** Development builds only: the design's "Tweaks" for demoing edge cases. */
 function DemoControls() {
   const simulate = useCourier((s) => s.simulate);
@@ -221,6 +228,8 @@ function DemoControls() {
   const set = useCourier((s) => s.set);
   const source = useCourier((s) => s.source);
   const connected = useCourier((s) => s.connected);
+  const tracking = useCourier((s) => s.tracking);
+  const gps = useCourier((s) => s.gps);
   const step = (d: number) =>
     set({ requestSeconds: Math.max(5, Math.min(30, requestSeconds + d)) });
   return (
@@ -232,6 +241,9 @@ function DemoControls() {
           : API_URL
             ? `Offline demo · waiting for ${API_URL}`
             : 'Offline demo (no API configured)'}
+      </Txt>
+      <Txt size={13} color={colors.neutral700}>
+        {`GPS · ${TRACKING_LABEL[tracking]}${gps?.accuracy ? ` · ±${Math.round(gps.accuracy)} m` : ''}`}
       </Txt>
       <Txt size={13} color={colors.neutral700}>
         Simulate an edge case

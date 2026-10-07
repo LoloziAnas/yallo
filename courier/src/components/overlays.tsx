@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
 
 import { Btn, Spacer } from '@/components/button';
+import { requestForegroundLocation } from '@/device/tracking';
 import { Icon, type IconName } from '@/components/icon';
 import { useBottomPad, useDirection } from '@/components/screen';
 import { Txt } from '@/components/txt';
@@ -269,7 +270,6 @@ export function EdgeOverlay({ kind }: { kind: EdgeKind }) {
   const bottom = useBottomPad();
   const direction = useDirection();
 
-  const goOnline = useCourier((s) => s.goOnline);
   const go = (edge: EdgeKind | null) => () => set({ edge, edgeT: 0 });
   // The copy below is the design's, written for its order (#1284, Café Marrakech, Youssef, 35 DH)
   // so it matches the translation table; swap in the real job after translating.
@@ -382,7 +382,11 @@ export function EdgeOverlay({ kind }: { kind: EdgeKind }) {
       primary: 'Allow location access',
       onPrimary: () => {
         set({ edge: null });
-        goOnline(true);
+        // Re-asks for permission (or opens Settings if it was denied for good).
+        requestForegroundLocation().then((ok) => {
+          if (ok) useCourier.getState().goOnline(true);
+          else set({ edge: 'location', edgeT: 0 });
+        });
       },
       secondary: 'Not now',
       onSecondary: go(null),

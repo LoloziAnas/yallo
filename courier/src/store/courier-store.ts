@@ -1,7 +1,7 @@
-import type { OrderStatus as SharedOrderStatus } from '@yallo/shared';
+import type { OrderStatus as SharedOrderStatus, Ticket } from '@yallo/shared';
 import { create } from 'zustand';
 
-import { COURIER_ID, api, errorText } from '@/api/client';
+import { COURIER_ID, DEMO_ALLOWED, api, errorText } from '@/api/client';
 import { CHALLENGE_GOAL, HIST0, PAYOUTS0, fmt, type HistoryEntry, type Payout } from '@/data/demo';
 import { makeT, type Lang } from '@/data/i18n';
 import { DEMO_ORDER, type OrderView } from '@/data/order-view';
@@ -50,6 +50,12 @@ export interface Data {
   dropped: string[];
   /** Distance to the current leg's target when the leg began, to turn position into progress. */
   leg: { key: string; start: number } | null;
+  /** This courier's support conversations (live), and how many ops replies were read in each. */
+  tickets: Ticket[];
+  repliesSeen: Record<string, number>;
+  /** Latest GPS fix from this phone, and where tracking stands. */
+  gps: { lat: number; lon: number; accuracy: number | null; at: number } | null;
+  tracking: 'off' | 'foreground' | 'background' | 'foreground-only';
   /** Trip compensation ops granted when cancelling the job (live). */
   opsComp: number;
   /** Demo clock from the server, "HH:MM". */
@@ -107,6 +113,8 @@ interface Actions {
   complete: () => void;
   /** Tell ops about a problem with the current job (live: opens a support ticket). */
   reportProblem: (subject: string, text: string) => void;
+  /** Writes to support: opens a conversation (no `ticketId`) or continues one. Resolves to its id. */
+  sendSupport: (ticketId: string | null, subject: string, text: string) => Promise<string | null>;
   withdraw: () => void;
   logout: () => void;
 }
@@ -121,7 +129,8 @@ const TOAST_MS = 2600;
 export const mkToast = (text: string) => ({ text, until: Date.now() + TOAST_MS });
 
 const INITIAL: Data = {
-  source: 'demo',
+  // Release builds never show demo data: they start live and wait for the API.
+  source: DEMO_ALLOWED ? 'demo' : 'live',
   connected: false,
   jobId: null,
   jobStatus: null,
@@ -129,6 +138,10 @@ const INITIAL: Data = {
   dropped: [],
   leg: null,
   opsComp: 0,
+  tickets: [],
+  repliesSeen: {},
+  gps: null,
+  tracking: 'off',
   clock: null,
   order: DEMO_ORDER,
 
@@ -336,6 +349,31 @@ export const useCourier = create<CourierState>()((set, get) => {
           text,
         }),
       );
+    },
+
+    sendSupport: async (ticketId, subject, text) => {
+      if (!live() || !api) {
+        toast('Connecting you to a support agent…');
+        return null;
+      }
+      try {
+        if (ticketId) {
+          await api.addTicketMessage(ticketId, 'requester', 'Karim El Amrani', text);
+          return ticketId;
+        }
+        const ticket = await api.openTicket({
+          source: 'courier',
+          requesterName: 'Karim El Amrani',
+          requesterId: COURIER_ID,
+          subject,
+          orderId: get().jobId,
+          text,
+        });
+        return ticket.id;
+      } catch (e) {
+        toast(errorText(e));
+        return null;
+      }
     },
 
     withdraw: () =>

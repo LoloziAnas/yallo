@@ -3,7 +3,9 @@ import { ACTIVE_STATUSES, clockAt, OFFER_SEC, type LiveState, type MapPoint } fr
 import { useEffect } from 'react';
 
 import { COURIER_ID, api } from '@/api/client';
+import { makeT } from '@/data/i18n';
 import { fromApi } from '@/data/order-view';
+import { notifyCourier } from '@/device/notifications';
 import {
   arrive,
   inDelivery,
@@ -94,6 +96,18 @@ export function applyLive(st: LiveState) {
     }
   }
 
+  // Support conversations: a new reply from ops is announced once.
+  const tickets = st.tickets.filter((tk) => tk.requesterId === COURIER_ID);
+  p.tickets = tickets;
+  const opsReplies = (tk: (typeof tickets)[number]) =>
+    tk.messages.filter((m) => m.from === 'ops').length;
+  const known = new Map(s.tickets.map((tk) => [tk.id, opsReplies(tk)]));
+  const replied = tickets.find((tk) => known.has(tk.id) && opsReplies(tk) > known.get(tk.id)!);
+  if (replied && s.tickets.length) {
+    p.toast = mkToast('Support replied');
+    notifyCourier(makeT(s.lang)('Support replied'), replied.messages.at(-1)!.text);
+  }
+
   if (offer && !job) {
     // An offer waits for Accept / Decline; the server's clock decides when it expires.
     const merchant = st.merchants.find((m) => m.id === offer.merchantId);
@@ -106,7 +120,11 @@ export function applyLive(st: LiveState) {
         count: Math.max(0, offer.offer.expiresAt - st.t),
         countTotal: OFFER_SEC,
       });
-      if (!showing) Object.assign(p, { phase: 'request', online: true });
+      if (!showing) {
+        Object.assign(p, { phase: 'request', online: true });
+        const t = makeT(s.lang);
+        notifyCourier(t('New delivery'), `${merchant.name} · ${p.order!.earn} DH`);
+      }
     }
   } else if (s.phase === 'request' && s.offerId && !s.dropped.includes(s.offerId) && !job) {
     // The offer ended without an answer from here: expired, or ops withdrew it.

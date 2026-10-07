@@ -23,6 +23,7 @@ import {
 } from '@/components/ui';
 import { CHALLENGE_GOAL, DEMO_PIN, ROUTES, along, fmt } from '@/data/demo';
 import { mapsUrl, openUrl, smsUrl, telUrl } from '@/data/contact';
+import { isWeakGps } from '@/device/tracking';
 import { etaMin } from '@/data/order-view';
 import { totals, useCourier, useT, useOrder } from '@/store/courier-store';
 import { colors, radius, shadow } from '@/theme';
@@ -67,7 +68,7 @@ function MapView() {
   const phase = useCourier((s) => s.phase);
   const nav = useCourier((s) => s.nav);
   const prog = useCourier((s) => s.prog);
-  const weakGps = useCourier((s) => s.simulate === 'poor-gps');
+  const weakGps = useCourier(isWeakGps);
   const set = useCourier((s) => s.set);
   const showToast = useCourier((s) => s.showToast);
   const { width: W, height: H } = useWindowDimensions();
