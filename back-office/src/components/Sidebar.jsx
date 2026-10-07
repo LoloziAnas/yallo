@@ -15,22 +15,13 @@ export default function Sidebar({ v }) {
         </button>
       ))}
       <div style={{ flex: 1 }} />
-      <div style={{ padding: 12, borderRadius: 14, background: 'rgba(255,255,255,.06)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--color-neutral-400)' }}>City</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {v.cities.map(c => (
-            <button key={c.label} onClick={c.onClick} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 32, padding: '0 10px', border: 0, borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600, background: c.bg, color: c.fg }}>
-              <span>{c.label}</span><span style={{ fontSize: 12, opacity: .7 }}>{c.n}</span>
-            </button>
-          ))}
-        </div>
-      </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 8px 0' }}>
-        <span className="avatar" style={{ width: 34, height: 34, background: 'var(--color-accent-2-500)', color: '#fff', fontSize: 13 }}>LA</span>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>Leila Amrani</div>
-          <div style={{ fontSize: 12, color: 'var(--color-neutral-400)' }}>Ops lead · Shift 14–22h</div>
+        <span className="avatar" style={{ width: 34, height: 34, background: 'var(--color-accent-2-500)', color: '#fff', fontSize: 13 }}>{v.user.ini}</span>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div className="ellip" style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>{v.user.name}</div>
+          <div style={{ fontSize: 12, color: 'var(--color-neutral-400)' }}>{v.user.title}</div>
         </div>
+        <button onClick={v.signOut} title="Sign out" aria-label="Sign out" style={{ border: 0, background: 'transparent', color: 'var(--color-neutral-400)', cursor: 'pointer', fontSize: 12, fontWeight: 600, padding: 4 }}>Sign out</button>
       </div>
     </aside>
   );

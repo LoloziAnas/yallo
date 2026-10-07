@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { dirname } from 'node:path';
 // In-memory state for the mock API: the shared demo seed plus the rules every app's actions go through.
 import {
-  ACTIVE_STATUSES, APPLICATIONS, PAYOUTS, COURIERS, courierEarnings, normalizePhone as normPhone, requiredDocs, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, MERCHANTS, clockAt, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
+  ACTIVE_STATUSES, APPLICATIONS, OPS_STAFF, DEV_TOKENS, PAYOUTS, COURIERS, courierEarnings, normalizePhone as normPhone, requiredDocs, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, MERCHANTS, clockAt, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
   type ApiCourier, type ApiOrder, type LiveState, type OpenTicketBody, type OrderStatus, type PlaceOrderBody, type Ticket, type TicketPriority,
   type TicketSource, type ZoneName, type ApplyBody, type ApplicationStatus, type CourierApplication, type DocKey, type Vehicle, type AuthRole, type AuthSession, type AuthUser, DEV_OTP_CODE, normalizePhone, type OrderItem, type OrderLineInput, type Quote, PricingError, quoteOrder, storeAvailability,
 } from '@yallo/shared';
@@ -138,12 +138,15 @@ export type StoreOptions = {
   file?: string;
   /** Debounce for saving after a change, ms. */
   saveDelayMs?: number;
+  /** Accept the fixed DEV_TOKENS (on by default; turn off in production). */
+  devTokens?: boolean;
 };
 
 export class Store {
   private s: LiveState;
   private readonly file?: string;
   private readonly saveDelayMs: number;
+  private readonly devTokens: boolean;
   private saveTimer?: ReturnType<typeof setTimeout>;
   /** Ids of orders placed through the API, which the stand-in merchant advances. */
   private auto = new Set<string>();
@@ -157,6 +160,7 @@ export class Store {
   constructor(opts: StoreOptions = {}) {
     this.file = opts.file;
     this.saveDelayMs = opts.saveDelayMs ?? 1000;
+    this.devTokens = opts.devTokens ?? true;
     this.s = this.load() ?? seed();
     if (this.file) this.flush();
   }
@@ -289,7 +293,7 @@ export class Store {
     this.changed();
   }
 
-  placeOrder(body: PlaceOrderBody): ApiOrder {
+  placeOrder(body: PlaceOrderBody, by?: AuthUser): ApiOrder {
     const m = this.merchant(String(body?.merchantId));
     const availability = storeAvailability(m, this.s.t);
     if (!availability.accepting) throw new ActionError(availability.reason!, 409);
@@ -311,6 +315,7 @@ export class Store {
       id: '#' + nextNum,
       merchantId: m.id,
       customerName: body.customerName.trim(),
+      ...(by?.role === 'customer' ? { customerId: by.id } : {}),
       zone: body.zone,
       dropoff: { x: Math.min(97, Math.max(3, centre.x + Math.cos(angle) * r)), y: Math.min(97, Math.max(3, centre.y + Math.sin(angle) * r)) },
       status: 'pending',
@@ -536,7 +541,10 @@ export class Store {
     this.changed();
   }
 
-  openTicket(body: OpenTicketBody): Ticket {
+  openTicket(body: OpenTicketBody, by?: AuthUser): Ticket {
+    // A signed-in customer or courier always opens tickets as themself.
+    if (by?.role === 'customer') body = { ...body, source: 'customer', requesterId: by.id, requesterName: by.name || body?.requesterName };
+    if (by?.role === 'courier') body = { ...body, source: 'courier', requesterId: by.courierId, requesterName: by.name ?? body?.requesterName };
     if (!SOURCES.includes(body?.source)) throw new ActionError("source must be 'customer', 'courier' or 'merchant'");
     const requesterName = cleanText(body.requesterName, 'requesterName');
     const subject = cleanText(body.subject, 'subject');
@@ -600,7 +608,8 @@ export class Store {
   requestOtp(rawPhone: string, role: AuthRole) {
     const phone = normalizePhone(rawPhone);
     if (!phone) throw new ActionError('Enter a valid phone number');
-    if (role !== 'customer' && role !== 'courier') throw new ActionError("role must be 'customer' or 'courier'");
+    if (role !== 'customer' && role !== 'courier' && role !== 'ops') throw new ActionError("role must be 'customer', 'courier' or 'ops'");
+    if (role === 'ops' && !this.staffByPhone(phone)) throw new ActionError('This number is not on the ops staff list', 403);
     if (role === 'courier') {
       const c = this.courierByPhone(phone);
       if (!c) throw new ActionError('No courier account for this number', 404);
@@ -627,7 +636,12 @@ export class Store {
     }
     this.otps.delete(phone);
     let user: AuthUser;
-    if (otp.role === 'courier') {
+    if (otp.role === 'ops') {
+      const o = this.staffByPhone(phone);
+      if (!o) throw new ActionError('This number is not on the ops staff list', 403);
+      user = this.auth.users.find(u => u.role === 'ops' && u.id === o.id)
+        ?? this.addUser({ id: o.id, role: 'ops', phone, name: o.name, title: o.title });
+    } else if (otp.role === 'courier') {
       const c = this.courierByPhone(phone);
       if (!c) throw new ActionError('No courier account for this number', 404);
       if (c.suspended) throw new ActionError('This courier account is suspended. Contact Yallo support', 403);
@@ -650,9 +664,33 @@ export class Store {
     return u;
   }
 
-  /** The user a token belongs to, or undefined. */
+  private staffByPhone(phone: string) {
+    return OPS_STAFF.find(o => normPhone(o.phone) === phone);
+  }
+
+  /** The user a token belongs to, or undefined. Suspended couriers lose access at once. */
   userForToken(token: string | undefined): AuthUser | undefined {
     if (!token) return undefined;
+    if (this.devTokens) {
+      const dev = this.devUser(token);
+      if (dev) return dev;
+    }
+    const user = this.sessionUser(token);
+    if (user?.role === 'courier' && this.s.couriers.find(c => c.id === user.courierId)?.suspended) return undefined;
+    return user;
+  }
+
+  private devUser(token: string): AuthUser | undefined {
+    if (token === DEV_TOKENS.ops) {
+      const o = OPS_STAFF[0];
+      return { id: o.id, role: 'ops', phone: normPhone(o.phone)!, name: o.name, title: o.title };
+    }
+    if (token === DEV_TOKENS.customer) return { id: 'u-dev', role: 'customer', phone: '+212600000000', name: 'Test customer' };
+    const c = token.startsWith('dev-courier-') && this.s.couriers.find(c => DEV_TOKENS.courier(c.id) === token);
+    return c ? { id: c.id, role: 'courier', phone: normPhone(c.phone)!, name: c.name, courierId: c.id } : undefined;
+  }
+
+  private sessionUser(token: string): AuthUser | undefined {
     const session = this.auth.sessions.find(x => x.token === token);
     return session && this.auth.users.find(u => u.id === session.userId);
   }
@@ -772,5 +810,30 @@ export class Store {
   courierEarnings(courierId: string) {
     this.courier(courierId);
     return courierEarnings(this.s.orders, courierId);
+  }
+
+  // ---------- per-viewer state ----------
+
+  /**
+   * What a viewer may see. Ops see everything; a courier sees their own record, jobs, tickets and payout line;
+   * a customer sees their own orders and tickets plus the couriers on them; anyone else sees the stores only.
+   */
+  viewFor(user: AuthUser | undefined): LiveState {
+    const s = this.s;
+    if (user?.role === 'ops') return s;
+    const base = { epoch: s.epoch, t: s.t, merchants: s.merchants, applications: [], payouts: { ...s.payouts, lines: [] as LiveState['payouts']['lines'] } };
+    if (user?.role === 'courier') {
+      const me = user.courierId!;
+      return { ...base, couriers: s.couriers.filter(c => c.id === me),
+        orders: s.orders.filter(o => o.courierId === me || o.offer?.courierId === me),
+        tickets: s.tickets.filter(tk => tk.requesterId === me),
+        payouts: { ...s.payouts, lines: s.payouts.lines.filter(l => l.kind === 'courier' && l.partyId === me) } };
+    }
+    if (user?.role === 'customer') {
+      const orders = s.orders.filter(o => o.customerId === user.id);
+      const riders = new Set(orders.filter(o => ACTIVE_STATUSES.includes(o.status)).map(o => o.courierId));
+      return { ...base, orders, couriers: s.couriers.filter(c => riders.has(c.id)), tickets: s.tickets.filter(tk => tk.requesterId === user.id) };
+    }
+    return { ...base, couriers: [], orders: [], tickets: [] };
   }
 }

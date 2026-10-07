@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { DISPATCH_RADIUS_KM, clockAt, createYalloClient, pickupKm, storeAvailability } from '@yallo/shared';
+import { DISPATCH_RADIUS_KM, clockAt, pickupKm, storeAvailability } from '@yallo/shared';
+import { api } from './api.js';
 import { IC } from './icons.jsx';
 import { ZONES, MERCH, MBY, COURIERS0, ORDERS0, STATUS, ACTIVE, APPS0, PAYOUTS0, DOCDEF, TICKETS0, fromLive } from './data.js';
 
-// Same origin: Vite proxies /api to the mock API (see vite.config.js).
-const api = createYalloClient('');
 
 const fmt = n => Math.round(n).toLocaleString('en-US');
 const mmss = s => { s = Math.max(0, Math.floor(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
@@ -21,15 +20,18 @@ const initialState = startPage => ({
 });
 
 // All back-office state plus the derived view model each screen renders from.
-export function useBackOffice({ startPage } = {}) {
+export function useBackOffice({ startPage, user, onSignOut } = {}) {
   const [s, setS] = useState(() => initialState(startPage));
   const setState = useCallback(u => setS(prev => ({ ...prev, ...(typeof u === 'function' ? u(prev) : u) })), []);
 
   useEffect(() => {
     // Orders, couriers, merchants and the demo clock come from the API's live feed.
     // A new epoch means the API reseeded: order ids may now name different orders, so drop selections.
-    const stop = api.subscribe(live => setState(st => ({ ...fromLive(live), epoch:live.epoch,
-      ...(st.epoch && st.epoch !== live.epoch ? { drawer:null, modal:null, assignOpen:false } : {}) })), connected => setState({ connected }));
+    const stop = api.subscribe(live => setState(st => {
+      // A reseed also clears sessions, so check this one is still valid.
+      if (st.epoch && st.epoch !== live.epoch) api.me().catch(() => onSignOut?.());
+      return { ...fromLive(live), epoch:live.epoch, ...(st.epoch && st.epoch !== live.epoch ? { drawer:null, modal:null, assignOpen:false } : {}) };
+    }), connected => setState({ connected }));
     const onR = () => setState({ w:window.innerWidth });
     window.addEventListener('resize', onR);
     return () => { stop(); window.removeEventListener('resize', onR); };
@@ -43,7 +45,11 @@ export function useBackOffice({ startPage } = {}) {
   // Sends an action to the API, applies the state it returns, then confirms or shows why it was refused.
   const act = (request, done, patch) => request
     .then(live => { setState({ ...fromLive(live), ...patch }); if (done) toast(done); })
-    .catch(err => toast(err.message));
+    .catch(err => {
+      // The session ended (signed out elsewhere, or the API was reset): back to the sign-in screen.
+      if (/^Sign in first/.test(err.message)) onSignOut?.();
+      else toast(err.message);
+    });
   const el = o => o.el;
   const lateInfo = o => {
     const e = el(o);
@@ -82,7 +88,6 @@ export function useBackOffice({ startPage } = {}) {
   const NAV = [['overview','Overview','grid'],['live','Live operations','radar',needs.length,'var(--color-accent)'],['orders','Orders','receipt'],['couriers','Couriers','bike',pendingApps,'var(--color-neutral-600)'],['merchants','Merchants','store'],['support','Support','headset',openT.length,'var(--color-accent)'],['payouts','Payouts','wallet']];
   const nav = NAV.map(([k, label, icon, badge, badgeBg]) => ({ label, icon:IC[icon], onClick:go(k), badge, badgeBg, hasBadge:!!badge,
     bg:s.page === k ? 'rgba(255,255,255,.12)' : 'transparent', fg:s.page === k ? '#fff' : 'var(--color-neutral-300)' }));
-  const cities = [['Marrakech',142],['Casablanca',388],['Rabat',176]].map(([label, n]) => ({ label, n, onClick:() => { setState({ city:label }); if (label !== 'Marrakech') toast('Demo data shows Marrakech only'); }, bg:s.city === label ? 'rgba(255,255,255,.12)' : 'transparent', fg:s.city === label ? '#fff' : 'var(--color-neutral-400)' }));
 
   const TITLES = { overview:['Overview','Tuesday 6 October 2026 · Marrakech · all figures live'], live:['Live operations', active.length + ' active orders · ' + s.couriers.filter(c => c.st !== 'off').length + ' couriers online · ' + needs.length + ' need action'], orders:['Orders','Search, inspect and refund orders'], couriers:['Couriers','Fleet status, documents and new applications'], merchants:['Merchants','Store status, prep times and quality'], support:['Support', openT.length + ' open tickets · avg first reply 1m 48s'], payouts:['Payouts','Weekly settlement for couriers and merchants'] };
   const nowMin = 18 * 60 + 34 + Math.floor(s.t / 60), clock = String(Math.floor(nowMin / 60)).padStart(2, '0') + ':' + String(nowMin % 60).padStart(2, '0') + ':' + String(s.t % 60).padStart(2, '0');
@@ -251,7 +256,7 @@ export function useBackOffice({ startPage } = {}) {
   const md = MD[s.modal] ? { isRefund:false, isCancel:false, ...MD[s.modal], reasons, disabled:(s.modal === 'cancel' || s.modal === 'refund' || s.modal === 'reject') && !s.reason } : { reasons:[] };
 
   return {
-    ic:IC, p, nav, cities, liveOk:s.connected, liveText:!s.connected ? 'OFFLINE · reconnecting' : W < 1100 ? 'LIVE' : 'LIVE · ' + clock,
+    ic:IC, p, nav, user:{ name:user?.name ?? 'Ops', title:user?.title ?? 'Ops', ini:ini(user?.name ?? 'Ops') }, signOut:() => onSignOut?.(), liveOk:s.connected, liveText:!s.connected ? 'OFFLINE · reconnecting' : W < 1100 ? 'LIVE' : 'LIVE · ' + clock,
     liveCols:(() => { const d = !!(selId || (s.drawer && s.drawer.type === 'courier')); if (W < 1240 && d) return '0px minmax(0,1fr) 340px'; return (W < 1240 ? '280px' : '340px') + ' minmax(0,1fr) ' + (d ? '400px' : '0px'); })(),
     drawerW:W < 1240 ? '340px' : '400px', supWide:W >= 1280, supNarrow:W < 1280, supCols:W >= 1280 ? '300px minmax(0,1fr) 280px' : (W < 1100 ? '240px' : '280px') + ' minmax(0,1fr)', pageTitle:TITLES[s.page][0], pageSub:TITLES[s.page][1], clock, openTickets:openT.length, goSupport:go('support'), goMerchants:go('merchants'),
     gq:s.gq, onGq:e => setState({ gq:e.target.value }), onGqKey:e => { if (e.key === 'Enter') { const v = s.gq.trim(); const o = s.orders.find(o => o.id.replace('#', '') === v.replace('#', '')); if (o) setState({ page:'orders', oq:'', oFilter:'all', drawer:{ type:'order', id:o.id } }); else setState({ page:'orders', oq:v, oFilter:'all' }); } },

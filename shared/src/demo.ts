@@ -175,3 +175,9 @@ export const PAYOUTS: PayoutRun = {
     ...PAY_MERCHANTS.map(([id, n, sales, com, bank]) => payoutLine('merchant', id, merchantById[id].name, n, sales, com, bank)),
   ],
 };
+
+/** Ops staff allowed to sign in to the back office. */
+export const OPS_STAFF: { id: string; name: string; phone: string; title: string }[] = [
+  { id: 'o1', name: 'Leila Amrani', phone: '+212 661 00 10 01', title: 'Ops lead' },
+  { id: 'o2', name: 'Youssef Tahiri', phone: '+212 661 00 10 02', title: 'Ops agent' },
+];

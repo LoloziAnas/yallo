@@ -2,7 +2,7 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import { createYalloClient, type LiveState, type YalloClient } from '@yallo/shared';
-import { DEV_OTP_CODE, DISPATCH_RADIUS_KM, OFFER_SEC, courierPayFor, normalizePhone, pickupKm, tripKm } from '@yallo/shared';
+import { DEV_OTP_CODE, DEV_TOKENS, DISPATCH_RADIUS_KM, OFFER_SEC, courierPayFor, normalizePhone, pickupKm, tripKm } from '@yallo/shared';
 import { AUTO_ACCEPT_SEC, AUTO_READY_SEC, STAND_IN_ACCEPT_SEC, STATE_VERSION, Store } from '../src/store';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -480,7 +480,8 @@ describe('Sign-in (mock OTP)', () => {
 
   test('wrong codes, too many tries, resend cooldown and bad input are refused', () => {
     assert.equal(status(() => s.requestOtp('not a phone', 'customer')), 400);
-    assert.equal(status(() => s.requestOtp('0612345678', 'ops' as never)), 400);
+    assert.equal(status(() => s.requestOtp('0612345678', 'admin' as never)), 400);
+    assert.equal(status(() => s.requestOtp('0612345678', 'ops')), 403, 'not on the staff list');
     assert.equal(status(() => s.verifyOtp('0612345678', DEV_OTP_CODE)), 400, 'no code was requested');
     s.requestOtp('0612345678', 'customer');
     assert.equal(status(() => s.requestOtp('0612345678', 'customer')), 429, 'resend cooldown');
@@ -700,5 +701,105 @@ describe('HTTP and live feed', () => {
     stop();
     assert.ok(seen.length >= 2, 'got the initial snapshot and an update');
     assert.equal(seen.at(-1)!.orders[0].customerName, 'Rania');
+  });
+});
+
+describe('Authorization (enforce mode)', () => {
+  let api: ReturnType<typeof createApi>;
+  let base: string;
+  const as = (token?: string) => createYalloClient(base, { token });
+  const status = async (p: Promise<unknown>) => { try { await p; return 200; } catch (e) { return Number(/\((\d{3})\)/.exec(String(e))?.[1]) || String((e as Error).message); } };
+  const raw = async (method: string, path: string, token?: string, body?: unknown) => {
+    const res = await fetch(base + '/api' + path, { method, headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: body ? JSON.stringify(body) : undefined });
+    return { status: res.status, body: await res.json() };
+  };
+  const tajine = { merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz' as const, pay: 'cash' as const, items: [{ productId: 'p1-6', qty: 1 }] };
+
+  before(async () => {
+    api = createApi({ tickMs: 0, authMode: 'enforce' });
+    await new Promise<void>(r => api.http.listen(0, '127.0.0.1', r));
+    base = `http://127.0.0.1:${(api.http.address() as AddressInfo).port}`;
+  });
+  after(() => new Promise<void>(r => api.http.close(() => r())));
+  beforeEach(() => as(DEV_TOKENS.ops).reset());
+
+  test('anonymous viewers see the stores only and cannot order', async () => {
+    const s = await as().getState();
+    assert.deepEqual([s.merchants.length, s.orders.length, s.couriers.length, s.tickets.length, s.applications.length, s.payouts.lines.length], [10, 0, 0, 0, 0, 0]);
+    assert.equal((await raw('POST', '/orders', undefined, tajine)).status, 401);
+    assert.equal((await raw('POST', '/reset')).status, 401);
+  });
+
+  test('a customer order belongs to the customer, who sees only their own orders', async () => {
+    const me = as(DEV_TOKENS.customer);
+    const o = await me.placeOrder(tajine);
+    assert.equal(o.customerId, 'u-dev');
+    const s = await me.getState();
+    assert.deepEqual(s.orders.map(x => x.id), [o.id]);
+    assert.equal((await raw('POST', `/orders/${o.id.slice(1)}/cancel`, DEV_TOKENS.customer, { reason: 'x' })).status, 403);
+  });
+
+  test('couriers act only on their own jobs and record', async () => {
+    const ops = as(DEV_TOKENS.ops), c3 = as(DEV_TOKENS.courier('c3'));
+    assert.equal((await raw('POST', '/orders/48219/assign', DEV_TOKENS.courier('c3'), { courierId: 'c3' })).status, 403);
+    await ops.offerOrder('#48219', 'c3');
+    assert.equal((await raw('POST', '/orders/48219/offer/accept', DEV_TOKENS.courier('c2'), { courierId: 'c3' })).status, 403);
+    const after = await c3.acceptOffer('#48219', 'c3');
+    assert.deepEqual(after.orders.map(o => o.id), ['#48219'], 'a courier sees only their own jobs');
+    assert.deepEqual(after.couriers.map(c => c.id), ['c3']);
+    assert.equal((await raw('POST', '/couriers/c2/availability', DEV_TOKENS.courier('c3'), { status: 'off' })).status, 403);
+    assert.equal((await raw('POST', '/orders/48214/status', DEV_TOKENS.courier('c3'), { status: 'ready' })).status, 403, 'not their order');
+    assert.equal((await raw('GET', '/couriers/c2/earnings', DEV_TOKENS.courier('c3'))).status, 403);
+    assert.equal((await raw('GET', '/couriers/c3/earnings', DEV_TOKENS.courier('c3'))).status, 200);
+  });
+
+  test('tickets: the requester is the signed-in user; only they and ops write there', async () => {
+    const tk = await as(DEV_TOKENS.customer).openTicket({ source: 'courier', requesterName: 'Someone else', requesterId: 'c9', subject: 'Late', text: 'Where is my order?' });
+    assert.deepEqual([tk.source, tk.requesterId, tk.requesterName], ['customer', 'u-dev', 'Test customer']);
+    assert.equal((await raw('POST', `/tickets/${tk.id}/messages`, DEV_TOKENS.customer, { from: 'requester', author: 'Me', text: 'Still waiting' })).status, 200);
+    assert.equal((await raw('POST', `/tickets/${tk.id}/messages`, DEV_TOKENS.customer, { from: 'ops', author: 'Me', text: 'Fake reply' })).status, 403);
+    assert.equal((await raw('POST', `/tickets/${tk.id}/resolve`, DEV_TOKENS.customer)).status, 403);
+    assert.equal((await raw('POST', '/tickets/T-9011/messages', DEV_TOKENS.customer, { from: 'requester', author: 'Me', text: 'Hi' })).status, 403, "someone else's ticket");
+  });
+
+  test('each live-feed socket gets its own view', async () => {
+    const o = await as(DEV_TOKENS.customer).placeOrder(tajine);
+    const first = (token?: string) => new Promise<LiveState>(resolve => {
+      const stop = as(token).subscribe(s => { stop(); resolve(s); });
+    });
+    const [anon, cust, opsView] = await Promise.all([first(), first(DEV_TOKENS.customer), first(DEV_TOKENS.ops)]);
+    assert.deepEqual([anon.orders.length, cust.orders.map(x => x.id), opsView.orders.length], [0, [o.id], 17]);
+  });
+
+  test('a suspended courier is locked out at once; ops staff sign in by phone', async () => {
+    const ops = as(DEV_TOKENS.ops);
+    await ops.requestOtp('0661234578', 'courier');
+    const karim = as();
+    await karim.verifyOtp('0661234578', DEV_OTP_CODE);
+    assert.equal((await karim.me()).courierId, 'c1');
+    await ops.setCourierSuspended('c1', true);
+    await assert.rejects(karim.me(), /Sign in first/);
+    const leila = as();
+    await leila.requestOtp('+212 661 00 10 01', 'ops');
+    assert.deepEqual((await leila.verifyOtp('0661001001', DEV_OTP_CODE)).user, { id: 'o1', role: 'ops', phone: '+212661001001', name: 'Leila Amrani', title: 'Ops lead' });
+    assert.equal((await leila.getState()).orders.length, 16);
+  });
+});
+
+describe('Authorization (warn mode)', () => {
+  test('refused calls are logged but go through, and everyone sees the full state', async () => {
+    const api = createApi({ tickMs: 0 });
+    await new Promise<void>(r => api.http.listen(0, '127.0.0.1', r));
+    const anon = createYalloClient(`http://127.0.0.1:${(api.http.address() as AddressInfo).port}`);
+    const warn = console.warn; const logged: string[] = []; console.warn = (m: string) => logged.push(m);
+    try {
+      const s = await anon.assignCourier('#48219', 'c3');
+      assert.equal(s.orders.find(o => o.id === '#48219')!.courierId, 'c3');
+      assert.equal(s.orders.length, 16);
+      assert.match(logged[0], /\[auth\] would refuse POST \/api\/orders\/48219\/assign \(not signed in\): Only ops staff/);
+    } finally {
+      console.warn = warn;
+      await new Promise<void>(r => api.http.close(() => r()));
+    }
   });
 });

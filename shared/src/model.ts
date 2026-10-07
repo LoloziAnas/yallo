@@ -201,6 +201,8 @@ export type Order = {
   /** Delivery slot the customer picked, "HH:MM" on the demo clock. Absent means as soon as possible. */
   scheduledFor?: string;
   customerPhone?: string;
+  /** The signed-in customer who placed the order (absent for guest orders). */
+  customerId?: string;
   /** Local time the order was placed, "HH:MM". */
   placedAt: string;
   /**

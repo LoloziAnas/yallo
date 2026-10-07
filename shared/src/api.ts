@@ -93,8 +93,8 @@ export type OpenTicketBody = {
   text: string;
 };
 
-/** Who can sign in. Ops sign-in comes with authorization (phase 2). */
-export type AuthRole = 'customer' | 'courier';
+/** Who can sign in. Ops staff sign in from an allowlisted number (OPS_STAFF). */
+export type AuthRole = 'customer' | 'courier' | 'ops';
 
 export type AuthUser = {
   /** "u1", "u2", … for customers; the courier id ("c1") for couriers. */
@@ -105,7 +105,15 @@ export type AuthUser = {
   name?: string;
   /** For couriers, the courier this account drives as. */
   courierId?: string;
+  /** For ops staff, e.g. "Ops lead". */
+  title?: string;
 };
+
+/**
+ * Tokens the API accepts outside production, so tests and private APIs needn't sign in: "dev-ops" (Leila, ops),
+ * "dev-courier-<courierId>" (e.g. "dev-courier-c1") and "dev-customer" (a fixed test customer).
+ */
+export const DEV_TOKENS = { ops: 'dev-ops', courier: (courierId: string) => 'dev-courier-' + courierId, customer: 'dev-customer' } as const;
 
 export type AuthSession = { token: string; user: AuthUser };
 

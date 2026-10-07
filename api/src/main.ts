@@ -11,12 +11,18 @@ const host = process.env.HOST || '0.0.0.0';
 const file = process.env.STATE_FILE === 'off' ? undefined
   : process.env.STATE_FILE || fileURLToPath(new URL(`../data/state-${port}.json`, import.meta.url));
 
-const store = new Store({ file });
-const { http } = createApi({ store });
+// AUTH_MODE=enforce refuses unauthorised calls and filters the live state per viewer; warn (default) only logs.
+const authMode = process.env.AUTH_MODE === 'enforce' ? 'enforce' : 'warn';
+// DEV_TOKENS=off turns off the fixed test tokens (dev-ops, dev-courier-<id>, dev-customer).
+const devTokens = process.env.DEV_TOKENS !== 'off' && process.env.NODE_ENV !== 'production';
+
+const store = new Store({ file, devTokens });
+const { http } = createApi({ store, authMode });
 
 http.listen(port, host, () => {
   console.log(`Yallo mock API on http://localhost:${port}  (live feed: ws://localhost:${port}/api/live)`);
   console.log(file ? `State: ${file} (epoch ${store.state.epoch}, demo clock t=${store.state.t}s)` : 'State: in memory only');
+  console.log(`Auth: ${authMode}${devTokens ? ', dev tokens on' : ''}`);
 });
 
 // Save the latest state before exiting.

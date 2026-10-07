@@ -87,6 +87,14 @@ back office deploy with `deploy/prepare.sh` (builds the commit into `.deploy/<sh
     `/refund {amount, reason}`. `:n` is the order number without "#".
   - `/api/tickets` opens a ticket (body `OpenTicketBody`) and returns it. `/api/tickets/:id/messages {from: 'requester'|'ops', author, text}`
     adds a message (a requester message reopens a resolved ticket). Also `/resolve` and `/escalate`.
+  - Authorization: every route has a rule (ops; the courier the order/offer/record belongs to; a customer for
+    placing orders; ticket requester or ops; public for sign-in, courier sign-up and GET /state). `AUTH_MODE=warn`
+    (default) logs what it would refuse; `AUTH_MODE=enforce` refuses (401/403) and sends each viewer only their view
+    (ops: all; courier: own record, jobs, tickets; customer: own orders and tickets plus their courier; anonymous:
+    stores only). Outside production the API accepts the fixed tokens `dev-ops`, `dev-courier-<id>` and `dev-customer`
+    (`DEV_TOKENS` in shared; `DEV_TOKENS=off` disables them). Orders placed with a customer token carry `customerId`.
+  - Ops staff (`OPS_STAFF` in shared, e.g. Leila Amrani +212 661 00 10 01) sign in with the same OTP, role 'ops'. The
+    back office requires it.
   - Sign-in (mock phone OTP): `/api/auth/otp {phone, role: 'customer'|'courier'}` then `/api/auth/verify {phone, code, name?}`
     → `{ token, user }`. The code is always 123456 in dev (`DEV_OTP_CODE`, logged). Couriers sign in only with a known,
     non-suspended courier number; customers get an account on first sign-in. `GET /api/auth/me` and

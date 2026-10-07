@@ -1,3 +1,6 @@
+import { useEffect, useState } from 'react';
+import { api, saveToken } from './api.js';
+import SignIn from './components/SignIn.jsx';
 import { useBackOffice } from './useBackOffice.js';
 import Sidebar from './components/Sidebar.jsx';
 import Header from './components/Header.jsx';
@@ -12,7 +15,24 @@ import Support from './pages/Support.jsx';
 import Payouts from './pages/Payouts.jsx';
 
 export default function App({ startPage }) {
-  const v = useBackOffice({ startPage });
+  // undefined while checking a remembered token, null when signed out.
+  const [user, setUser] = useState(undefined);
+  useEffect(() => {
+    if (!api.token) { setUser(null); return; }
+    api.me().then(setUser, () => signOut());
+  }, []);
+  const signOut = () => {
+    api.signOut();
+    saveToken(null);
+    setUser(null);
+  };
+  if (user === undefined) return null;
+  if (!user) return <SignIn onSignedIn={setUser} />;
+  return <BackOffice startPage={startPage} user={user} onSignOut={signOut} />;
+}
+
+function BackOffice({ startPage, user, onSignOut }) {
+  const v = useBackOffice({ startPage, user, onSignOut });
   const { p } = v;
   return (
     <div className="bo">

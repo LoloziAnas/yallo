@@ -42,13 +42,17 @@ const CUSTOMER = { name: 'Salma El Amrani', first: 'Salma', zone: 'Guéliz' };
 
 // ---------- helpers ----------
 
+// Setup and checks talk to the API as ops (the fixed dev token), so they keep working when the API enforces auth.
+const OPS_TOKEN = 'dev-ops';
+const OPS_PHONE = '+212 661 00 10 01'; // Leila Amrani, on the ops staff list
+const authHeaders = { authorization: 'Bearer ' + OPS_TOKEN };
 const post = async (path, body) => {
-  const res = await fetch(API + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}) });
+  const res = await fetch(API + path, { method: 'POST', headers: { 'content-type': 'application/json', ...authHeaders }, body: JSON.stringify(body ?? {}) });
   const data = await res.json();
   if (!res.ok) throw new Error(`POST ${path} → ${res.status}: ${data.error}`);
   return data;
 };
-const getState = () => fetch(API + '/state').then(r => r.json());
+const getState = () => fetch(API + '/state', { headers: authHeaders }).then(r => r.json());
 const getOrder = async id => (await getState()).orders.find(o => o.id === id);
 
 /** Polls the API until `check(order)` is true. */
@@ -130,7 +134,7 @@ try {
     if (c.status !== 'idle') throw new Error(`Karim should be idle, is ${c.status}`);
   });
 
-  await step('Open the back office, the courier app and the customer app', async () => {
+  await step('Open the back office (ops signs in), the courier app and the customer app', async () => {
     const ops = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     pages.ops = await ops.newPage();
     const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
@@ -149,6 +153,12 @@ try {
       await pages.customer.goto(CUSTOMER_APP, { waitUntil: 'networkidle', timeout: 120_000 });
       await pages.customer.waitForTimeout(2000);
     }
+    // Ops sign-in: phone, then the one-time code (always 123456 in development).
+    await pages.ops.getByLabel('Phone number').fill(OPS_PHONE);
+    await pages.ops.getByRole('button', { name: 'Send code' }).click();
+    await pages.ops.getByLabel('6-digit code').fill('123456');
+    await pages.ops.getByRole('button', { name: 'Sign in' }).click();
+    await seen(pages.ops, 'Leila Amrani');
     await seen(pages.ops, /^LIVE/);
   });
 
