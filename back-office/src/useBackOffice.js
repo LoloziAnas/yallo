@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { DISPATCH_RADIUS_KM, clockAt, pickupKm, storeAvailability } from '@yallo/shared';
 import { api } from './api.js';
 import { IC } from './icons.jsx';
-import { ZONES, MERCH, MBY, COURIERS0, ORDERS0, STATUS, ACTIVE, APPS0, PAYOUTS0, DOCDEF, TICKETS0, fromLive } from './data.js';
+import { ZONES, STATUS, ACTIVE, DOCDEF, fromLive } from './data.js';
 
 
 const fmt = n => Math.round(n).toLocaleString('en-US');
@@ -12,9 +12,9 @@ const pill = on => ({ bg:on ? 'var(--color-card)' : 'transparent', fg:on ? 'var(
 const chip = on => ({ bg:on ? 'var(--color-text)' : 'var(--color-card)', fg:on ? '#fff' : 'var(--color-text)', bd:on ? 'var(--color-text)' : 'var(--color-divider)' });
 
 const initialState = startPage => ({
-  page:startPage ?? 'live', city:'Marrakech', t:0, orders:ORDERS0, couriers:COURIERS0, merchants:MERCH.map(m => ({ ...m })),
+  page:startPage ?? 'live', t:0, orders:[], couriers:[], merchants:[], loaded:false, slow:false,
   drawer:startPage && startPage !== 'live' ? null : { type:'order', id:'#48214' }, assignOpen:true, qTab:'action', layers:{ couriers:true, merchants:true },
-  oFilter:'all', oq:'', gq:'', cTab:'fleet', apps:APPS0, payouts:PAYOUTS0, appSel:null, tickets:TICKETS0, tSel:'T-9011', tFilter:'open', draft:'',
+  oFilter:'all', oq:'', gq:'', cTab:'fleet', apps:[], payouts:null, appSel:null, tickets:[], tSel:null, tFilter:'open', draft:'',
   payTab:'couriers', paySel:{}, modal:null, reason:null, refundMode:'full', refundAmt:'', comp:true, toast:null, suspended:{}, connected:false,
   w:typeof window === 'undefined' ? 1440 : window.innerWidth
 });
@@ -30,11 +30,13 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
     const stop = api.subscribe(live => setState(st => {
       // A reseed also clears sessions, so check this one is still valid.
       if (st.epoch && st.epoch !== live.epoch) api.me().catch(() => onSignOut?.());
-      return { ...fromLive(live), epoch:live.epoch, ...(st.epoch && st.epoch !== live.epoch ? { drawer:null, modal:null, assignOpen:false } : {}) };
+      return { ...fromLive(live), epoch:live.epoch, loaded:true, ...(st.epoch && st.epoch !== live.epoch ? { drawer:null, modal:null, assignOpen:false } : {}) };
     }), connected => setState({ connected }));
+    // Nothing is shown until the first live snapshot; after a few seconds without one, say so.
+    const slow = setTimeout(() => setState(st => st.loaded ? {} : { slow:true }), 5000);
     const onR = () => setState({ w:window.innerWidth });
     window.addEventListener('resize', onR);
-    return () => { stop(); window.removeEventListener('resize', onR); };
+    return () => { stop(); clearTimeout(slow); window.removeEventListener('resize', onR); };
   }, [setState]);
 
   const toast = text => {
@@ -43,7 +45,10 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
     setTimeout(() => setState(st => st.toast && st.toast.until === until ? { toast:null } : {}), 2600);
   };
   // Sends an action to the API, applies the state it returns, then confirms or shows why it was refused.
-  const act = (request, done, patch) => request
+  // `request` is a function, so nothing is sent while offline.
+  const act = (request, done, patch) => !s.connected
+    ? toast("Offline: can't reach the Yallo API. Try again when LIVE is back.")
+    : request()
     .then(live => { setState({ ...fromLive(live), ...patch }); if (done) toast(done); })
     .catch(err => {
       // The session ended (signed out elsewhere, or the API was reset): back to the sign-in screen.
@@ -60,10 +65,14 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
   // Ops offers the job; the courier (or a stand-in for couriers without the app) accepts or declines.
   const offer = (oid, cid) => {
     const c = s.couriers.find(c => c.id === cid);
-    act(api.offerOrder(oid, cid), oid + ' offered to ' + c.name, { assignOpen:false });
+    act(() => api.offerOrder(oid, cid), oid + ' offered to ' + c.name, { assignOpen:false });
   };
 
+  if (!s.loaded) return { loaded:false, slow:s.slow, ic:IC };
+
   const set = o => () => setState(o), W = s.w || 1440;
+  // Live merchants by name (orders refer to their store by name in the back office's shape).
+  const MBY = Object.fromEntries(s.merchants.map(m => [m.name, m]));
   const CBY = {}; s.couriers.forEach(c => CBY[c.id] = c);
   // Paused by ops, or outside its opening hours on the demo clock.
   const takingOrders = m => storeAvailability(m, s.t).accepting;
@@ -134,7 +143,7 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
   const CC = { idle:'var(--color-accent-2-500)', busy:'var(--color-accent)', off:'var(--color-neutral-400)' };
   const mapCouriers = s.couriers.map(c => { const sel = c.id === selCourierId; return { name:c.name, x:c.x.toFixed(2) + '%', y:c.y.toFixed(2) + '%', onClick:openCourier(c.id), size:sel ? '20px' : '14px', bg:CC[c.st], sh:sel ? '0 0 0 3px #fff,0 0 0 6px ' + CC[c.st] : '0 0 0 2.5px #fff,var(--shadow-sm)' }; });
   const hasRoute = !!(selOrder && p.live && ACTIVE.includes(selOrder.st));
-  const rm = selOrder ? MBY[selOrder.m] : MERCH[0], rc = selOrder && CBY[selOrder.courier];
+  const rm = selOrder ? MBY[selOrder.m] : s.merchants[0], rc = selOrder && CBY[selOrder.courier];
   const route = selOrder ? { mx:rm.x, my:rm.y, ux:selOrder.ux, uy:selOrder.uy, uxp:selOrder.ux + '%', uyp:selOrder.uy + '%', cx:rc ? rc.x : rm.x, cy:rc ? rc.y : rm.y, cust:selOrder.c.split(' ')[0] } : {};
   const layerBtns = [['couriers','Couriers','bike'],['merchants','Merchants','store']].map(([k, label, icon]) => ({ label, icon:IC[icon], onClick:() => setState({ layers:{ ...s.layers, [k]:!s.layers[k] } }), bg:s.layers[k] ? 'var(--color-text)' : 'transparent', fg:s.layers[k] ? '#fff' : 'var(--color-neutral-700)' }));
   const fleetLegend = [['idle','Available'],['busy','On delivery'],['off','Offline']].map(([k, label]) => ({ label, c:CC[k], n:s.couriers.filter(c => c.st === k).length }));
@@ -156,13 +165,13 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
   const appTag = a => { const vals = Object.values(a.docs); if (vals.includes('bad')) return ['Needs re-upload','var(--color-accent-100)','var(--color-accent-800)']; if (vals.every(v => v === 'ok')) return ['Ready to activate','var(--color-accent-2-100)','var(--color-accent-2-700)']; if (vals.some(v => v)) return ['In review','var(--color-saffron-100)','var(--color-neutral-800)']; return ['New','var(--color-neutral-200)','var(--color-neutral-800)']; };
   const appView = a => ({ ...a, veh:a.vehicle, plate:a.plate ?? '—', sub:ago(a.submittedAt), ini:ini(a.name) });
   const appList = pendingList.map(a => { const t = appTag(a); return { ...appView(a), tag:t[0], tagBg:t[1], tagFg:t[2], sh:appCur && a.id === appCur.id ? '0 0 0 2px var(--color-accent)' : 'var(--shadow-sm)', onClick:set({ appSel:a.id }) }; });
-  const setDoc = (k, v) => () => act(api.reviewDocument(appCur.id, k, v), null);
+  const setDoc = (k, v) => () => act(() => api.reviewDocument(appCur.id, k, v), null);
   const app = appCur ? (() => { const t = appTag(appCur), keys = Object.keys(appCur.docs); return { ...appView(appCur), tag:t[0], tagBg:t[1], tagFg:t[2], docsTotal:keys.length, docsDone:keys.filter(k => appCur.docs[k]).length, cantApprove:!keys.every(k => appCur.docs[k] === 'ok'),
     docs:keys.map(k => { const v = appCur.docs[k], d = DOCDEF[k]; return { label:d[0], file:d[1], meta:v === 'bad' ? (appCur.docNotes?.[k] ?? 'Rejected · ask for a new upload') : d[2], state:v === 'ok' ? 'Approved' : v === 'bad' ? 'Rejected' : 'Pending', fg:v === 'ok' ? 'var(--color-accent-2-700)' : v === 'bad' ? 'var(--color-accent-700)' : 'var(--color-neutral-600)', bd:v === 'ok' ? 'var(--color-accent-2-300)' : v === 'bad' ? 'var(--color-accent-300)' : 'var(--color-divider)', approve:setDoc(k, 'ok'), reject:setDoc(k, 'bad') }; }) }; })() : { docs:[], cantApprove:true };
 
   // merchants
   const merchantRows = s.merchants.map(m => ({ ...m, prepFg:m.prep > 20 ? 'var(--color-accent-700)' : 'var(--color-text)', hoursLabel:m.hours.open + '–' + m.hours.close, stLabel:!m.open ? 'Paused' : takingOrders(m) ? 'Open' : 'Closed · opens ' + m.hours.open, stBg:takingOrders(m) ? 'var(--color-accent-2-100)' : 'var(--color-neutral-200)', stFg:takingOrders(m) ? 'var(--color-accent-2-700)' : 'var(--color-neutral-700)', trk:m.open ? 'var(--color-accent-2-500)' : 'var(--color-neutral-400)', knob:m.open ? '18px' : '2px',
-    toggle:() => act(api.setMerchantOpen(m.id, !m.open), m.name + (m.open ? ' paused' : ' reopened')) }));
+    toggle:() => act(() => api.setMerchantOpen(m.id, !m.open), m.name + (m.open ? ' paused' : ' reopened')) }));
 
   // support
   const TF = [['open','Open',openT.length],['urgent','Urgent',openT.filter(t => t.prio === 'Urgent' || t.prio === 'High').length],['resolved','Resolved',s.tickets.filter(t => t.resolved).length],['all','All',s.tickets.length]];
@@ -170,9 +179,9 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
   const tFilters = TF.map(([k, label, n]) => ({ label, n, onClick:set({ tFilter:k }), ...chip(s.tFilter === k) }));
   const PR = { Urgent:['var(--color-accent)','#fff'], High:['var(--color-accent-100)','var(--color-accent-800)'], Normal:['var(--color-neutral-200)','var(--color-neutral-800)'], Low:['var(--color-surface)','var(--color-neutral-700)'] };
   const ticketList = s.tickets.filter(t => tMatch(t, s.tFilter)).map(t => ({ ...t, icon:IC[t.icon], order:t.order || 'No order', pBg:PR[t.prio][0], pFg:PR[t.prio][1], bg:'var(--color-card)', sh:t.id === s.tSel ? '0 0 0 2px var(--color-accent)' : 'var(--shadow-sm)', onClick:set({ tSel:t.id, draft:'' }) }));
-  const T = s.tickets.find(t => t.id === s.tSel) || s.tickets[0];
+  const T = s.tickets.find(t => t.id === s.tSel) || s.tickets[0] || { id:'—', from:'Customer', name:'', subject:'No tickets', order:null, msgs:[], resolved:true, escalated:true, meta:'' };
   const TO = T.order && s.orders.find(o => o.id === T.order);
-  const addMsg = text => { if (text.trim()) act(api.addTicketMessage(T.id, 'ops', 'Leila', text), null, { draft:'' }); };
+  const addMsg = text => { if (text.trim()) act(() => api.addTicketMessage(T.id, 'ops', (user?.name ?? 'Ops').split(' ')[0], text), null, { draft:'' }); };
   const actByFrom = {
     Courier:[[IC.wallet,'Compensate courier 10 DH',() => toast('10 DH added to ' + T.name)],[IC.x,'Cancel linked order',() => TO && setState({ modal:'cancel', reason:null, drawer:{ type:'order', id:TO.id } })],[IC.phone,'Call courier',() => toast('Calling ' + T.name + '…')]],
     Merchant:[[IC.bike,'Assign courier now',() => TO && setState({ page:'live', drawer:{ type:'order', id:TO.id }, assignOpen:true })],[IC.phone,'Call merchant',() => toast('Calling ' + T.name + '…')]],
@@ -246,16 +255,17 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
   const reasons = (RS[s.modal] || []).map(label => ({ label, onClick:set({ reason:label }), ...chip(s.reason === label) }));
   const MD = {
     cancel:{ title:'Cancel order ' + (dOrderObj ? dOrderObj.id : ''), sub:'The customer is refunded automatically and notified by SMS.', isCancel:true, confirm:'Cancel order', onConfirm:() => {
-      const o = dOrderObj; act(api.cancelOrder(o.id, s.reason, s.comp), o.id + ' cancelled' + (s.comp && o.courier ? ' · courier compensated' : ''), { modal:null }); } },
+      const o = dOrderObj; act(() => api.cancelOrder(o.id, s.reason, s.comp), o.id + ' cancelled' + (s.comp && o.courier ? ' · courier compensated' : ''), { modal:null }); } },
     refund:{ title:'Refund ' + (dOrderObj ? dOrderObj.id : ''), sub:dOrderObj ? 'Paid ' + dOrderObj.total + ' DH · ' + (dOrderObj.pay === 'Cash' ? 'cash refund goes to Yallo wallet' : 'back to card in 3–5 days') : '', isRefund:true, confirm:'Issue refund', onConfirm:() => {
       const amt = s.refundMode === 'full' ? dOrderObj.total : Math.min(dOrderObj.total, Number(s.refundAmt) || 0);
-      act(api.refundOrder(dOrderObj.id, amt, s.reason), amt + ' DH refunded on ' + dOrderObj.id, { modal:null }); } },
-    reject:{ title:'Reject ' + (appCur ? appCur.name : ''), sub:'The applicant gets an SMS with the reason and can re-apply in 30 days.', confirm:'Reject application', onConfirm:() => act(api.rejectApplication(appCur.id, s.reason), appCur.name + ' rejected', { modal:null }) },
-    payout:{ title:'Approve ' + selKeys.length + ' payouts', sub:fmt(selTotal) + ' DH will be sent by bank transfer on ' + s.payouts.payDate + '.', confirm:'Approve payouts', onConfirm:() => act(api.approvePayouts(selKeys), selKeys.length + ' payouts approved', { paySel:{}, modal:null }) }
+      act(() => api.refundOrder(dOrderObj.id, amt, s.reason), amt + ' DH refunded on ' + dOrderObj.id, { modal:null }); } },
+    reject:{ title:'Reject ' + (appCur ? appCur.name : ''), sub:'The applicant gets an SMS with the reason and can re-apply in 30 days.', confirm:'Reject application', onConfirm:() => act(() => api.rejectApplication(appCur.id, s.reason), appCur.name + ' rejected', { modal:null }) },
+    payout:{ title:'Approve ' + selKeys.length + ' payouts', sub:fmt(selTotal) + ' DH will be sent by bank transfer on ' + s.payouts.payDate + '.', confirm:'Approve payouts', onConfirm:() => act(() => api.approvePayouts(selKeys), selKeys.length + ' payouts approved', { paySel:{}, modal:null }) }
   };
   const md = MD[s.modal] ? { isRefund:false, isCancel:false, ...MD[s.modal], reasons, disabled:(s.modal === 'cancel' || s.modal === 'refund' || s.modal === 'reject') && !s.reason } : { reasons:[] };
 
   return {
+    loaded:true, offlineNote:s.connected ? null : 'Offline · showing the state at ' + clock + ' (demo time). Actions are paused until the connection is back.',
     ic:IC, p, nav, user:{ name:user?.name ?? 'Ops', title:user?.title ?? 'Ops', ini:ini(user?.name ?? 'Ops') }, signOut:() => onSignOut?.(), liveOk:s.connected, liveText:!s.connected ? 'OFFLINE · reconnecting' : W < 1100 ? 'LIVE' : 'LIVE · ' + clock,
     liveCols:(() => { const d = !!(selId || (s.drawer && s.drawer.type === 'courier')); if (W < 1240 && d) return '0px minmax(0,1fr) 340px'; return (W < 1240 ? '280px' : '340px') + ' minmax(0,1fr) ' + (d ? '400px' : '0px'); })(),
     drawerW:W < 1240 ? '340px' : '400px', supWide:W >= 1280, supNarrow:W < 1280, supCols:W >= 1280 ? '300px minmax(0,1fr) 280px' : (W < 1100 ? '240px' : '280px') + ' minmax(0,1fr)', pageTitle:TITLES[s.page][0], pageSub:TITLES[s.page][1], clock, openTickets:openT.length, goSupport:go('support'), goMerchants:go('merchants'),
@@ -264,11 +274,11 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
     qTabs, queue, queueEmpty:!queue.length, zoneLabels, mapMerchants, mapCouriers, hasRoute, route, layers:s.layers, layerBtns, fleetLegend,
     oFilters, oq:s.oq, onOq:e => setState({ oq:e.target.value }), orderRows, orderRowsCount:orderRows.length, ordersEmpty:!orderRows.length,
     cTabs, cFleet:s.cTab === 'fleet', cApps:s.cTab === 'apps' && !!appCur, fleetRows, appList, app,
-    approveApp:() => act(api.approveApplication(appCur.id), appCur.name + ' activated · welcome SMS sent'), rejectApp:set({ modal:'reject', reason:null }),
+    approveApp:() => act(() => api.approveApplication(appCur.id), appCur.name + ' activated · welcome SMS sent'), rejectApp:set({ modal:'reject', reason:null }),
     merchantRows,
     tFilters, ticketList, tkt, macros, resolveLabel:T.resolved ? 'Resolved' : 'Resolve',
-    resolveTicket:() => act(api.resolveTicket(T.id), T.id + ' resolved'),
-    escalate:() => act(api.escalateTicket(T.id), T.id + ' escalated to Tier 2'), escalateLabel:T.escalated ? 'Escalated' : 'Escalate',
+    resolveTicket:() => act(() => api.resolveTicket(T.id), T.id + ' resolved'),
+    escalate:() => act(() => api.escalateTicket(T.id), T.id + ' escalated to Tier 2'), escalateLabel:T.escalated ? 'Escalated' : 'Escalate',
     draft:s.draft, onDraft:e => setState({ draft:e.target.value }), onDraftKey:e => { if (e.key === 'Enter') addMsg(s.draft); }, sendMsg:() => addMsg(s.draft),
     payTabs:[['couriers','Couriers'],['merchants','Merchants']].map(([k, label]) => ({ label, onClick:set({ payTab:k, paySel:{} }), ...pill(s.payTab === k) })),
     payKpis, payRows, payPeriod:payWeekLabel + ' · ' + s.payouts.period + ' · payout ' + s.payouts.payDate, payColName:isC ? 'Courier' : 'Merchant', payColN:isC ? 'Deliv.' : 'Orders', payColAdj:isC ? 'Cash held' : 'Commission',
@@ -276,11 +286,11 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
     toggleAll:() => setState(() => { const d = {}; if (!allOn) selectable.forEach(r => d[r.id] = true); return { paySel:d }; }), allMark:allOn ? '✓' : '', allBg:allOn ? 'var(--color-accent)' : 'var(--color-card)', allBd:allOn ? 'var(--color-accent)' : 'var(--color-neutral-400)',
     hasDrawer:!!(dOrderObj || dCourierObj), dOrder:!!dOrderObj, dCourier:!!dCourierObj, od, cd, nearest, radiusKm:DISPATCH_RADIUS_KM, showAssign:!!dOrderObj && s.assignOpen && ACTIVE.includes(dOrderObj.st) && dOrderObj.st !== 'delivering',
     assignLabel:s.assignOpen ? 'Hide' : dOrderObj && dOrderObj.courier ? 'Reassign' : 'Assign courier', toggleAssign:set({ assignOpen:!s.assignOpen }),
-    closeDrawer:set({ drawer:null }), withdrawOffer:() => act(api.withdrawOffer(dOrderObj.id), 'Offer withdrawn'), callMerchant:() => toast('Calling ' + (dOrderObj && dOrderObj.m) + '…'), callCustomer:() => toast('Calling ' + (dOrderObj && dOrderObj.c) + (dOrderObj && dOrderObj.phone ? ' · ' + dOrderObj.phone : '') + '…'),
+    closeDrawer:set({ drawer:null }), withdrawOffer:() => act(() => api.withdrawOffer(dOrderObj.id), 'Offer withdrawn'), callMerchant:() => toast('Calling ' + (dOrderObj && dOrderObj.m) + '…'), callCustomer:() => toast('Calling ' + (dOrderObj && dOrderObj.c) + (dOrderObj && dOrderObj.phone ? ' · ' + dOrderObj.phone : '') + '…'),
     openRefund:() => setState({ modal:'refund', reason:null, refundMode:'full', refundAmt:String(dOrderObj.total) }), openCancel:set({ modal:'cancel', reason:null, comp:true }),
     msgCourier:() => toast('Message sent to ' + (dCourierObj && dCourierObj.name)),
     suspendLabel:dCourierObj && s.suspended[dCourierObj.id] ? 'Reactivate' : 'Suspend',
-    toggleSuspend:() => { const id = dCourierObj.id; act(api.setCourierSuspended(id, !s.suspended[id]), dCourierObj.name + (s.suspended[id] ? ' reactivated' : ' suspended')); },
+    toggleSuspend:() => { const id = dCourierObj.id; act(() => api.setCourierSuspended(id, !s.suspended[id]), dCourierObj.name + (s.suspended[id] ? ' reactivated' : ' suspended')); },
     hasModal:!!MD[s.modal], md, closeModal:set({ modal:null }),
     refundModes:[['full','Full refund'],['partial','Partial']].map(([k, label]) => ({ label, onClick:() => setState({ refundMode:k, refundAmt:k === 'full' && dOrderObj ? String(dOrderObj.total) : s.refundAmt }), ...pill(s.refundMode === k) })),
     refundFull:s.refundMode === 'full', refundAmt:s.refundAmt, onRefundAmt:e => setState({ refundAmt:e.target.value.replace(/[^0-9]/g, '') }),
