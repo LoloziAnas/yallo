@@ -70,6 +70,8 @@ export interface Data {
   /** Latest GPS fix from this phone, and where tracking stands. */
   gps: { lat: number; lon: number; accuracy: number | null; at: number } | null;
   tracking: 'off' | 'foreground' | 'background' | 'foreground-only';
+  /** Customer messages on the current job already seen in the chat screen. */
+  chatSeen: number;
   /** Server state generation; a change means the API restarted from other state or was reset. */
   epoch: string | null;
   /** Live: this courier's record (name, vehicle, rating) as the server has it. */
@@ -136,6 +138,8 @@ interface Actions {
   complete: (pin?: string) => Promise<void>;
   /** Tell ops about a problem with the current job (live: opens a support ticket). */
   reportProblem: (subject: string, text: string) => void;
+  /** Writes to the customer in the current job's chat. Resolves to false (with a toast) when refused. */
+  sendChat: (text: string) => Promise<boolean>;
   /** Writes to support: opens a conversation (no `ticketId`) or continues one. Resolves to its id. */
   sendSupport: (ticketId: string | null, subject: string, text: string) => Promise<string | null>;
   withdraw: () => void;
@@ -172,6 +176,7 @@ const INITIAL: Data = {
   opsComp: 0,
   epoch: null,
   me: null,
+  chatSeen: 0,
   completing: null,
   earnings: null,
   payout: null,
@@ -401,6 +406,19 @@ export const useCourier = create<CourierState>()((set, get) => {
           text,
         }),
       );
+    },
+
+    sendChat: async (text) => {
+      const { jobId } = get();
+      if (!live() || !api || !jobId) return false;
+      try {
+        await api.sendOrderMessage(jobId, text);
+        return true;
+      } catch (e) {
+        toast(errorText(e));
+        onRefusal?.();
+        return false;
+      }
     },
 
     sendSupport: async (ticketId, subject, text) => {

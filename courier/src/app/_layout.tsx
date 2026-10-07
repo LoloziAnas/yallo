@@ -141,6 +141,7 @@ export default function RootLayout() {
             <Stack.Screen name="bonuses" />
             <Stack.Screen name="history/[id]" />
             <Stack.Screen name="ticket/[id]" />
+            <Stack.Screen name="chat" />
             <Stack.Screen name="problem" options={sheet} />
             <Stack.Screen name="cancel-delivery" options={sheet} />
             <Stack.Screen name="withdraw" options={sheet} />

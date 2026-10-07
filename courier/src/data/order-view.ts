@@ -7,6 +7,7 @@ import {
   type GeoPoint,
   type MapPoint,
   type Merchant,
+  type OrderMessage,
 } from '@yallo/shared';
 
 import { O, type OrderItem } from '@/data/demo';
@@ -36,6 +37,8 @@ export interface OrderView {
   scheduledFor?: string;
   /** When the order left the store, "HH:MM" (live). */
   pickedAt?: string;
+  /** Live: the order's chat with the customer (and ops), oldest first. */
+  chat: OrderMessage[];
   /** Drop-off area as the offer screen shows it before accepting (no exact address yet). */
   dropZone: string;
   dropLine: string;
@@ -62,6 +65,7 @@ export const DEMO_ORDER: OrderView = {
   ...O,
   dropAddr: O.custAddr + ', Guéliz',
   navTo: { store: `${O.storeAddr}, Marrakech`, customer: O.custArea },
+  chat: [],
   storeKind: 'Restaurant',
   dropZone: 'Guéliz',
   dropLine: 'Rue de la Liberté, Marrakech',
@@ -123,6 +127,7 @@ export function fromApi(o: ApiOrder, m: Merchant, courierPos: MapPoint): OrderVi
     },
     scheduledFor: o.scheduledFor,
     pickedAt: o.statusAt?.delivering !== undefined ? clockAt(o.statusAt.delivering) : undefined,
+    chat: o.chat ?? [],
     cash: o.pay === 'cash' ? o.total : 0,
     earn: pay + tip,
     fee: pay,

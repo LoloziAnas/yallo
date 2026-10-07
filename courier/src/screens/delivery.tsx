@@ -52,6 +52,27 @@ export function Delivery() {
 }
 
 const minimise = () => router.back();
+
+/** Opens the chat with the customer (live only), with a dot for unread customer messages. */
+function ChatButton({ bg, size, floating }: { bg: string; size: number; floating?: boolean }) {
+  const t = useT();
+  const live = useCourier((s) => s.source === 'live');
+  const unread = useCourier(
+    (s) => s.order.chat.filter((m) => m.from === 'customer').length > s.chatSeen,
+  );
+  if (!live) return null;
+  return (
+    <RoundButton
+      icon="msg"
+      size={size}
+      bg={bg}
+      floating={floating}
+      onPress={() => router.push('/chat')}
+      accessibilityLabel={t(`Chat with ${useCourier.getState().order.cust}`)}>
+      {unread && <View style={styles.unreadDot} />}
+    </RoundButton>
+  );
+}
 const openSupport = () => router.push('/support');
 const openProblem = () => router.push('/problem');
 
@@ -245,6 +266,7 @@ function MapView() {
               {t((isPick ? 'Going to pickup · ' : 'Going to customer · ') + order.id)}
             </Txt>
           </View>
+          <ChatButton bg={colors.bg} size={52} floating />
           <RoundButton
             icon="help"
             bg={colors.bg}
@@ -438,13 +460,16 @@ function ArrivalHeader({
           onPress={minimise}
           accessibilityLabel="Minimise"
         />
-        <RoundButton
-          icon="help"
-          size={48}
-          bg={btnBg}
-          onPress={openSupport}
-          accessibilityLabel={t('Help & support')}
-        />
+        <View style={[styles.rowC, { gap: 8 }]}>
+          <ChatButton bg={btnBg} size={48} />
+          <RoundButton
+            icon="help"
+            size={48}
+            bg={btnBg}
+            onPress={openSupport}
+            accessibilityLabel={t('Help & support')}
+          />
+        </View>
       </View>
       {children}
     </View>
@@ -652,8 +677,8 @@ function AtCustomer() {
             </Txt>
           )}
         </View>
-        {(demo || !!order.phone) && (
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {(demo || !!order.phone) && (
             <Btn
               variant="secondary"
               icon="phone"
@@ -667,21 +692,23 @@ function AtCustomer() {
                 if (order.phone) openUrl(telUrl(order.phone));
               }}
             />
-            <Btn
-              variant="secondary"
-              icon="msg"
-              iconSize={20}
-              label={t('Message')}
-              fontSize={16}
-              height={64}
-              style={{ flex: 1 }}
-              onPress={() => {
-                showToast("Message sent: “I'm outside”");
-                if (order.phone) openUrl(smsUrl(order.phone, "I'm outside"));
-              }}
-            />
-          </View>
-        )}
+          )}
+          <Btn
+            variant="secondary"
+            icon="msg"
+            iconSize={20}
+            label={t('Message')}
+            fontSize={16}
+            height={64}
+            style={{ flex: 1 }}
+            onPress={() => {
+              // Live, messages go through the order chat the customer sees in their app.
+              if (!demo) return router.push('/chat');
+              showToast("Message sent: “I'm outside”");
+              if (order.phone) openUrl(smsUrl(order.phone, "I'm outside"));
+            }}
+          />
+        </View>
         <Btn
           variant="ghost"
           icon="alert"
@@ -972,6 +999,15 @@ function Done() {
 
 const styles = StyleSheet.create({
   rowC: { flexDirection: 'row', alignItems: 'center' },
+  unreadDot: {
+    position: 'absolute',
+    top: 10,
+    end: 10,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.accent,
+  },
   pinWrap: { position: 'absolute', width: 160, alignItems: 'center', gap: 4 },
   pinLabel: {
     paddingVertical: 4,

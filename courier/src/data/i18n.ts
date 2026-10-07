@@ -52,6 +52,14 @@ const PHR: [string, string, string][] = [
     'Yallo a été mis à jour. Vos courses sont à jour',
     'تم تحديث يالو. طلباتك محدّثة',
   ],
+  // Order chat with the customer.
+  ['Message from {0}', 'Message de {0}', 'رسالة من {0}'],
+  ['Chat with {0}', 'Discussion avec {0}', 'محادثة مع {0}'],
+  [
+    'Messages are shared with Yallo support.',
+    'Les messages sont partagés avec le support Yallo.',
+    'تتم مشاركة الرسائل مع دعم يالو.',
+  ],
   // Delivery PIN checked by the API.
   [
     'Ask the customer for the PIN shown in their app',

@@ -137,6 +137,14 @@ export function applyLive(st: LiveState) {
     const view = fromApi(job, merchant, me.pos);
     // Keep the trip estimate from when the job started rather than letting it shrink as you ride.
     p.order = fresh ? view : { ...view, km: s.order.km, min: s.order.min };
+    // A new message from the customer is announced (the chat screen marks messages seen).
+    const fromCustomer = view.chat.filter((m) => m.from === 'customer');
+    if (fresh) p.chatSeen = fromCustomer.length;
+    else if (fromCustomer.length > s.order.chat.filter((m) => m.from === 'customer').length) {
+      const last = fromCustomer.at(-1)!;
+      p.toast = mkToast(`Message from ${last.author}`);
+      notifyCourier(makeT(s.lang)(`Message from ${last.author}`), last.text);
+    }
     if (fresh && !inDelivery(s.phase)) p.checked = {};
     // The server is ahead (a new job, or ops advanced it): catch up. Behind means our update is in flight.
     if (s.phase !== 'done' && rank(job.status) > localRank(s)) {
