@@ -56,6 +56,8 @@ export type ActiveOrder = Omit<Order, 'date' | 'status'> & {
   lost?: boolean;
   /** Delivery slot ("21:30") when the customer scheduled the order; absent for ASAP. */
   scheduledFor?: string;
+  /** Code the customer gives the rider at the door; the courier app needs it to mark the order delivered. */
+  pin?: string;
 };
 
 /** How long a just-placed order may be missing from the live feed before it counts as lost. */
@@ -433,6 +435,7 @@ export const useApp = create<State & Actions>()(
           ...(s.when === 'sched' ? { scheduledFor: SCHEDULE_SLOTS[s.slot] } : {}),
           addrId: s.addrId,
           pay: s.pay,
+          ...(placed.deliveryPin ? { pin: placed.deliveryPin } : {}),
         };
         set({
           placing: false,

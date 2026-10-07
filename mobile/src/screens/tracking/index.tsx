@@ -40,6 +40,7 @@ export function Tracking() {
   // When each step happened, from the API (the same times ops and the courier see).
   const times = [0, 1, 2, 3, 4].map((i) => stepTime(order?.statusAt, i));
   const count = active.lines.reduce((a, l) => a + l.qty, 0);
+  const pin = order?.deliveryPin ?? active.pin;
   const mapH = MAP_H + insets.top;
 
   const openChat = () => router.push('/chat');
@@ -224,6 +225,41 @@ export function Tracking() {
             </View>
           ))}
         </View>
+
+        {/* Delivery PIN: the rider types it into the courier app to mark the order delivered. */}
+        {!!pin && step >= 0 && step < 4 && (
+          <View
+            style={{
+              marginTop: 6,
+              marginHorizontal: 16,
+              marginBottom: 10,
+              paddingVertical: 12,
+              paddingHorizontal: 14,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12,
+              backgroundColor: colors.accent100,
+              borderWidth: 1,
+              borderColor: colors.accent200,
+              borderRadius: radius.lg,
+            }}>
+            <Icon name="lock" size={18} color={colors.accent700} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Txt w={600}>{t.pinT}</Txt>
+              <Txt size={13} color={colors.neutral700}>
+                {t.pinB}
+              </Txt>
+            </View>
+            <Txt
+              testID="delivery-pin"
+              heading
+              size={28}
+              color={colors.accent800}
+              style={{ writingDirection: 'ltr', letterSpacing: 4 }}>
+              {pin}
+            </Txt>
+          </View>
+        )}
 
         {/* Rider card: hidden for cancelled orders, whose message is shown above. */}
         <View
