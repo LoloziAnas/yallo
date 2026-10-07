@@ -32,7 +32,12 @@ export function Stepper({
   style,
 }: Props) {
   const fg = look === 'accent' ? colors.white : colors.text;
-  const btn = { width: buttonWidth, height, alignItems: 'center', justifyContent: 'center' } as const;
+  const btn = {
+    width: buttonWidth,
+    height,
+    alignItems: 'center',
+    justifyContent: 'center',
+  } as const;
   return (
     <View
       style={[
@@ -50,7 +55,13 @@ export function Stepper({
       <Pressable onPress={onDec} accessibilityLabel="Remove one" hitSlop={4} style={btn}>
         <Icon name={trashAtOne && qty === 1 ? 'trash' : 'minus'} size={iconSize} color={fg} />
       </Pressable>
-      <Txt heading={heading} w={600} size={heading ? 18 : 15} color={fg} center style={{ minWidth: 20 }}>
+      <Txt
+        heading={heading}
+        w={600}
+        size={heading ? 18 : 15}
+        color={fg}
+        center
+        style={{ minWidth: 20 }}>
         {qty}
       </Txt>
       <Pressable onPress={onInc} accessibilityLabel="Add one" hitSlop={4} style={btn}>

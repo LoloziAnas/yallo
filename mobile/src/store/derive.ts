@@ -12,7 +12,15 @@ import {
   storeById,
   stores,
 } from '@/data/catalog';
-import { clockAt, type Order as ApiOrderBase } from '@yallo/shared';
+import {
+  clockAt,
+  FREE_GROCERY_DELIVERY_FROM,
+  type LiveState,
+  merchantById,
+  type Order as ApiOrderBase,
+  SERVICE_FEE,
+  storeAvailability,
+} from '@yallo/shared';
 
 import type { Strings } from '@/data/strings';
 import type { IconName } from '@/components/icon';
@@ -102,9 +110,9 @@ export function totals(cart: Cart, promo: Promo): Totals {
   const sub = cart.lines.reduce((a, l) => a + l.unit * l.qty, 0);
   const count = cart.lines.reduce((a, l) => a + l.qty, 0);
   let fee = store ? store.fee : 0;
-  if (store && store.cat === 'groceries' && sub >= 150) fee = 0;
+  if (store && store.cat === 'groceries' && sub >= FREE_GROCERY_DELIVERY_FROM) fee = 0;
   if (promo === 'LIVRAISON') fee = 0;
-  const service = sub > 0 ? 3 : 0;
+  const service = sub > 0 ? SERVICE_FEE : 0;
   const disc = promo === 'MARHABA' ? Math.min(40, Math.round(sub * 0.3)) : 0;
   return { sub, fee, service, disc, total: sub + fee + service - disc, count, store };
 }
@@ -133,16 +141,27 @@ export function cartQty(cart: Cart, pid: string) {
   return cart.lines.filter((l) => l.pid === pid).reduce((a, l) => a + l.qty, 0);
 }
 
-/** Store list views */
-export const popularStores = () =>
+/** Store list views. `isOpen` says whether a store takes orders right now (see storeState). */
+export const popularStores = (isOpen: (id: string) => boolean) =>
   stores
-    .filter((x) => !x.closed)
+    .filter((x) => isOpen(x.id))
     .sort((x, y) => y.reviewCount - x.reviewCount)
     .slice(0, 5);
-export const fastStores = () =>
-  stores.filter((x) => !x.closed && x.tMax <= 25).sort((x, y) => x.tMin - y.tMin);
+export const fastStores = (isOpen: (id: string) => boolean) =>
+  stores.filter((x) => isOpen(x.id) && x.tMax <= 25).sort((x, y) => x.tMin - y.tMin);
 export const recommendedStores = () =>
-  ['s1', 's3', 's5', 's8', 's9', 's2'].map((id) => storeById[id]);
+  ['m1', 'm8', 'm4', 'm10', 'm9', 'm2'].map((id) => storeById[id]);
+
+/**
+ * Whether a store takes orders now, from the live feed: 'open', 'paused' (by ops), or its opening
+ * time ("19:00") when outside its hours. Treated as open while there's no live data.
+ */
+export function storeState(storeId: string, live: LiveState | null): 'open' | 'paused' | string {
+  const m = live?.merchants.find((x) => x.id === storeId) ?? merchantById[storeId];
+  if (!live || !m) return 'open';
+  if (!m.open) return 'paused';
+  return storeAvailability(m, live.t).accepting ? 'open' : m.hours.open;
+}
 
 export type SearchFilters = {
   q: string;
@@ -155,15 +174,14 @@ export type SearchFilters = {
 };
 
 const sorters: Record<SortKey, (a: Store, b: Store) => number> = {
-  rec: (a, b) =>
-    Number(a.closed) - Number(b.closed) ||
-    b.rating * Math.log(b.reviewCount) - a.rating * Math.log(a.reviewCount),
+  rec: (a, b) => b.rating * Math.log(b.reviewCount) - a.rating * Math.log(a.reviewCount),
   fast: (a, b) => a.tMin - b.tMin,
   rating: (a, b) => b.rating - a.rating,
   fee: (a, b) => a.fee - b.fee,
 };
 
-export function search(f: SearchFilters) {
+/** `isOpen` puts stores taking orders right now first (see storeState). */
+export function search(f: SearchFilters, isOpen: (id: string) => boolean = () => true) {
   const nq = norm(f.q.trim());
   const match = (x: Store) =>
     !nq ||
@@ -178,7 +196,8 @@ export function search(f: SearchFilters) {
         (!f.fFast || x.tMax <= 25) &&
         (!f.fPrice || x.price <= f.fPrice),
     )
-    .sort(sorters[f.sort]);
+    .sort(sorters[f.sort])
+    .sort((a, b) => Number(isOpen(b.id)) - Number(isOpen(a.id)));
   const productResults = nq
     ? products
         .filter(

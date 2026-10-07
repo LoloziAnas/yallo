@@ -13,9 +13,9 @@ export function useLiveOrder() {
   const live = useApp((s) => s.live);
   if (!active) return null;
 
-  const order = live?.orders.find((o) => isOurOrder(o, active));
+  const order = active.lost ? undefined : live?.orders.find((o) => isOurOrder(o, active));
   // `lost`: the order vanished from the live feed (the API restarted or was reset).
-  const status: OrderStatus = order?.status ?? (active.lost ? 'cancelled' : 'pending');
+  const status: OrderStatus = active.lost ? 'cancelled' : (order?.status ?? 'pending');
   const courier = order?.courierId
     ? live?.couriers.find((c) => c.id === order.courierId)
     : undefined;

@@ -64,8 +64,18 @@ export const monoFont = Platform.select({ ios: 'Menlo', default: 'monospace' });
 export type Weight = 400 | 500 | 600 | 700;
 
 const families = {
-  heading: { 400: 'Outfit_500Medium', 500: 'Outfit_500Medium', 600: 'Outfit_600SemiBold', 700: 'Outfit_700Bold' },
-  body: { 400: 'Figtree_400Regular', 500: 'Figtree_500Medium', 600: 'Figtree_600SemiBold', 700: 'Figtree_700Bold' },
+  heading: {
+    400: 'Outfit_500Medium',
+    500: 'Outfit_500Medium',
+    600: 'Outfit_600SemiBold',
+    700: 'Outfit_700Bold',
+  },
+  body: {
+    400: 'Figtree_400Regular',
+    500: 'Figtree_500Medium',
+    600: 'Figtree_600SemiBold',
+    700: 'Figtree_700Bold',
+  },
   arabic: {
     400: 'IBMPlexSansArabic_400Regular',
     500: 'IBMPlexSansArabic_500Medium',

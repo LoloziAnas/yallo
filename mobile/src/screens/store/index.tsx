@@ -3,6 +3,7 @@ import { useMemo, useRef, useState } from 'react';
 import { type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useStoreStatus } from '@/hooks/use-store-status';
 import { IconButton } from '@/components/button';
 import { CartBar } from '@/components/cart-bar';
 import { Icon } from '@/components/icon';
@@ -25,7 +26,8 @@ export function StoreScreen({ id }: { id: string }) {
   const rtl = useRtl();
   const insets = useSafeAreaInsets();
   const bottomPad = useBottomPad(12);
-  const store = storeById[id] ?? storeById.s1;
+  const store = storeById[id] ?? storeById.m1;
+  const status = useStoreStatus(store.id);
   const fav = useApp((s) => s.favStores.includes(store.id));
   const toggleFav = useApp((s) => s.toggleFav);
 
@@ -166,11 +168,11 @@ export function StoreScreen({ id }: { id: string }) {
               bottom={`${t.minOrder} ${fmt(store.min)}`}
             />
           </View>
-          {store.closed && (
+          {!status.open && (
             <Tag
               tone="neutral"
               size={14}
-              label={`${t.closed} · ${store.opens}`}
+              label={status.closedLabel}
               style={{
                 alignSelf: 'stretch',
                 gap: 8,

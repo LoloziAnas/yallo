@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
+import { useIsStoreOpen } from '@/hooks/use-store-status';
 import { Button, IconButton } from '@/components/button';
 import { CartBar } from '@/components/cart-bar';
 import { EmptyState } from '@/components/empty-state';
@@ -217,6 +218,7 @@ function SectionHead({
 }
 
 function Feed() {
+  const isOpen = useIsStoreOpen();
   const t = useT();
   const set = useApp((s) => s.set);
   const showToast = useApp((s) => s.showToast);
@@ -274,7 +276,7 @@ function Feed() {
           body={t.p3b}
           icon="cookie"
           iconColor={colors.accent}
-          onPress={() => openStore('s4')}
+          onPress={() => openStore('m6')}
         />
       </ScrollView>
 
@@ -313,7 +315,7 @@ function Feed() {
 
       <SectionHead title={t.popular} onSeeAll={() => seeAll({ sort: 'rating', fRating: true })} />
       <Rail gap={16} itemWidth={252}>
-        {popularStores().map((s) => (
+        {popularStores(isOpen).map((s) => (
           <PopularCard key={s.id} store={s} />
         ))}
       </Rail>
@@ -325,7 +327,7 @@ function Feed() {
         onSeeAll={() => seeAll({ sort: 'fast', fFast: true })}
       />
       <Rail gap={16} itemWidth={200}>
-        {fastStores().map((s) => (
+        {fastStores(isOpen).map((s) => (
           <FastCard key={s.id} store={s} />
         ))}
       </Rail>

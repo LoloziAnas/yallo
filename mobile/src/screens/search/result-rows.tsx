@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
+import { useStoreStatus } from '@/hooks/use-store-status';
 import { cardRole } from '@/components/card-role';
 import { IconButton } from '@/components/button';
 import { Icon } from '@/components/icon';
@@ -21,6 +22,7 @@ const row = {
 } as const;
 
 export function StoreRow({ store }: { store: Store }) {
+  const status = useStoreStatus(store.id);
   const t = useT();
   const feeColor = store.fee === 0 ? colors.mint700 : colors.neutral700;
   return (
@@ -39,7 +41,7 @@ export function StoreRow({ store }: { store: Store }) {
           <Txt heading size={19} numberOfLines={1} style={{ flexShrink: 1 }}>
             {store.name}
           </Txt>
-          {store.closed && <Tag tone="neutral" label={`${t.closed} · ${store.opens}`} />}
+          {!status.open && <Tag tone="neutral" label={status.closedLabel} />}
         </View>
         <Txt size={13} color={colors.neutral700} numberOfLines={1}>
           {store.cuisine}

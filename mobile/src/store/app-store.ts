@@ -9,21 +9,22 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { api } from '@/api/client';
-import { merchantForStore, zoneForDistrict } from '@/data/api-merchants';
+import { zoneForDistrict } from '@/location/zones';
 import { type HelpTopic, helpTopics } from '@/data/help';
 import { locate } from '@/location/locate';
 
 import {
   type Address,
-  type CategoryId,
   type CartLine,
+  type CategoryId,
+  legacyStoreIds,
   lineKey,
   type Order,
   type PayMethod,
   productById,
-  type Selection,
   seedAddresses,
   seedOrders,
+  type Selection,
   storeById,
 } from '@/data/catalog';
 import { type Lang, strings } from '@/data/strings';
@@ -33,9 +34,8 @@ import {
   type Promo,
   type SortKey,
   demoClock,
-  optionText,
+  storeState,
   SCHEDULE_SLOTS,
-  totals,
   unitPrice,
 } from '@/store/derive';
 
@@ -98,6 +98,8 @@ type State = {
   // misc
   toast: string | null;
   homeLoading: boolean;
+  /** The API's demo epoch the remembered live order and tickets belong to. */
+  epoch: string | null;
   /** Support tickets this person opened (ids in the API), newest last. */
   tickets: string[];
   /** Latest snapshot from the mock API's live feed. */
@@ -154,7 +156,7 @@ type Actions = {
  * number alone could match someone else's order; the store and total must match too.
  */
 export function isOurOrder(o: ApiOrder, a: ActiveOrder) {
-  return o.id === a.id && o.merchantId === merchantForStore[a.storeId] && o.total === a.total;
+  return o.id === a.id && o.merchantId === a.storeId && o.total === a.total;
 }
 
 /** Max lengths the API accepts. */
@@ -202,7 +204,7 @@ const userDefaults = () => ({
   addresses: seedAddresses,
   addrId: 'a1',
   cart: { storeId: null, lines: [] },
-  favStores: ['s1', 's4', 's6'],
+  favStores: ['m1', 'm6', 'm3'],
   favProducts: ['p4-1', 'p1-2', 'p7-2'],
   recent: ['Tajine', 'Paracetamol', 'Msemen'],
   promoInput: '',
@@ -213,6 +215,7 @@ const userDefaults = () => ({
   rating: 0,
   orders: seedOrders,
   tickets: [] as string[],
+  epoch: null as string | null,
 });
 
 /** Saved on the device and restored on the next launch. Everything else starts fresh. */
@@ -233,6 +236,7 @@ const persisted = [
   'rating',
   'orders',
   'tickets',
+  'epoch',
 ] as const satisfies readonly (keyof State)[];
 
 type Persisted = Pick<State, (typeof persisted)[number]>;
@@ -305,10 +309,10 @@ export const useApp = create<State & Actions>()(
         const p = productById[pid];
         const store = storeById[p.storeId];
         const s = get();
-        // Closed in the catalogue, or paused by ops in the back office.
-        const merchant = s.live?.merchants.find((m) => m.id === merchantForStore[store.id]);
-        if (store.closed || merchant?.open === false) {
-          s.showToast(`${store.name} · ${t().closed}${store.closed ? ' · ' + store.opens : ''}`);
+        // Outside its hours, or paused by ops in the back office.
+        const state = storeState(store.id, s.live);
+        if (state !== 'open') {
+          s.showToast(`${store.name} · ${t().closed}${state === 'paused' ? '' : ' · ' + state}`);
           return false;
         }
         if (s.cart.storeId && s.cart.storeId !== p.storeId && s.cart.lines.length) {
@@ -361,21 +365,13 @@ export const useApp = create<State & Actions>()(
         if (s.placing || !s.cart.storeId) return;
         const store = storeById[s.cart.storeId];
         const addr = s.addresses.find((a) => a.id === s.addrId) ?? s.addresses[0];
-        const tt = totals(s.cart, s.promo);
         const body: PlaceOrderBody = {
-          merchantId: merchantForStore[store.id],
+          merchantId: store.id,
           customerName: CUSTOMER_NAME,
           zone: (addr.zone as ZoneName | undefined) ?? zoneForDistrict(addr.district),
-          items: s.cart.lines.map((l) => {
-            const p = productById[l.pid];
-            const opts = optionText(p, l.sel);
-            return { qty: l.qty, name: opts ? `${p.name} (${opts})` : p.name, price: l.unit };
-          }),
+          // The API prices catalogue lines itself (options, fees, promo); it names items "Product (choice · choice)".
+          items: s.cart.lines.map((l) => ({ productId: l.pid, qty: l.qty, options: l.sel })),
           pay: s.pay,
-          // Sent explicitly: the API charges 15 DH when fee is omitted.
-          fee: tt.fee,
-          serviceFee: tt.service,
-          discount: tt.disc,
           ...(s.promo ? { promoCode: s.promo } : {}),
           ...deliveryDetails(s, addr),
         };
@@ -385,18 +381,20 @@ export const useApp = create<State & Actions>()(
           placed = await api.placeOrder(body);
         } catch (e) {
           set({ placing: false });
-          const paused = e instanceof Error && /paused/i.test(e.message);
-          get().showToast(paused ? `${store.name} · ${t().closed}` : t().orderFailed);
+          // 409s carry a customer-ready reason (paused, outside hours, under the minimum); keep it short.
+          const closed = e instanceof Error && /paused|closed/i.test(e.message);
+          get().showToast(closed ? `${store.name} · ${t().closed}` : t().orderFailed);
           return;
         }
         const active: ActiveOrder = {
           id: placed.id,
           storeId: store.id,
           lines: s.cart.lines,
-          sub: tt.sub,
-          fee: tt.fee,
-          service: tt.service,
-          disc: tt.disc,
+          // The API's prices are the receipt.
+          sub: placed.items.reduce((a, i) => a + i.qty * i.price, 0),
+          fee: placed.fee ?? 0,
+          service: placed.serviceFee ?? 0,
+          disc: placed.discount ?? 0,
           total: placed.total,
           placedAt: Date.now(),
           ...(s.when === 'sched' ? { scheduledFor: SCHEDULE_SLOTS[s.slot] } : {}),
@@ -434,7 +432,7 @@ export const useApp = create<State & Actions>()(
 
       reorder: (o) => {
         const st = storeById[o.storeId];
-        if (st.closed) {
+        if (storeState(st.id, get().live) !== 'open') {
           get().showToast(`${st.name} · ${t().closed}`);
           return;
         }
@@ -475,10 +473,25 @@ export const useApp = create<State & Actions>()(
       connectLive: () =>
         api.subscribe(
           (live) => {
+            // A new epoch means the API reseeded: order and ticket numbers start over, so ones
+            // remembered from before may now name someone else's. Forget them.
+            if (get().epoch !== live.epoch) {
+              const { epoch, active: was } = get();
+              // The order can't be followed any more: show it as cancelled (Done clears it).
+              set(
+                epoch
+                  ? {
+                      epoch: live.epoch,
+                      tickets: [],
+                      ...(was ? { active: { ...was, lost: true } } : {}),
+                    }
+                  : { epoch: live.epoch },
+              );
+            }
             const { active } = get();
             if (!active) return set({ live });
             const o = live.orders.find((x) => isOurOrder(x, active));
-            const lost = !o && Date.now() - active.placedAt > PLACE_GRACE_MS;
+            const lost = active.lost || (!o && Date.now() - active.placedAt > PLACE_GRACE_MS);
             set({ live, ...(lost !== !!active.lost ? { active: { ...active, lost } } : {}) });
           },
           (connected) => set({ connected, networkError: !connected }),
@@ -535,8 +548,20 @@ export const useApp = create<State & Actions>()(
     }),
     {
       name: 'yallo-customer',
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => AsyncStorage),
+      // v1 used the app's own store ids (s1–s10); the shared catalogue uses m1–m10.
+      migrate: (saved, version) => {
+        const st = saved as Persisted;
+        if (version < 2) {
+          const id = (x: string | null) => (x ? (legacyStoreIds[x] ?? x) : x);
+          st.cart = { ...st.cart, storeId: id(st.cart?.storeId ?? null) };
+          st.favStores = (st.favStores ?? []).map((x) => id(x)!);
+          st.orders = (st.orders ?? []).map((o) => ({ ...o, storeId: id(o.storeId)! }));
+          st.active = null;
+        }
+        return st;
+      },
       partialize: (s): Persisted =>
         Object.fromEntries(persisted.map((k) => [k, s[k]])) as Persisted,
     },

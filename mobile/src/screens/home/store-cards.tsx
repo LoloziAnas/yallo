@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
+import { useStoreStatus } from '@/hooks/use-store-status';
 import { cardRole } from '@/components/card-role';
 import { Icon } from '@/components/icon';
 import { Photo } from '@/components/photo';
@@ -196,7 +197,7 @@ export function FastCard({ store }: { store: Store }) {
 
 /** Full-width "Recommended for you" card, dimmed with the opening time when closed. */
 export function RecommendedCard({ store }: { store: Store }) {
-  const t = useT();
+  const status = useStoreStatus(store.id);
   return (
     <Pressable
       onPress={() => openStore(store.id)}
@@ -209,7 +210,7 @@ export function RecommendedCard({ store }: { store: Store }) {
         style={[{ height: 170 }, photoEdge]}>
         <FavButton id={store.id} size={40} />
         <TimePill store={store} size={16} />
-        {store.closed && (
+        {!status.open && (
           <View
             style={{
               position: 'absolute',
@@ -222,7 +223,7 @@ export function RecommendedCard({ store }: { store: Store }) {
               backgroundColor: 'rgba(251, 246, 239, 0.72)',
             }}>
             <Txt heading size={22} center>
-              {`${t.closed} · ${store.opens}`}
+              {status.closedLabel}
             </Txt>
           </View>
         )}
