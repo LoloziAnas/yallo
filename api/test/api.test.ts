@@ -1,5 +1,6 @@
 import { after, before, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import WsClient from 'ws';
 import type { AddressInfo } from 'node:net';
 import { createYalloClient, type LiveState, type YalloClient } from '@yallo/shared';
 import { COURIERS, DEMO_TESTER_COURIERS, clockAt, dateAt, DEV_OTP_CODE, DEV_TOKENS, DISPATCH_RADIUS_KM, GEO_ANCHOR, GPS_STALE_SEC, geoToMap, mapToGeo, OFFER_SEC, courierPayFor, normalizePhone, pickupKm, tripKm } from '@yallo/shared';
@@ -1168,7 +1169,19 @@ describe('Deployment', () => {
       assert.deepEqual([ok.status, ok.headers.get('access-control-allow-origin')], [200, 'https://ops.yallo.ma']);
       assert.equal((await fetch(base + '/state', { headers: { origin: 'https://evil.example' } })).status, 403);
       assert.equal((await fetch(base + '/state')).status, 200);
+      // Same-origin: React Native's Android WebSocket sends the socket URL's own origin, e.g. the demo tunnel's host.
+      const host = new URL(base).host;
+      assert.equal((await fetch(base + '/state', { headers: { origin: 'http://' + host } })).status, 200);
+      assert.equal((await fetch(base + '/state', { headers: { origin: 'https://tunnel.example', 'x-forwarded-host': 'tunnel.example' } })).status, 200);
+      const live = (origin?: string) => new Promise<string>(resolve => {
+        const ws = new WsClient(base.replace(/^http/, 'ws') + '/live', origin ? { origin } : {});
+        ws.on('open', () => { ws.close(); resolve('open'); });
+        ws.on('error', () => resolve('refused'));
+      });
+      assert.deepEqual(await Promise.all([live(), live('https://ops.yallo.ma'), live('http://' + host), live('https://evil.example')]),
+        ['open', 'open', 'open', 'refused']);
     } finally {
+      api.http.closeAllConnections();
       await new Promise<void>(r => api.http.close(() => r()));
     }
   });

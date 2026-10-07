@@ -190,7 +190,16 @@ const bearer = (header: string | undefined) => (header?.startsWith('Bearer ') ? 
 export function createApi({ tickMs = 1000, store = new Store(), authMode = 'warn' as AuthMode, push = createPush('log') as PushSender,
   corsOrigins = undefined as string[] | undefined, allowReset = true, demo = false, trustProxy = false, limits = {} as typeof DEFAULT_LIMITS } = {}) {
   const limiter = createLimiter(limits);
-  const originAllowed = (origin: string | undefined) => !origin || !corsOrigins || corsOrigins.includes(origin);
+  // Same-origin is never cross-origin: React Native's Android WebSocket sends the socket URL's own origin (e.g. the
+  // demo tunnel's host), so an Origin naming the host the request was sent to is allowed too.
+  const sameOrigin = (origin: string, req: import('node:http').IncomingMessage) => {
+    let host: string;
+    try { host = new URL(origin).host; } catch { return false; }
+    const forwarded = String(req.headers['x-forwarded-host'] ?? '').split(',')[0].trim();
+    return host === req.headers.host || (!!forwarded && host === forwarded);
+  };
+  const originAllowed = (origin: string | undefined, req: import('node:http').IncomingMessage) =>
+    !origin || !corsOrigins || corsOrigins.includes(origin) || sameOrigin(origin, req);
   const enforce = authMode === 'enforce';
   /** The state this viewer gets: everything in warn mode, their own view when enforcing. */
   const viewFor = (user: AuthUser | undefined): LiveState => (enforce ? store.viewFor(user) : store.state);
@@ -198,7 +207,7 @@ export function createApi({ tickMs = 1000, store = new Store(), authMode = 'warn
   const http = createServer(async (req, res) => {
     // CORS: any origin in development; only the allowlist when CORS_ORIGINS is set.
     const origin = req.headers.origin;
-    if (!originAllowed(origin)) return send(res, 403, { error: 'Origin not allowed: ' + origin });
+    if (!originAllowed(origin, req)) return send(res, 403, { error: 'Origin not allowed: ' + origin });
     res.setHeader('access-control-allow-origin', corsOrigins && origin ? origin : '*');
     if (corsOrigins) res.setHeader('vary', 'Origin');
     res.setHeader('access-control-allow-headers', 'content-type, authorization');
@@ -236,7 +245,7 @@ export function createApi({ tickMs = 1000, store = new Store(), authMode = 'warn
   const viewers = new WeakMap<WebSocket, string | undefined>();
   http.on('upgrade', (req, socket, head) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
-    if (url.pathname !== '/api/live' || !originAllowed(req.headers.origin)) { socket.destroy(); return; }
+    if (url.pathname !== '/api/live' || !originAllowed(req.headers.origin, req)) { socket.destroy(); return; }
     wss.handleUpgrade(req, socket, head, ws => {
       viewers.set(ws, url.searchParams.get('token') ?? undefined);
       // A courier app subscribes with ?courier=<id>, so the server knows that courier answers its own offers.
