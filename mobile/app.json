@@ -44,7 +44,13 @@
           "locationWhenInUsePermission": "Yallo uses your location to deliver your order to where you are."
         }
       ],
-      "expo-notifications"
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#CF4520"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
