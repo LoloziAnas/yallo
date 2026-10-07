@@ -2,10 +2,12 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { API_PORT } from '../shared/src/api';
 
+// The back office talks to the mock API (../api) through the dev server, REST and live feed alike.
+// API_URL points it at another API, e.g. a private one for testing: API_URL=http://localhost:5198 npm run dev
+const target = process.env.API_URL || `http://localhost:${API_PORT}`;
+
 export default defineConfig({
   plugins: [react()],
-  server: {
-    // The back office talks to the mock API (../api) through the dev server, REST and live feed alike.
-    proxy: { '/api': { target: `http://localhost:${API_PORT}`, ws: true } },
-  },
+  server: { proxy: { '/api': { target, ws: true } } },
+  preview: { proxy: { '/api': { target, ws: true } } },
 });

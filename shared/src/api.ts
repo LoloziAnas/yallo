@@ -32,6 +32,11 @@ export type ApiCourier = Courier & {
 
 /** Everything the apps share. The server pushes the whole snapshot on every change and every tick. */
 export type LiveState = {
+  /**
+   * Identifies this run of the demo data. It changes whenever the API reseeds (a reset, or a first start with no
+   * saved state), so order ids and other references a client remembers are only valid for the same epoch.
+   */
+  epoch: string;
   /** Seconds since the demo started. The demo clock reads DEMO_START_MIN + t / 60. */
   t: number;
   merchants: Merchant[];

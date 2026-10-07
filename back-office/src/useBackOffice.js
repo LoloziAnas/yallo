@@ -27,7 +27,9 @@ export function useBackOffice({ startPage } = {}) {
 
   useEffect(() => {
     // Orders, couriers, merchants and the demo clock come from the API's live feed.
-    const stop = api.subscribe(live => setState(fromLive(live)), connected => setState({ connected }));
+    // A new epoch means the API reseeded: order ids may now name different orders, so drop selections.
+    const stop = api.subscribe(live => setState(st => ({ ...fromLive(live), epoch:live.epoch,
+      ...(st.epoch && st.epoch !== live.epoch ? { drawer:null, modal:null, assignOpen:false } : {}) })), connected => setState({ connected }));
     const onR = () => setState({ w:window.innerWidth });
     window.addEventListener('resize', onR);
     return () => { stop(); window.removeEventListener('resize', onR); };

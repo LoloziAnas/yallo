@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 // In-memory state for the mock API: the shared demo seed plus the rules every app's actions go through.
 import {
   ACTIVE_STATUSES, COURIERS, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, MERCHANTS, clockAt, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
@@ -107,6 +108,7 @@ function cleanText(text: unknown, what: string) {
 
 function seed(): LiveState {
   return {
+    epoch: Date.now().toString(36) + '-' + randomBytes(3).toString('hex'),
     t: 0,
     merchants: clone(MERCHANTS),
     couriers: COURIERS.map(c => ({ ...clone(c), suspended: false, app: false })),

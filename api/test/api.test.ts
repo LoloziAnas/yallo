@@ -14,6 +14,13 @@ describe('Store', () => {
   let s: Store;
   beforeEach(() => { s = new Store(); });
 
+  test('a reset starts a new epoch', () => {
+    const first = s.state.epoch;
+    assert.match(first, /^[a-z0-9]+-[0-9a-f]{6}$/);
+    s.reset();
+    assert.notEqual(s.state.epoch, first);
+  });
+
   test('seeds the shared demo state', () => {
     assert.equal(s.state.orders.length, 16);
     assert.equal(order(s, '#48214').elapsedSec, 700);
