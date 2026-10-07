@@ -61,6 +61,9 @@ export default function RootLayout() {
     IBMPlexSansArabic_700Bold,
   });
   const [brandSplash, setBrandSplash] = useState(true);
+  // The navigator waits for the saved session: a deep link or a reload on a signed-in screen
+  // (e.g. /earnings on the web) must not be bounced to the welcome screen first.
+  const [restored, setRestored] = useState(false);
   const signedIn = useCourier((s) => s.signedIn);
   const requestUp = useCourier((s) => s.phase === 'request');
   const edge = useCourier((s) => s.edge);
@@ -103,7 +106,10 @@ export default function RootLayout() {
     SplashScreen.hideAsync();
     let cancelled = false;
     const minimum = new Promise((r) => setTimeout(r, BRAND_SPLASH_MS));
-    Promise.all([minimum, restoreSession().catch(() => false)]).then(() => {
+    const restoring = restoreSession()
+      .catch(() => false)
+      .finally(() => !cancelled && setRestored(true));
+    Promise.all([minimum, restoring]).then(() => {
       if (!cancelled) setBrandSplash(false);
     });
     return () => {
@@ -123,33 +129,36 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
         <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
-          <Stack.Protected guard={!signedIn}>
-            <Stack.Screen name="welcome" />
-            <Stack.Screen name="login" />
-            <Stack.Screen name="otp" />
-            <Stack.Screen name="signup" />
-            <Stack.Screen name="documents" />
-            <Stack.Screen name="verify" options={{ gestureEnabled: false }} />
-          </Stack.Protected>
-          <Stack.Protected guard={signedIn}>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen
-              name="delivery"
-              options={{ animation: 'slide_from_bottom', gestureDirection: 'vertical' }}
-            />
-            <Stack.Screen name="notifications" />
-            <Stack.Screen name="support" />
-            <Stack.Screen name="performance" />
-            <Stack.Screen name="bonuses" />
-            <Stack.Screen name="history/[id]" />
-            <Stack.Screen name="ticket/[id]" />
-            <Stack.Screen name="chat" />
-            <Stack.Screen name="problem" options={sheet} />
-            <Stack.Screen name="cancel-delivery" options={sheet} />
-            <Stack.Screen name="withdraw" options={sheet} />
-          </Stack.Protected>
-        </Stack>
+        {restored && (
+          <Stack
+            screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+            <Stack.Protected guard={!signedIn}>
+              <Stack.Screen name="welcome" />
+              <Stack.Screen name="login" />
+              <Stack.Screen name="otp" />
+              <Stack.Screen name="signup" />
+              <Stack.Screen name="documents" />
+              <Stack.Screen name="verify" options={{ gestureEnabled: false }} />
+            </Stack.Protected>
+            <Stack.Protected guard={signedIn}>
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen
+                name="delivery"
+                options={{ animation: 'slide_from_bottom', gestureDirection: 'vertical' }}
+              />
+              <Stack.Screen name="notifications" />
+              <Stack.Screen name="support" />
+              <Stack.Screen name="performance" />
+              <Stack.Screen name="bonuses" />
+              <Stack.Screen name="history/[id]" />
+              <Stack.Screen name="ticket/[id]" />
+              <Stack.Screen name="chat" />
+              <Stack.Screen name="problem" options={sheet} />
+              <Stack.Screen name="cancel-delivery" options={sheet} />
+              <Stack.Screen name="withdraw" options={sheet} />
+            </Stack.Protected>
+          </Stack>
+        )}
         {requestUp && <RequestOverlay />}
         {edge && <EdgeOverlay kind={edge} />}
         {offline && !brandSplash && <NoNetBanner waking={waking} />}

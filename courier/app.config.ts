@@ -4,7 +4,8 @@
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 
 export default ({ config }: ConfigContext): ExpoConfig => {
-  const api = process.env.EXPO_PUBLIC_API_URL ?? '';
+  // The API's address, or (demo builds) the config file that names it, which points at https.
+  const api = process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_CONFIG_URL || '';
   const cleartext = !api.startsWith('https://');
   // Web builds served from a sub-path of a static host (`npm run web:export -- --base /courier`).
   const baseUrl = process.env.EXPO_BASE_URL || undefined;

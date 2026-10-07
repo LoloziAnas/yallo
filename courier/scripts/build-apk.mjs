@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // Local Android release build, no EAS account needed:
-//   npm run apk -- --api https://yallo-api.example.com [--clean] [--all-abis] [--out dist]
+//   npm run apk -- --api https://<api>                  a fixed API address, or
+//   npm run apk -- --config https://…/yallo/api.json    the address read at runtime (demo tunnel:
+//                                                       one APK keeps working when it moves)
+//   [--clean] [--all-abis] [--out dist]
 // Bakes the API URL and the commit into the bundle, signs with the release key in ~/yallo-keys
 // (plugins/with-release-signing.js) and writes dist/yallo-courier-<version>-<sha>.apk.
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -20,9 +23,11 @@ const fail = (msg) => {
   process.exit(1);
 };
 
-const api = (opt('api') ?? process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '');
-if (!/^https?:\/\//.test(api)) fail('pass the API with --api https://… (or set EXPO_PUBLIC_API_URL)');
-if (!api.startsWith('https://')) console.warn(`build-apk: ${api} is plain http; the APK will allow cleartext traffic`);
+const config = opt('config') ?? process.env.YALLO_API_CONFIG_URL ?? '';
+const api = config ? '' : (opt('api') ?? process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '');
+const target = config || api;
+if (!/^https?:\/\//.test(target)) fail('pass --api https://… or --config https://…/api.json');
+if (!target.startsWith('https://')) console.warn(`build-apk: ${target} is plain http; the APK will allow cleartext traffic`);
 
 const keyProps = process.env.YALLO_KEYSTORE_PROPERTIES ?? join(homedir(), 'yallo-keys', 'courier-release.properties');
 if (!existsSync(keyProps)) fail(`no release key at ${keyProps} (see ~/yallo-keys/README.txt)`);
@@ -59,7 +64,8 @@ const javaHome = (() => {
 
 const env = {
   ...process.env,
-  EXPO_PUBLIC_API_URL: api,
+  EXPO_PUBLIC_API_URL: api || undefined,
+  EXPO_PUBLIC_API_CONFIG_URL: config || undefined,
   EXPO_PUBLIC_BUILD_SHA: sha,
   YALLO_KEYSTORE_PROPERTIES: keyProps,
   NODE_ENV: 'production',
@@ -73,7 +79,7 @@ const run = (cmd, a, cwd = root) => {
   if (r.status !== 0) fail(`${cmd} failed (${r.status})`);
 };
 
-console.log(`build-apk: Yallo Courier ${version} · ${sha} → ${api}`);
+console.log(`build-apk: Yallo Courier ${version} · ${sha} → ${config ? `API from ${config}` : api}`);
 run('npx', ['expo', 'prebuild', '--platform', 'android', '--no-install', ...(args.includes('--clean') ? ['--clean'] : [])]);
 // Modern Android phones are arm64; x86_64 runs on the emulator. `--all-abis` adds 32-bit devices.
 const abis = args.includes('--all-abis') ? 'armeabi-v7a,arm64-v8a,x86,x86_64' : 'arm64-v8a,x86_64';

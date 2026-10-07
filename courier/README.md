@@ -48,7 +48,14 @@ development builds; a release build would need HTTPS (or cleartext allowed for t
 
 ### Demo builds without EAS
 
-- **Android APK**: `npm run apk -- --api https://<api host>` runs `expo prebuild` and
+- **Where the API is**: the public demo's API sits behind a tunnel whose address changes when it
+  restarts. Demo builds are made with `--config https://lolozianas.github.io/yallo/api.json`
+  (`DEMO_API_CONFIG_URL` in shared), and the shared client reads `{ "api": "https://…" }` from that
+  file at runtime. It reads it again when the API stops answering, and the live feed follows it, so
+  one build keeps working across tunnel restarts without signing anyone out. The last address that
+  worked is kept on the device for cold starts. `--api <url>` pins one address instead (dev, e2e,
+  :8091).
+- **Android APK**: `npm run apk -- --config <api.json url>` (or `--api https://<api host>`) runs `expo prebuild` and
   `gradlew assembleRelease` locally and writes `dist/yallo-courier-<version>-<sha>.apk`. It needs
   the Android SDK (`ANDROID_HOME`, default `~/Android/Sdk`) and a JDK 17–21, which the script finds
   under `/usr/lib/jvm` if `JAVA_HOME` is older. It builds for arm64 phones and the x86_64 emulator;
@@ -58,10 +65,12 @@ development builds; a release build would need HTTPS (or cleartext allowed for t
   `courier-release.properties`; read `README.txt` there). `plugins/with-release-signing.js` reads
   it when Gradle runs (`YALLO_KEYSTORE_PROPERTIES` overrides the path). Back both files up:
   testers can only update an install that was signed with the same key.
-- **Web (iPhone testers)**: `npm run web:export -- --api https://<api host> [--out dir] [--base /path]`
-  writes a single-page static folder. On a host's build step, use
-  `EXPO_PUBLIC_API_URL=https://<api host> npm run web:build`, which writes `web-dist/`. The host must
-  rewrite every path to `/index.html`. On web, location only works while the page is open.
+- **Web (iPhone testers)**: `npm run web:export -- --config <api.json url> [--base /yallo/courier] [--out dir]`
+  writes a single-page static folder. The GitHub Pages workflow runs `npm run web:build` (→ `web-dist/`)
+  with `YALLO_API_CONFIG_URL` and `YALLO_BASE_PATH` set. Pages has no rewrites: the site's root
+  404.html sends `/yallo/courier/<path>` to `/yallo/courier/?p=<path>`, and `index.js` puts the path
+  back (`src/web/restore-path.ts`) before Expo Router starts. On web, location only works while the
+  page is open.
 - Builds show `version · commit` on the welcome and profile screens.
 - **Cold start**: the free demo API sleeps when idle. The app pings it at launch; while it wakes,
   the app shows "Connecting to Yallo…" and sign-in keeps retrying for about 90 s. A saved session

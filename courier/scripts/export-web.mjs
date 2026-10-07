@@ -1,7 +1,11 @@
 #!/usr/bin/env node
-// Static web build for a static host (for iPhone testers; foreground only, no background GPS):
-//   npm run web:export -- --api https://yallo-api.example.com [--out dist/web] [--base /courier]
-// On a static host's build step: EXPO_PUBLIC_API_URL=https://… npm run web:build (→ web-dist/).
+// Static single-page web build (for iPhone testers; foreground only, no background GPS):
+//   npm run web:export -- --api https://<api>              a fixed API address, or
+//   npm run web:export -- --config https://…/api.json      the address read at runtime from
+//                                                          { "api": "https://…" } (demo tunnel)
+//   [--base /yallo/courier] [--out dist/web]
+// On a host's build step (GitHub Pages workflow): `npm run web:build` (→ web-dist/) with
+// YALLO_API_CONFIG_URL (or EXPO_PUBLIC_API_URL) and YALLO_BASE_PATH in the environment.
 // The API must be https (the page is served over https, so its live feed becomes wss://).
 import { execFileSync, spawnSync } from 'node:child_process';
 import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
@@ -14,17 +18,18 @@ const opt = (name) => {
   const i = args.indexOf('--' + name);
   return i >= 0 ? args[i + 1] : undefined;
 };
-const api = (opt('api') ?? process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '');
-if (!/^https?:\/\//.test(api)) {
-  console.error('export-web: pass the API with --api https://…');
+const discovery = opt('config') ?? process.env.YALLO_API_CONFIG_URL ?? '';
+const api = discovery ? '' : (opt('api') ?? process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '');
+if (!/^https?:\/\//.test(discovery || api)) {
+  console.error('export-web: pass --api https://… or --config https://…/api.json');
   process.exit(1);
 }
-const base = (opt('base') ?? '').replace(/\/$/, '');
+const base = (opt('base') ?? process.env.YALLO_BASE_PATH ?? '').replace(/\/$/, '');
 const out = resolve(root, opt('out') ?? 'dist/web');
 
-// The commit: from git locally, or from the host's build environment (Render sets RENDER_GIT_COMMIT).
+// The commit: from git locally, or from the CI environment (GITHUB_SHA, RENDER_GIT_COMMIT).
 const sha = (() => {
-  const given = process.env.EXPO_PUBLIC_BUILD_SHA || process.env.RENDER_GIT_COMMIT;
+  const given = process.env.EXPO_PUBLIC_BUILD_SHA || process.env.GITHUB_SHA || process.env.RENDER_GIT_COMMIT;
   if (given) return given.slice(0, 7);
   try {
     const git = (...a) => execFileSync('git', a, { cwd: root, encoding: 'utf8' }).trim();
@@ -36,7 +41,8 @@ const sha = (() => {
 
 const env = {
   ...process.env,
-  EXPO_PUBLIC_API_URL: api,
+  EXPO_PUBLIC_API_URL: api || undefined,
+  EXPO_PUBLIC_API_CONFIG_URL: discovery || undefined,
   EXPO_PUBLIC_BUILD_SHA: sha,
   EXPO_BASE_URL: base,
   EXPO_WEB_SPA: '1',
@@ -55,4 +61,4 @@ copyFileSync(join(out, 'index.html'), join(out, '404.html'));
 writeFileSync(join(out, '_redirects'), `${base || ''}/*  ${base || ''}/index.html  200\n`);
 const html = readFileSync(join(out, 'index.html'), 'utf8');
 if (!html.includes('<script')) console.warn('export-web: index.html has no script tag?');
-console.log(`\nexport-web: Yallo Courier ${sha} → ${api}\n  static folder: ${out}${base ? `\n  served under: ${base}/` : ''}`);
+console.log(`\nexport-web: Yallo Courier ${sha} → ${discovery ? `API from ${discovery}` : api}\n  static folder: ${out}${base ? `\n  served under: ${base}/` : ''}`);

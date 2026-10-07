@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { API_URL, api } from '@/api/client';
+import { CONFIG_URL, api, apiUrl } from '@/api/client';
 import { signOut } from '@/api/session';
 import { Btn } from '@/components/button';
 import { Icon, type IconName } from '@/components/icon';
@@ -295,9 +295,9 @@ function DemoControls() {
       <SectionLabel>Demo controls</SectionLabel>
       <Txt size={13} color={colors.neutral700}>
         {source === 'live'
-          ? `Live · ${API_URL} · ${connected ? 'connected' : 'reconnecting…'}`
-          : API_URL
-            ? `Offline demo · waiting for ${API_URL}`
+          ? `Live · ${apiUrl()} · ${connected ? 'connected' : 'reconnecting…'}`
+          : api
+            ? `Offline demo · waiting for ${apiUrl() ?? CONFIG_URL}`
             : 'Offline demo (no API configured)'}
       </Txt>
       <Txt size={13} color={colors.neutral700}>
