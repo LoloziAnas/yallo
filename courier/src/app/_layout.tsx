@@ -19,10 +19,9 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { recheckSession, restoreSession } from '@/api/session';
+import { recheckSession, registerPush, restoreSession } from '@/api/session';
 import { useLiveSync } from '@/api/sync';
-import { api } from '@/api/client';
-import { getPushToken, setUpNotifications } from '@/device/notifications';
+import { setUpNotifications } from '@/device/notifications';
 import { useTracking } from '@/device/tracking';
 import {
   EdgeOverlay,
@@ -82,10 +81,8 @@ export default function RootLayout() {
   useEffect(() => {
     if (!signedIn) return;
     setUpNotifications()
-      .then(async (allowed) => {
-        const token = allowed ? await getPushToken() : null;
-        if (token && api && useCourier.getState().source === 'live')
-          await api.registerPushToken(token);
+      .then((allowed) => {
+        if (allowed && useCourier.getState().source === 'live') return registerPush();
       })
       .catch(() => {});
   }, [signedIn]);

@@ -7,7 +7,7 @@ import {
 } from '@yallo/shared';
 
 import { applyLive } from '@/api/sync';
-import { useCourier } from '@/store/courier-store';
+import { setRefusalHook, useCourier } from '@/store/courier-store';
 
 // Minimal live-state fixtures: one store, courier c1, and one order we vary per test.
 const STORE = { x: 33, y: 26 };
@@ -249,5 +249,36 @@ describe('handing over', () => {
     useCourier.setState({ completing: null });
     applyLive(live([order({ status: 'delivered', courierId: 'c1' })]));
     expect(s().edge).toBeNull();
+  });
+});
+
+describe('server restarts and lost sessions', () => {
+  const withEpoch = (st: LiveState, epoch: string) => ({ ...st, epoch }) as LiveState;
+
+  it('ends a job quietly when a new epoch no longer has it', () => {
+    applyLive(
+      withEpoch(live([order({ status: 'picking', courierId: 'c1' })], courier('busy')), 'e1'),
+    );
+    expect(s().phase).toBe('toPickup');
+    applyLive(withEpoch(live([]), 'e2'));
+    expect(s().phase).toBeNull();
+    expect(s().edge).toBeNull();
+    expect(s().toast?.text).toBe('Yallo was updated. Your jobs are up to date');
+  });
+
+  it('keeps a job the new epoch still has', () => {
+    const job = order({ status: 'picking', courierId: 'c1' });
+    applyLive(withEpoch(live([job], courier('busy')), 'e1'));
+    applyLive(withEpoch(live([job], courier('busy')), 'e2'));
+    expect(s().phase).toBe('toPickup');
+    expect(s().epoch).toBe('e2');
+  });
+
+  it('asks for a session re-check when the feed no longer has this courier', () => {
+    const hook = jest.fn();
+    setRefusalHook(hook);
+    applyLive({ ...live([]), couriers: [] } as unknown as LiveState);
+    expect(hook).toHaveBeenCalledTimes(1);
+    expect(s().source).toBe('live');
   });
 });

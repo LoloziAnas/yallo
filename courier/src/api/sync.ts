@@ -20,6 +20,7 @@ import {
   inDelivery,
   isPickupPhase,
   mkToast,
+  reportRefusal,
   useCourier,
   type Data,
 } from '@/store/courier-store';
@@ -61,6 +62,14 @@ function historyEntry(e: EarningEntry, st: LiveState): HistoryEntry {
   };
 }
 
+let lastLostCheck = 0;
+/** At most every 10 s, ask for a session re-check (via the store's refusal hook). */
+function lostRecord() {
+  if (Date.now() - lastLostCheck < 10_000) return;
+  lastLostCheck = Date.now();
+  reportRefusal();
+}
+
 export function applyLive(st: LiveState) {
   const s = useCourier.getState();
   const ME = s.courierId;
@@ -71,9 +80,42 @@ export function applyLive(st: LiveState) {
     if (s.phase || s.edge) return useCourier.setState(p);
     p.source = 'live';
   }
+  // A new epoch: the API restarted from other state or was reset. Forget what referred to the old
+  // state; the job (if any) is re-derived below, and a job that's gone ends quietly, not as a loss.
+  if (st.epoch) p.epoch = st.epoch;
+  let endedByReset = false;
+  if (s.epoch && st.epoch && st.epoch !== s.epoch) {
+    Object.assign(p, { dropped: [], offerId: null, completing: null, leg: null });
+    const stillMine = st.orders.some(
+      (o) => o.id === s.jobId && o.courierId === ME && ACTIVE_STATUSES.includes(o.status),
+    );
+    if (!stillMine && (inDelivery(s.phase) || s.phase === 'request')) {
+      endedByReset = true;
+      Object.assign(p, {
+        phase: null,
+        nav: false,
+        edge: null,
+        jobId: null,
+        toast: mkToast('Yallo was updated. Your jobs are up to date'),
+      });
+    }
+  }
+
   // Signed out, the feed is anonymous and has no courier record: nothing more to follow yet.
   const me = st.couriers.find((c) => c.id === ME);
-  if (!me || !s.signedIn) return useCourier.setState(p);
+  if (!s.signedIn) return useCourier.setState(p);
+  if (!me) {
+    // Signed in but served the anonymous view: the session may have ended.
+    useCourier.setState(p);
+    return lostRecord();
+  }
+  p.me = {
+    name: me.name,
+    phone: me.phone,
+    vehicle: me.vehicle,
+    rating: me.rating,
+    ratingCount: me.ratingCount,
+  };
   if (!s.phase && !s.edge) p.online = me.status !== 'off';
 
   const active = st.orders.filter((o) => ACTIVE_STATUSES.includes(o.status));
@@ -123,7 +165,7 @@ export function applyLive(st: LiveState) {
     const was = st.orders.find((o) => o.id === s.jobId);
     // Delivered from this app (the request may still be in flight): completion, not a loss.
     const handedOver = s.completing === s.jobId || was?.status === 'delivered';
-    if (ownJob && inDelivery(s.phase) && !s.edge && !handedOver) {
+    if (ownJob && inDelivery(s.phase) && !s.edge && !handedOver && !endedByReset) {
       // Ops took the job back mid-delivery: cancelled outright, or reassigned / returned to the queue.
       if (was?.status === 'cancelled') {
         Object.assign(p, { edge: 'opsCancelled', opsComp: was.courierCompensation ?? 0 });
@@ -175,7 +217,13 @@ export function applyLive(st: LiveState) {
         notifyCourier(t('New delivery'), `${merchant.name} · ${p.order!.earn} DH`);
       }
     }
-  } else if (s.phase === 'request' && s.offerId && !s.dropped.includes(s.offerId) && !job) {
+  } else if (
+    s.phase === 'request' &&
+    s.offerId &&
+    !s.dropped.includes(s.offerId) &&
+    !job &&
+    !endedByReset
+  ) {
     // The offer ended without an answer from here: expired, or ops withdrew it.
     Object.assign(p, { phase: null, offerId: null, toast: mkToast('Request expired') });
   }

@@ -47,6 +47,11 @@ const PHR: [string, string, string][] = [
     'Votre session a expiré. Reconnectez-vous',
     'انتهت جلستك. سجّل الدخول مجدداً',
   ],
+  [
+    'Yallo was updated. Your jobs are up to date',
+    'Yallo a été mis à jour. Vos courses sont à jour',
+    'تم تحديث يالو. طلباتك محدّثة',
+  ],
   // Delivery PIN checked by the API.
   [
     'Ask the customer for the PIN shown in their app',

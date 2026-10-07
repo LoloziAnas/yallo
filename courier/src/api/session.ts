@@ -5,7 +5,8 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 import { DEMO_COURIER, api } from '@/api/client';
-import { useCourier } from '@/store/courier-store';
+import { getPushToken } from '@/device/notifications';
+import { setRefusalHook, useCourier } from '@/store/courier-store';
 
 const KEY = 'yallo.courier.session';
 
@@ -111,8 +112,25 @@ export async function recheckSession() {
   }
 }
 
-/** Ends the session on the server and on the phone. */
+// Any refusal while signed in may mean the session ended (expired, suspended, API reset):
+// re-check it rather than leave the courier on a session every call would refuse.
+setRefusalHook(() => {
+  verified = false;
+  recheckSession();
+});
+
+let pushToken: string | null = null;
+
+/** Registers this device for offer / chat pushes (no-op until push credentials exist). */
+export async function registerPush() {
+  pushToken = await getPushToken();
+  if (pushToken && api) await api.registerPushToken(pushToken).catch(() => {});
+}
+
+/** Ends the session on the server and on the phone; this device stops receiving the courier's pushes. */
 export async function signOut() {
+  if (pushToken) await api?.unregisterPushToken(pushToken).catch(() => {});
+  pushToken = null;
   await api?.signOut().catch(() => {});
   await storage.clear().catch(() => {});
   useCourier.getState().logout();

@@ -70,6 +70,10 @@ export interface Data {
   /** Latest GPS fix from this phone, and where tracking stands. */
   gps: { lat: number; lon: number; accuracy: number | null; at: number } | null;
   tracking: 'off' | 'foreground' | 'background' | 'foreground-only';
+  /** Server state generation; a change means the API restarted from other state or was reset. */
+  epoch: string | null;
+  /** Live: this courier's record (name, vehicle, rating) as the server has it. */
+  me: { name: string; phone: string; vehicle: string; rating: number; ratingCount?: number } | null;
   /** The job this app is handing over right now (live), so its disappearance isn't read as a loss. */
   completing: string | null;
   /** Trip compensation ops granted when cancelling the job (live). */
@@ -147,6 +151,13 @@ const TOAST_MS = 2600;
 
 export const mkToast = (text: string) => ({ text, until: Date.now() + TOAST_MS });
 
+/** Called when the API refuses something; the session module uses it to re-check the session. */
+let onRefusal: (() => void) | null = null;
+export const setRefusalHook = (fn: () => void) => {
+  onRefusal = fn;
+};
+export const reportRefusal = () => onRefusal?.();
+
 const INITIAL: Data = {
   courierId: DEMO_COURIER.id,
   userName: DEMO_COURIER.name,
@@ -159,6 +170,8 @@ const INITIAL: Data = {
   dropped: [],
   leg: null,
   opsComp: 0,
+  epoch: null,
+  me: null,
   completing: null,
   earnings: null,
   payout: null,
@@ -207,7 +220,10 @@ export const useCourier = create<CourierState>()((set, get) => {
   const toast = (text: string) => set({ toast: mkToast(text) });
   /** Runs an API call; on refusal shows the server's message and undoes the optimistic change. */
   const call = (p: Promise<unknown> | undefined, undo?: Partial<Data>) =>
-    p?.catch((e) => set({ ...undo, toast: mkToast(errorText(e)) }));
+    p?.catch((e) => {
+      set({ ...undo, toast: mkToast(errorText(e)) });
+      onRefusal?.();
+    });
   /** Hand the current job back to ops: drop it if not picked up yet, otherwise cancel with a reason. */
   const release = (reason: string, compensate: boolean) => {
     const { jobId, jobStatus } = get();
