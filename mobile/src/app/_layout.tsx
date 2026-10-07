@@ -86,6 +86,7 @@ export default function RootLayout() {
             <Stack.Screen name="new-cart" options={sheet} />
             <Stack.Screen name="chat" options={sheet} />
             <Stack.Screen name="payments" options={sheet} />
+            <Stack.Screen name="help" options={sheet} />
           </Stack.Protected>
           {/* Address sheets are also used during onboarding ("Enter address manually"). */}
           <Stack.Screen name="address" options={sheet} />

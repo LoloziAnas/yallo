@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
+import { Linking, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, IconButton } from '@/components/button';
@@ -276,7 +276,11 @@ export function Tracking() {
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <Button
                   variant="secondary"
-                  onPress={() => showToast(withName(t.calling, rider.first))}
+                  onPress={() => {
+                    // Opens the phone's dialer with the courier's number from the API.
+                    showToast(withName(t.calling, rider.first));
+                    Linking.openURL('tel:' + courier.phone.replace(/\s/g, '')).catch(() => {});
+                  }}
                   accessibilityLabel={t.call}
                   style={{ flex: 1, height: 48 }}>
                   <Icon name="phone" size={15} />

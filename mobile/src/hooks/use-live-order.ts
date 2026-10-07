@@ -1,7 +1,7 @@
 import type { OrderStatus } from '@yallo/shared';
 
 import { storeById } from '@/data/catalog';
-import { useApp } from '@/store/app-store';
+import { isOurOrder, useApp } from '@/store/app-store';
 import { customerStep, etaMinutes, riderNames } from '@/store/derive';
 
 /**
@@ -13,7 +13,7 @@ export function useLiveOrder() {
   const live = useApp((s) => s.live);
   if (!active) return null;
 
-  const order = live?.orders.find((o) => o.id === active.id);
+  const order = live?.orders.find((o) => isOurOrder(o, active));
   // `lost`: the order vanished from the live feed (the API restarted or was reset).
   const status: OrderStatus = order?.status ?? (active.lost ? 'cancelled' : 'pending');
   const courier = order?.courierId

@@ -10,6 +10,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { api } from '@/api/client';
 import { merchantForStore, zoneForDistrict } from '@/data/api-merchants';
+import { type HelpTopic, helpTopics } from '@/data/help';
 import { locate } from '@/location/locate';
 
 import {
@@ -99,6 +100,8 @@ type State = {
   // misc
   toast: string | null;
   homeLoading: boolean;
+  /** Support tickets this person opened (ids in the API), newest last. */
+  tickets: string[];
   /** Latest snapshot from the mock API's live feed. */
   live: LiveState | null;
   /** Live feed connection; null until the first attempt finishes. */
@@ -127,6 +130,10 @@ type Actions = {
   placeOrder: () => Promise<void>;
   finishOrder: () => void;
   reorder: (order: Order) => void;
+  /** Opens a support ticket (optionally about an order). Resolves with its id, or null on failure. */
+  openTicket: (topic: HelpTopic, text: string, orderId: string | null) => Promise<string | null>;
+  /** Adds the customer's reply to one of their tickets. Resolves false on failure. */
+  replyTicket: (ticketId: string, text: string) => Promise<boolean>;
   /** Starts the live feed. Returns a function that stops it. */
   connectLive: () => () => void;
   sendChat: (text: string) => void;
@@ -144,6 +151,14 @@ type Actions = {
    */
   locateMe: () => Promise<'ok' | 'denied' | 'unavailable'>;
 };
+
+/**
+ * Whether a live order is the one being tracked. Order numbers restart when the API is reset, so the
+ * number alone could match someone else's order; the store and total must match too.
+ */
+export function isOurOrder(o: ApiOrder, a: ActiveOrder) {
+  return o.id === a.id && o.merchantId === merchantForStore[a.storeId] && o.total === a.total;
+}
 
 /** Max lengths the API accepts. */
 const MAX_FIELD = 120;
@@ -201,6 +216,7 @@ const userDefaults = () => ({
   rating: 0,
   chat: [],
   orders: seedOrders,
+  tickets: [] as string[],
 });
 
 /** Saved on the device and restored on the next launch. Everything else starts fresh. */
@@ -222,6 +238,7 @@ const persisted = [
   'rating',
   'chat',
   'orders',
+  'tickets',
 ] as const satisfies readonly (keyof State)[];
 
 type Persisted = Pick<State, (typeof persisted)[number]>;
@@ -412,7 +429,7 @@ export const useApp = create<State & Actions>()(
         const { placedAt, lost, scheduledFor, ...rest } = s.active;
         const status = lost
           ? 'cancelled'
-          : (s.live?.orders.find((o) => o.id === rest.id)?.status ?? 'delivered');
+          : (s.live?.orders.find((o) => isOurOrder(o, s.active!))?.status ?? 'delivered');
         // Cancelled orders aren't kept in the history.
         const at = s.live ? demoClock(s.live.t) : clock(Date.now());
         const done: Order = { ...rest, date: 'Today · ' + at, status };
@@ -432,13 +449,42 @@ export const useApp = create<State & Actions>()(
         set({ cart: { storeId: o.storeId, lines }, promo: null, promoMsg: '' });
         router.push('/cart');
       },
+      openTicket: async (topic, text, orderId) => {
+        const tp = helpTopics.find((x) => x.id === topic)!;
+        // Only API orders have an id ops can open ("#48220"); for demo history, name the order in the text.
+        const apiOrder = orderId?.startsWith('#') ? orderId : null;
+        const body = orderId && !apiOrder ? `${text.trim()}\n(Order ${orderId})` : text.trim();
+        try {
+          const ticket = await api.openTicket({
+            source: 'customer',
+            requesterName: CUSTOMER_NAME,
+            subject: tp.subject,
+            orderId: apiOrder,
+            priority: tp.priority,
+            text: body,
+          });
+          set((s) => ({ tickets: [...s.tickets, ticket.id] }));
+          return ticket.id;
+        } catch {
+          return null;
+        }
+      },
+
+      replyTicket: async (ticketId, text) => {
+        try {
+          await api.addTicketMessage(ticketId, 'requester', CUSTOMER_NAME, text.trim());
+          return true;
+        } catch {
+          return false;
+        }
+      },
 
       connectLive: () =>
         api.subscribe(
           (live) => {
             const { active } = get();
             if (!active) return set({ live });
-            const o = live.orders.find((x) => x.id === active.id);
+            const o = live.orders.find((x) => isOurOrder(x, active));
             const lost = !o && Date.now() - active.placedAt > PLACE_GRACE_MS;
             set({ live, ...(lost !== !!active.lost ? { active: { ...active, lost } } : {}) });
           },

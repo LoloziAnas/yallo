@@ -120,11 +120,11 @@ export function Profile() {
 
         {(
           [
-            ['help', t.help],
-            ['gear', t.settings],
+            ['help', t.help, () => router.push('/help')],
+            ['gear', t.settings, soon],
           ] as const
-        ).map(([icon, label]) => (
-          <Row key={label} icon={icon} onPress={soon} minHeight={58}>
+        ).map(([icon, label, onPress]) => (
+          <Row key={label} icon={icon} onPress={onPress} minHeight={58}>
             <Txt w={500} style={{ flex: 1 }}>
               {label}
             </Txt>

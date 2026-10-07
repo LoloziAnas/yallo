@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { ScrollView, View } from 'react-native';
 
 import { Button } from '@/components/button';
@@ -22,7 +23,6 @@ export function OrderDetail({ id }: { id: string }) {
   const orders = useApp((s) => s.orders);
   const addresses = useApp((s) => s.addresses);
   const reorder = useApp((s) => s.reorder);
-  const showToast = useApp((s) => s.showToast);
   const order = orders.find((o) => o.id === id) ?? orders[0];
   if (!order) return <Screen>{null}</Screen>;
   const addr = addresses.find((a) => a.id === order.addrId) ?? addresses[0];
@@ -113,7 +113,7 @@ export function OrderDetail({ id }: { id: string }) {
           icon="help"
           label={t.getHelp}
           fontSize={16}
-          onPress={() => showToast(t.soon)}
+          onPress={() => router.push({ pathname: '/help', params: { orderId: order.id } })}
           style={{ flex: 1, height: 54 }}
         />
         <Button
