@@ -41,6 +41,8 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
     return () => { stop(); clearTimeout(slow); window.removeEventListener('resize', onR); };
   }, [setState]);
 
+  // Opens the phone or SMS app on this device (tel:/sms: link); there's no in-app calling.
+  const dial = (phone, name, scheme = 'tel') => phone ? window.location.assign(scheme + ':' + phone.replace(/[^\d+]/g, '')) : toast('No phone number on file for ' + (name || 'them'));
   const toast = text => {
     const until = Date.now() + 2600;
     setState({ toast:{ text, until } });
@@ -190,9 +192,9 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
   const TO = T.order && s.orders.find(o => o.id === T.order);
   const addMsg = text => { if (text.trim()) act(() => api.addTicketMessage(T.id, 'ops', (user?.name ?? 'Ops').split(' ')[0], text), null, { draft:'' }); };
   const actByFrom = {
-    Courier:[[IC.wallet,'Compensate courier 10 DH',() => toast('10 DH added to ' + T.name)],[IC.x,'Cancel linked order',() => TO && setState({ modal:'cancel', reason:null, drawer:{ type:'order', id:TO.id } })],[IC.phone,'Call courier',() => toast('Calling ' + T.name + '…')]],
-    Merchant:[[IC.bike,'Assign courier now',() => TO && setState({ page:'live', drawer:{ type:'order', id:TO.id }, assignOpen:true })],[IC.phone,'Call merchant',() => toast('Calling ' + T.name + '…')]],
-    Customer:[[IC.refund,'Refund order',() => TO && setState({ modal:'refund', reason:null, refundMode:'full', refundAmt:String(TO.total), drawer:{ type:'order', id:TO.id } })],[IC.gift,'Send 20 DH voucher',() => toast('20 DH voucher sent to ' + T.name)],[IC.phone,'Call customer',() => toast('Calling ' + T.name + '…')]]
+    Courier:[[IC.x,'Cancel linked order',() => TO && setState({ modal:'cancel', reason:null, drawer:{ type:'order', id:TO.id } })],[IC.phone,'Call courier',() => dial(s.couriers.find(c => c.name === T.name)?.phone, T.name)]],
+    Merchant:[[IC.bike,'Assign courier now',() => TO && setState({ page:'live', drawer:{ type:'order', id:TO.id }, assignOpen:true })],[IC.phone,'Call merchant',() => dial(MBY[T.name]?.phone, T.name)]],
+    Customer:[[IC.refund,'Refund order',() => TO && setState({ modal:'refund', reason:null, refundMode:'full', refundAmt:String(TO.total), drawer:{ type:'order', id:TO.id } })],[IC.phone,'Call customer',() => dial(TO?.phone, T.name)]]
   };
   const tkt = { ...T, from:T.from, hasOrder:!!TO, noOrder:!TO, om:TO && TO.m, oc:TO && TO.c, ototal:TO && TO.total, opay:TO && TO.pay, ocourier:TO && CBY[TO.courier] ? CBY[TO.courier].name : 'No courier', openOrder:TO ? openOrder(TO.id) : null,
     msgs:T.msgs.map(([w, text, t, author]) => ({ text, t, who:w === 'us' ? author + ' (Yallo)' : T.name, align:w === 'us' ? 'flex-end' : 'flex-start', bg:w === 'us' ? 'var(--color-accent)' : 'var(--color-surface)', fg:w === 'us' ? '#fff' : 'var(--color-text)' })),
@@ -264,13 +266,13 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
   const RS = { cancel:['Merchant closed','Customer request','No courier available','Address unreachable','Fraud suspected'], refund:['Order arrived cold','Missing item','Wrong item','Late delivery','Damaged packaging'], reject:['Documents unreadable','Expired documents','Identity mismatch','Under 18'] };
   const reasons = (RS[s.modal] || []).map(label => ({ label, onClick:set({ reason:label }), ...chip(s.reason === label) }));
   const MD = {
-    cancel:{ title:'Cancel order ' + (dOrderObj ? dOrderObj.id : ''), sub:'The customer is refunded automatically and notified by SMS.', isCancel:true, confirm:'Cancel order', onConfirm:() => {
+    cancel:{ title:'Cancel order ' + (dOrderObj ? dOrderObj.id : ''), sub:'The customer and courier see the cancellation in their apps. No payment is reversed automatically; issue a refund if one is owed.', isCancel:true, confirm:'Cancel order', onConfirm:() => {
       const o = dOrderObj; act(() => api.cancelOrder(o.id, s.reason, s.comp), o.id + ' cancelled' + (s.comp && o.courier ? ' · courier compensated' : ''), { modal:null }); } },
-    refund:{ title:'Refund ' + (dOrderObj ? dOrderObj.id : ''), sub:dOrderObj ? 'Paid ' + dOrderObj.total + ' DH · ' + (dOrderObj.pay === 'Cash' ? 'cash refund goes to Yallo wallet' : 'back to card in 3–5 days') : '', isRefund:true, confirm:'Issue refund', onConfirm:() => {
+    refund:{ title:'Refund ' + (dOrderObj ? dOrderObj.id : ''), sub:dOrderObj ? 'Paid ' + dOrderObj.total + ' DH · ' + 'the refund is recorded on the order; pay it back to the customer yourself, as no money moves automatically yet' : '', isRefund:true, confirm:'Issue refund', onConfirm:() => {
       const amt = s.refundMode === 'full' ? dOrderObj.total : Math.min(dOrderObj.total, Number(s.refundAmt) || 0);
       act(() => api.refundOrder(dOrderObj.id, amt, s.reason), amt + ' DH refunded on ' + dOrderObj.id, { modal:null }); } },
-    reject:{ title:'Reject ' + (appCur ? appCur.name : ''), sub:'The applicant gets an SMS with the reason and can re-apply in 30 days.', confirm:'Reject application', onConfirm:() => act(() => api.rejectApplication(appCur.id, s.reason), appCur.name + ' rejected', { modal:null }) },
-    payout:{ title:'Approve ' + selKeys.length + ' payouts', sub:fmt(selTotal) + ' DH will be sent by bank transfer on ' + s.payouts.payDate + '.', confirm:'Approve payouts', onConfirm:() => act(() => api.approvePayouts(selKeys), selKeys.length + ' payouts approved', { paySel:{}, modal:null }) }
+    reject:{ title:'Reject ' + (appCur ? appCur.name : ''), sub:'The reason is recorded on the application. The applicant isn\'t messaged automatically.', confirm:'Reject application', onConfirm:() => act(() => api.rejectApplication(appCur.id, s.reason), appCur.name + ' rejected', { modal:null }) },
+    payout:{ title:'Approve ' + selKeys.length + ' payouts', sub:fmt(selTotal) + ' DH marked approved for ' + s.payouts.payDate + '. The bank transfer itself is made outside Yallo.', confirm:'Approve payouts', onConfirm:() => act(() => api.approvePayouts(selKeys), selKeys.length + ' payouts approved', { paySel:{}, modal:null }) }
   };
   const md = MD[s.modal] ? { isRefund:false, isCancel:false, ...MD[s.modal], reasons, disabled:(s.modal === 'cancel' || s.modal === 'refund' || s.modal === 'reject') && !s.reason } : { reasons:[] };
 
@@ -284,11 +286,11 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
     qTabs, queue, queueEmpty:!queue.length, zoneLabels, mapMerchants, mapCouriers, hasRoute, route, layers:s.layers, layerBtns, fleetLegend,
     oFilters, oq:s.oq, onOq:e => setState({ oq:e.target.value }), orderRows, orderRowsCount:orderRows.length, ordersEmpty:!orderRows.length,
     cTabs, cFleet:s.cTab === 'fleet', cApps:s.cTab === 'apps' && !!appCur, fleetRows, appList, app,
-    approveApp:() => act(() => api.approveApplication(appCur.id), appCur.name + ' activated · welcome SMS sent'), rejectApp:set({ modal:'reject', reason:null }),
+    approveApp:() => act(() => api.approveApplication(appCur.id), appCur.name + ' activated · they can sign in with their phone number'), rejectApp:set({ modal:'reject', reason:null }),
     merchantRows,
     tFilters, ticketList, tkt, macros, resolveLabel:T.resolved ? 'Resolved' : 'Resolve',
     resolveTicket:() => act(() => api.resolveTicket(T.id), T.id + ' resolved'),
-    escalate:() => act(() => api.escalateTicket(T.id), T.id + ' escalated to Tier 2'), escalateLabel:T.escalated ? 'Escalated' : 'Escalate',
+    escalate:() => act(() => api.escalateTicket(T.id), T.id + ' escalated'), escalateLabel:T.escalated ? 'Escalated' : 'Escalate',
     draft:s.draft, onDraft:e => setState({ draft:e.target.value }), onDraftKey:e => { if (e.key === 'Enter') addMsg(s.draft); }, sendMsg:() => addMsg(s.draft),
     payTabs:[['couriers','Couriers'],['merchants','Merchants']].map(([k, label]) => ({ label, onClick:set({ payTab:k, paySel:{} }), ...pill(s.payTab === k) })),
     payKpis, payRows, payPeriod:payWeekLabel + ' · ' + s.payouts.period + ' · payout ' + s.payouts.payDate, payColName:isC ? 'Courier' : 'Merchant', payColN:isC ? 'Deliv.' : 'Orders', payColAdj:isC ? 'Cash held' : 'Commission',
@@ -296,9 +298,9 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
     toggleAll:() => setState(() => { const d = {}; if (!allOn) selectable.forEach(r => d[r.id] = true); return { paySel:d }; }), allMark:allOn ? '✓' : '', allBg:allOn ? 'var(--color-accent)' : 'var(--color-card)', allBd:allOn ? 'var(--color-accent)' : 'var(--color-neutral-400)',
     hasDrawer:!!(dOrderObj || dCourierObj), dOrder:!!dOrderObj, dCourier:!!dCourierObj, od, cd, nearest, radiusKm:DISPATCH_RADIUS_KM, showAssign:!!dOrderObj && s.assignOpen && ACTIVE.includes(dOrderObj.st) && dOrderObj.st !== 'delivering',
     assignLabel:s.assignOpen ? 'Hide' : dOrderObj && dOrderObj.courier ? 'Reassign' : 'Assign courier', toggleAssign:set({ assignOpen:!s.assignOpen }),
-    closeDrawer:set({ drawer:null }), withdrawOffer:() => act(() => api.withdrawOffer(dOrderObj.id), 'Offer withdrawn'), callMerchant:() => toast('Calling ' + (dOrderObj && dOrderObj.m) + '…'), callCustomer:() => toast('Calling ' + (dOrderObj && dOrderObj.c) + (dOrderObj && dOrderObj.phone ? ' · ' + dOrderObj.phone : '') + '…'),
+    closeDrawer:set({ drawer:null }), withdrawOffer:() => act(() => api.withdrawOffer(dOrderObj.id), 'Offer withdrawn'), callMerchant:() => dial(dOrderObj && MBY[dOrderObj.m]?.phone, dOrderObj?.m), callCustomer:() => dial(dOrderObj?.phone, dOrderObj?.c),
     openRefund:() => setState({ modal:'refund', reason:null, refundMode:'full', refundAmt:String(dOrderObj.total) }), openCancel:set({ modal:'cancel', reason:null, comp:true }),
-    msgCourier:() => toast('Message sent to ' + (dCourierObj && dCourierObj.name)),
+    msgCourier:() => dial(dCourierObj?.phone, dCourierObj?.name, 'sms'),
     suspendLabel:dCourierObj && s.suspended[dCourierObj.id] ? 'Reactivate' : 'Suspend',
     toggleSuspend:() => { const id = dCourierObj.id; act(() => api.setCourierSuspended(id, !s.suspended[id]), dCourierObj.name + (s.suspended[id] ? ' reactivated' : ' suspended')); },
     hasModal:!!MD[s.modal], md, closeModal:set({ modal:null }),
