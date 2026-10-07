@@ -114,6 +114,9 @@ function alertStatus(s: State, o: ApiOrder) {
   );
 }
 
+/** The API's 401s say "Sign in first" / "Sign in as a customer" (the client doesn't expose the status). */
+const isSignedOutError = (e: unknown) => e instanceof Error && /^sign in\b/i.test(e.message);
+
 /** How long a just-placed order may be missing from the live feed before it counts as lost. */
 const PLACE_GRACE_MS = 5000;
 type PendingAdd = { pid: string; sel: Selection; qty: number; fromProduct: boolean };
@@ -184,6 +187,8 @@ type State = {
   setUpPush: () => Promise<void>;
   /** The Profile switch. Turning it off also stops the API pushing to this device. */
   setNotif: (on: boolean) => void;
+  /** The API no longer accepts the saved session (it expired): back to guest, keeping the cart and addresses. */
+  expireSession: () => void;
 };
 
 type Actions = {
@@ -244,6 +249,7 @@ export function isOurOrder(o: ApiOrder, a: ActiveOrder) {
 }
 
 /** Max lengths the API accepts. */
+const MAX_LINES = 50;
 const MAX_FIELD = 120;
 const MAX_INSTRUCTIONS = 500;
 const clip = (v: string, n: number) => v.trim().slice(0, n);
@@ -358,6 +364,12 @@ export const useApp = create<State & Actions>()(
       locDraft: null,
       notif: true,
       pushToken: null,
+      expireSession: () => {
+        if (!get().token) return;
+        api.setToken(null);
+        set({ token: null, phone: null, userName: null, pushToken: null });
+        get().showToast(t().sessionExpired);
+      },
       setNotif: (on) => {
         const pt = get().pushToken;
         set({ notif: on, ...(on ? {} : { pushToken: null }) });
@@ -441,6 +453,11 @@ export const useApp = create<State & Actions>()(
         }
         const key = lineKey(pid, sel);
         const unit = unitPrice(p, sel);
+        // The API takes at most MAX_LINES different items per order.
+        if (s.cart.lines.length >= MAX_LINES && !s.cart.lines.some((l) => l.key === key)) {
+          s.showToast(t().cartFull.replace('%n', String(MAX_LINES)));
+          return false;
+        }
         set((st) => {
           const lines = st.cart.lines.slice();
           const i = lines.findIndex((l) => l.key === key);
@@ -505,6 +522,11 @@ export const useApp = create<State & Actions>()(
           placed = await api.placeOrder(body);
         } catch (e) {
           set({ placing: false });
+          if (isSignedOutError(e)) {
+            get().expireSession();
+            router.push({ pathname: '/login', params: { then: 'checkout' } });
+            return;
+          }
           // 409s carry a customer-ready reason (paused, outside hours, under the minimum); keep it short.
           const closed = e instanceof Error && /paused|closed/i.test(e.message);
           get().showToast(closed ? `${store.name} · ${t().closed}` : t().orderFailed);
@@ -580,8 +602,10 @@ export const useApp = create<State & Actions>()(
         let h: CustomerHistory;
         try {
           h = await api.myHistory();
-        } catch {
-          return; // Offline or signed out elsewhere: keep what's on the device.
+        } catch (e) {
+          // Refused as signed out: the session expired. Offline: keep what's on the device.
+          if (isSignedOutError(e)) get().expireSession();
+          return;
         }
         const s = get();
         set({
