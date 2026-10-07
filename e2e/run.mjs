@@ -20,7 +20,7 @@ const CUSTOMER_APP = process.env.CUSTOMER_URL || 'http://localhost:8090';
 const CUSTOMER_MODE = process.env.CUSTOMER || 'ui';
 const OUT = new URL('./out/', import.meta.url).pathname;
 
-const COURIER = { id: 'c1', name: 'Karim El Amrani' };
+const COURIER = { id: 'c1', name: 'Karim El Amrani', phone: '0661234578' };
 // Karim is in Guéliz and jobs only go to couriers within the dispatch radius (5 km), so the order comes from
 // Dar Zitoun (m1), 0.7 km from him.
 const STORE = {
@@ -198,9 +198,20 @@ try {
     const p = pages.courier;
     await p.waitForTimeout(2000); // brand splash
     await tap(p, 'Log in');
-    await tap(p, 'Send code');
-    for (const d of '1234') await tap(p, d);
-    await seen(p, 'Welcome back, Karim');
+    const phone = p.getByLabel('Phone number', { exact: true });
+    if (await phone.count()) {
+      // Phone sign-in: release builds don't prefill the number; the code is checked by the API (123456 in dev).
+      await phone.first().fill(COURIER.phone);
+      await tap(p, 'Send code');
+      await seen(p, 'Enter the code');
+      for (const d of '123456') await tap(p, d);
+      await seen(p, 'Salam, Karim');
+    } else {
+      // Older builds: a demo sign-in with a 4-digit code.
+      await tap(p, 'Send code');
+      for (const d of '1234') await tap(p, d);
+      await seen(p, 'Welcome back, Karim');
+    }
     await seen(p, "You're online");
     const c = (await getState()).couriers.find(c => c.id === COURIER.id);
     if (!c.app) throw new Error('The API does not see Karim\'s app as attached');
@@ -334,9 +345,9 @@ try {
   await step('A second order: the customer cancels it while it is new; ops sees who cancelled', async () => {
     const p = pages.customer;
     if (!p) return skip('no customer app in this run');
-    // Back to Home, then the same store and item; the customer is already signed in.
-    const home = p.getByRole('button', { name: 'Home', exact: true });
-    if (await home.count()) await home.first().click();
+    // Back to Home (the tab bar's tabs are role="tab"), then the same store and item; the customer is signed in.
+    await p.getByRole('tab', { name: 'Home', exact: true }).first().click();
+    await p.getByLabel(STORE.customerName, { exact: true }).first().waitFor({ timeout: 10_000 });
     await STORE.ui(p, (name) => p.getByRole('button', { name, exact: typeof name === 'string' }).first().click());
     await p.getByRole('button', { name: 'View cart, 1', exact: true }).first().click();
     await p.getByRole('button', { name: /^Place order/ }).first().click();
