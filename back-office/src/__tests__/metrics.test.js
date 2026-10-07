@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { acceptanceRate, avgFirstReplyMin, isLate, merchantStats, onlineFor, ordersPerHour, overviewKpis, zoneStats } from '../metrics.js';
+import { acceptanceRate, avgFirstReplyMin, isLate, merchantStats, onlineFor, ordersPerHour, overviewKpis, todayOrders, zoneStats } from '../metrics.js';
+import { applyClock } from '@yallo/shared';
 import { live } from './fixture.js';
 
 const L = live();
@@ -50,5 +51,21 @@ describe('metrics', () => {
   test('average first reply over tickets ops answered', () => {
     expect(avgFirstReplyMin(L.tickets)).toBe(2);   // T-9012: opened 18:30, Leila replied 18:32
     expect(avgFirstReplyMin([])).toBe(null);
+  });
+
+  test('today: on a clock that runs for days, only orders placed since midnight', () => {
+    expect(todayOrders(L.orders, L.t)).toHaveLength(16);
+    // 18:34 + 6 h is past midnight: the seeded evening is yesterday.
+    const later = L.t + 6 * 3600;
+    expect(todayOrders(L.orders, later)).toHaveLength(0);
+    const fresh = { ...byId('#48217'), statusAt: { pending: later - 60 } };
+    expect(todayOrders([...L.orders, fresh], later)).toEqual([fresh]);
+  });
+
+  test('the hour chart follows the server clock', () => {
+    applyClock({ startMin: 9 * 60, startDate: '2026-10-07', realTime: true, enforceHours: false });
+    try {
+      expect(ordersPerHour([{ statusAt: { pending: 30 * 60 } }], 45 * 60).at(-1)).toEqual({ hour: 9, count: 1, current: true });
+    } finally { applyClock(undefined); }
   });
 });

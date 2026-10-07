@@ -1,6 +1,6 @@
 // The canonical store list and menus, from the customer app design. Generated once from mobile/src/data/catalog.ts;
 // edit here from now on. Store ids follow the old customer → API mapping (s1 → m1, s3 → m8, …).
-import { DEMO_START_MIN } from './clock';
+import { clockSettings, minuteOfDayAt } from './clock';
 import type { Merchant, OptionGroup, OptionKey, Product } from './model';
 
 export const MERCHANTS: Merchant[] = [
@@ -119,11 +119,12 @@ export function withinHours(m: Merchant, minuteOfDay: number): boolean {
 }
 
 /**
- * Whether a store takes orders at demo second `t`: open (not paused by ops) and within its hours.
+ * Whether a store takes orders at second `t`: open (not paused by ops) and within its hours.
  * `reason` says why not, fit to show customers.
  */
 export function storeAvailability(m: Merchant, t: number): { accepting: boolean; reason?: string } {
   if (!m.open) return { accepting: false, reason: `${m.name} is paused and not taking orders` };
-  if (!withinHours(m, DEMO_START_MIN + Math.floor(t / 60))) return { accepting: false, reason: `${m.name} is closed · opens at ${m.hours.open}` };
+  // A public demo shows the hours but doesn't enforce them (ClockSettings.enforceHours).
+  if (clockSettings().enforceHours && !withinHours(m, minuteOfDayAt(t))) return { accepting: false, reason: `${m.name} is closed · opens at ${m.hours.open}` };
   return { accepting: true };
 }

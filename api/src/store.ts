@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { dirname } from 'node:path';
 // In-memory state for the mock API: the shared demo seed plus the rules every app's actions go through.
 import {
-  ACTIVE_STATUSES, DEMO_START_MIN, APPLICATIONS, OPS_STAFF, DEV_TOKENS, GPS_STALE_SEC, geoToMap, PAYOUTS, COURIERS, courierEarnings, normalizePhone as normPhone, requiredDocs, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, MERCHANTS, clockAt, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
+  ACTIVE_STATUSES, DEMO_START_MIN, DEMO_START_DATE, DEMO_TESTER_COURIERS, applyClock, minuteOfDayAt, zonedNow, type ClockSettings, APPLICATIONS, OPS_STAFF, DEV_TOKENS, GPS_STALE_SEC, geoToMap, PAYOUTS, COURIERS, courierEarnings, normalizePhone as normPhone, requiredDocs, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, MERCHANTS, clockAt, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
   type ApiCourier, type ApiOrder, type LiveState, type OpenTicketBody, type OrderStatus, type PlaceOrderBody, type Ticket, type TicketPriority,
   type TicketSource, type ZoneName, type OrderMessage, type ApplyBody, type ApplicationStatus, type CourierApplication, type DocKey, type Vehicle, type AuthRole, type AuthSession, type AuthUser, DEV_OTP_CODE, normalizePhone, type OrderItem, type OrderLineInput, type Quote, PricingError, quoteOrder, storeAvailability,
 } from '@yallo/shared';
@@ -82,17 +82,41 @@ function cleanText(text: unknown, what: string) {
   return text.trim();
 }
 
-function seed(): LiveState {
-  return {
+/** Shifts an "HH:MM" by whole minutes, wrapping at midnight. */
+function shiftHhmm(hhmm: string, deltaMin: number) {
+  const [h, m] = hhmm.split(':').map(Number);
+  const min = (((h * 60 + m + deltaMin) % 1440) + 1440) % 1440;
+  return String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0');
+}
+
+type SeedOptions = { realTime: boolean; timeZone: string; enforceHours: boolean; testerCouriers: boolean };
+
+function seed(o: SeedOptions): LiveState {
+  const couriers = o.testerCouriers ? [...COURIERS, ...DEMO_TESTER_COURIERS] : COURIERS;
+  const s: LiveState = {
     epoch: Date.now().toString(36) + '-' + randomBytes(3).toString('hex'),
     t: 0,
     merchants: clone(MERCHANTS),
-    couriers: COURIERS.map(c => ({ ...clone(c), suspended: false, app: false })),
+    couriers: couriers.map(c => ({ ...clone(c), suspended: false, app: false })),
     orders: ORDERS.map(o => ({ ...clone(o), elapsedSec: DEMO_ELAPSED_SEC[o.id] ?? 0, statusAt: { ...DEMO_STATUS_AT[o.id] }, deliveryPin: newPin() })),
     tickets: clone(TICKETS),
     applications: clone(APPLICATIONS),
     payouts: clone(PAYOUTS),
   };
+  if (o.realTime) {
+    // t = 0 is the start of the current minute in the demo's time zone. The seed's "HH:MM" labels move with it, so the
+    // seeded evening reads as the last hour or so before now.
+    const now = Date.now(), z = zonedNow(o.timeZone, now), delta = z.min - DEMO_START_MIN;
+    s.clock = { startMin: z.min, startDate: z.date, realTime: true, timeZone: o.timeZone, enforceHours: o.enforceHours, startMs: now - z.sec * 1000 - (now % 1000) };
+    for (const order of s.orders) {
+      order.placedAt = shiftHhmm(order.placedAt, delta);
+      order.chat?.forEach(m => { m.at = shiftHhmm(m.at, delta); });
+    }
+    for (const tk of s.tickets) tk.messages.forEach(m => { m.at = shiftHhmm(m.at, delta); });
+  } else if (!o.enforceHours) {
+    s.clock = { startMin: DEMO_START_MIN, startDate: DEMO_START_DATE, realTime: false, enforceHours: false };
+  }
+  return s;
 }
 
 /** Bump when the saved state's shape changes; an older file is set aside and the demo reseeds. */
@@ -111,7 +135,7 @@ type AuthData = {
   /** Expo push tokens by recipient, "courier:c1" or "customer:u1". */
   pushTokens?: Record<string, string[]>;
 };
-type SavedState = { version: number; savedAt: string; state: LiveState; auto: string[]; auth: AuthData };
+export type SavedState = { version: number; savedAt: string; state: LiveState; auto: string[]; auth: AuthData };
 const emptyAuth = (): AuthData => ({ users: [], sessions: [], nextCustomer: 1 });
 
 /** Limits on what one request or one record can hold. */
@@ -144,7 +168,37 @@ export type StoreOptions = {
    * and have them ready AUTO_READY_SEC − AUTO_ACCEPT_SEC later. On by default; ops can always do it by hand.
    */
   standInMerchant?: boolean;
+  /**
+   * 'demo' (default): t = 0 is 18:34 on the demo day and t advances one second per tick. 'real': t follows real time
+   * in `timeZone` (Africa/Casablanca by default), also across restarts and sleeps; for a public demo that runs for days.
+   */
+  clock?: 'demo' | 'real';
+  timeZone?: string;
+  /** Refuse orders outside store hours (default). Off: hours are shown but every store not paused takes orders. */
+  enforceHours?: boolean;
+  /**
+   * Play couriers who have no app through the whole delivery: pick up once the food is ready, deliver at the door,
+   * then ride back towards their home zone. Off by default (ops or the courier app move orders along).
+   */
+  standInCourier?: boolean;
+  /**
+   * Offer an unassigned order automatically once it has waited this many seconds since the store accepted it:
+   * couriers with the app open first, then the nearest. Off by default (ops dispatch from the back office).
+   */
+  autoDispatchSec?: number;
+  /** Also seed DEMO_TESTER_COURIERS (public demo). */
+  testerCouriers?: boolean;
+  /**
+   * Save through this function instead of the file (e.g. to Postgres), starting from `saved` (what it saved last,
+   * or undefined for a first start).
+   */
+  persist?: { saved: unknown; save: (saved: SavedState) => void };
 };
+
+/** In real time, finished orders are dropped this long after they end, so the live feed doesn't grow for ever. */
+export const PRUNE_FINISHED_SEC = 2 * 86400;
+/** A stand-in courier spends this long at the store, and at the door, before moving the order on. */
+export const STAND_IN_STOP_SEC = 8;
 
 /**
  * A courier's view of an order: never the delivery PIN; the customer's phone and GPS fix only once the job is
@@ -176,6 +230,14 @@ export class Store {
   private readonly otpMode: 'dev' | 'random';
   private readonly sessionTtlMs: number;
   private readonly standIn: boolean;
+  private readonly seedOptions: SeedOptions;
+  private readonly standInCourier: boolean;
+  private readonly autoDispatchSec?: number;
+  private readonly persist?: StoreOptions['persist'];
+  /** When a stand-in courier reached their current stop, by order id (memory only). */
+  private arrivedAt = new Map<string, number>();
+  /** Couriers already offered an order by the auto-dispatcher, by order id (memory only). */
+  private tried = new Map<string, Set<string>>();
   private saveTimer?: ReturnType<typeof setTimeout>;
   /** Ids of orders placed through the API, which the stand-in merchant advances. */
   private auto = new Set<string>();
@@ -194,21 +256,38 @@ export class Store {
     this.otpMode = opts.otpMode ?? 'dev';
     this.sessionTtlMs = opts.sessionTtlMs ?? 30 * 24 * 3600_000;
     this.standIn = opts.standInMerchant ?? true;
-    this.s = this.load() ?? seed();
-    if (this.file) this.flush();
+    this.standInCourier = opts.standInCourier ?? false;
+    this.autoDispatchSec = opts.autoDispatchSec;
+    this.persist = opts.persist;
+    this.seedOptions = { realTime: opts.clock === 'real', timeZone: opts.timeZone ?? 'Africa/Casablanca', enforceHours: opts.enforceHours ?? true, testerCouriers: opts.testerCouriers ?? false };
+    this.s = this.load() ?? this.fresh();
+    applyClock(this.s.clock);
+    if (this.persistent) this.flush();
   }
 
-  /** Reads the saved state, or returns undefined (no file, unreadable, or an older format, which is set aside). */
+  private get persistent() { return !!(this.file || this.persist); }
+
+  /** A newly seeded state. With the stand-ins dispatching, the seeded open orders move along by themselves too. */
+  private fresh() {
+    const s = seed(this.seedOptions);
+    if (this.autoDispatchSec !== undefined) s.orders.filter(o => o.status === 'pending' || o.status === 'preparing').forEach(o => this.auto.add(o.id));
+    return s;
+  }
+
+  /** Reads the saved state, or returns undefined (nothing saved, unreadable, or an older format: then it reseeds). */
   private load(): LiveState | undefined {
+    if (this.persist) {
+      if (this.persist.saved === undefined) return undefined;
+      try {
+        return this.adopt(this.persist.saved as SavedState);
+      } catch (e) {
+        console.warn(`Saved state couldn't be used (${(e as Error).message}); reseeding. It is replaced on the next save.`);
+        return undefined;
+      }
+    }
     if (!this.file || !existsSync(this.file)) return undefined;
     try {
-      const saved = JSON.parse(readFileSync(this.file, 'utf8')) as SavedState;
-      if (saved.version !== STATE_VERSION || !saved.state?.epoch || !Array.isArray(saved.state.orders)) throw new Error('version ' + saved.version);
-      saved.auto.forEach(id => this.auto.add(id));
-      this.auth = saved.auth ?? emptyAuth();
-      // No courier app is connected yet; they re-attach when their sockets reconnect.
-      saved.state.couriers.forEach(c => { c.app = false; });
-      return saved.state;
+      return this.adopt(JSON.parse(readFileSync(this.file, 'utf8')) as SavedState);
     } catch (e) {
       const aside = this.file + '.unreadable-' + Date.now();
       renameSync(this.file, aside);
@@ -217,19 +296,38 @@ export class Store {
     }
   }
 
-  /** Writes the state now (atomically: temp file, then rename). No-op without a file. */
+  /** Checks a saved state and takes it over. Throws when it's from another format or clock. */
+  private adopt(saved: SavedState): LiveState {
+    if (saved?.version !== STATE_VERSION || !saved.state?.epoch || !Array.isArray(saved.state.orders)) throw new Error('version ' + saved?.version);
+    if (!!saved.state.clock?.realTime !== this.seedOptions.realTime) throw new Error(saved.state.clock?.realTime ? 'saved on real time' : 'saved on the demo clock');
+    saved.auto.forEach(id => this.auto.add(id));
+    this.auth = saved.auth ?? emptyAuth();
+    // No courier app is connected yet; they re-attach when their sockets reconnect.
+    saved.state.couriers.forEach(c => { c.app = false; });
+    const clock = saved.state.clock;
+    if (clock) clock.enforceHours = this.seedOptions.enforceHours;
+    if (clock?.realTime && clock.startMs !== undefined && clock.timeZone !== this.seedOptions.timeZone) {
+      // The time zone setting changed: read the same start instant in the new zone.
+      const z = zonedNow(this.seedOptions.timeZone, clock.startMs);
+      Object.assign(clock, { startMin: z.min, startDate: z.date, timeZone: this.seedOptions.timeZone });
+    }
+    return saved.state;
+  }
+
+  /** Writes the state now (to the file atomically: temp file, then rename; or through `persist.save`). */
   flush() {
     clearTimeout(this.saveTimer);
     this.saveTimer = undefined;
-    if (!this.file) return;
-    mkdirSync(dirname(this.file), { recursive: true });
+    if (!this.persistent) return;
     const saved: SavedState = { version: STATE_VERSION, savedAt: new Date().toISOString(), state: this.s, auto: [...this.auto], auth: this.auth };
+    if (this.persist || !this.file) return this.persist?.save(saved);
+    mkdirSync(dirname(this.file), { recursive: true });
     writeFileSync(this.file + '.tmp', JSON.stringify(saved));
     renameSync(this.file + '.tmp', this.file);
   }
 
   private scheduleSave() {
-    if (!this.file || this.saveTimer) return;
+    if (!this.persistent || this.saveTimer) return;
     this.saveTimer = setTimeout(() => this.flush(), this.saveDelayMs);
     this.saveTimer.unref?.();
   }
@@ -241,8 +339,9 @@ export class Store {
     return () => { this.listeners.delete(fn); };
   }
 
-  private changed() {
-    this.scheduleSave();
+  /** Tells listeners; `save` false skips saving (a real-time tick that only moved the clock and couriers). */
+  private changed(save = true) {
+    if (save) this.scheduleSave();
     this.listeners.forEach(fn => fn(this.s));
   }
 
@@ -253,7 +352,7 @@ export class Store {
   private timeToCook(o: ApiOrder) {
     if (!o.scheduledFor) return true;
     const [h, m] = o.scheduledFor.split(':').map(Number);
-    const now = (DEMO_START_MIN + Math.floor(this.s.t / 60)) % 1440;
+    const now = minuteOfDayAt(this.s.t);
     const minutesToSlot = (h * 60 + m - now + 1440) % 1440;
     return minutesToSlot > 720 || minutesToSlot <= this.merchant(o.merchantId).prepMin;
   }
@@ -305,8 +404,11 @@ export class Store {
   }
 
   reset() {
-    this.s = seed();
     this.auto.clear();
+    this.arrivedAt.clear();
+    this.tried.clear();
+    this.s = this.fresh();
+    applyClock(this.s.clock);
     this.auth = emptyAuth();
     this.otps.clear();
     for (const c of this.s.couriers) c.app = (this.apps.get(c.id) ?? 0) > 0;
@@ -314,13 +416,21 @@ export class Store {
     this.flush();
   }
 
-  /** Advances the demo by one second: timers, the stand-in merchant, and courier movement. */
+  /**
+   * Advances the clock: one second on the demo clock, or up to now on real time (more after a sleep). Runs the timers,
+   * the stand-ins, the auto-dispatcher and courier movement.
+   */
   tick() {
     const s = this.s;
-    s.t += 1;
+    const startMs = s.clock?.realTime ? s.clock.startMs : undefined;
+    const dt = startMs !== undefined ? Math.floor((Date.now() - startMs) / 1000) - s.t : 1;
+    if (dt <= 0) return;
+    // On real time only meaningful changes are saved: t is recomputed from the clock after a restart anyway.
+    const before = startMs !== undefined ? this.signature() : '';
+    s.t += dt;
     for (const o of s.orders) {
       if (!isActive(o.status)) continue;
-      o.elapsedSec += 1;
+      o.elapsedSec += dt;
       if (this.standIn && this.auto.has(o.id)) {
         if (o.status === 'pending' && o.elapsedSec >= AUTO_ACCEPT_SEC && this.timeToCook(o)) this.setStatus(o, 'preparing');
         else if (o.status === 'preparing' && s.t - (o.statusAt?.preparing ?? s.t) >= AUTO_READY_SEC - AUTO_ACCEPT_SEC) this.setStatus(o, readyStatus(o));
@@ -342,10 +452,92 @@ export class Store {
       const target = o.status === 'delivering' ? o.dropoff : this.merchant(o.merchantId).pos;
       const dx = target.x - c.pos.x, dy = target.y - c.pos.y, d = Math.hypot(dx, dy);
       if (d < 0.3) continue;
-      const step = Math.min(d, COURIER_STEP);
+      const step = Math.min(d, COURIER_STEP * Math.min(dt, 600));
       c.pos = { x: c.pos.x + dx / d * step, y: c.pos.y + dy / d * step };
     }
-    this.changed();
+    if (this.standInCourier) this.playCouriers(dt);
+    if (this.autoDispatchSec !== undefined) this.autoDispatch(this.autoDispatchSec);
+    if (startMs !== undefined && s.t % 60 < dt) this.prune();
+    this.changed(startMs === undefined || this.signature() !== before);
+  }
+
+  /** What a save must not miss: statuses, assignments, offers and availability. */
+  private signature() {
+    return this.s.orders.map(o => o.id + o.status + (o.courierId ?? '') + (o.offer?.courierId ?? '')).join() + '|' + this.s.couriers.map(c => c.status).join();
+  }
+
+  /** Whether a courier's app reports real positions (then the simulation leaves them alone). */
+  private hasFix(c: ApiCourier) {
+    return c.lastFixAt !== undefined && this.s.t - c.lastFixAt <= GPS_STALE_SEC;
+  }
+
+  /** Where a courier waits between jobs: their seeded position, or their zone's centre. */
+  private home(c: ApiCourier) {
+    return [...COURIERS, ...DEMO_TESTER_COURIERS].find(k => k.id === c.id)?.pos ?? ZONES[c.zone] ?? ZONES['Guéliz'];
+  }
+
+  /**
+   * Stand-in couriers (no app, no GPS): pick up at the store once the food is ready, hand over at the door, then ride
+   * back home. Each stop takes STAND_IN_STOP_SEC.
+   */
+  private playCouriers(dt: number) {
+    const s = this.s;
+    for (const c of s.couriers) {
+      if (c.app || this.hasFix(c)) continue;
+      if (c.status === 'idle') {
+        const home = this.home(c), dx = home.x - c.pos.x, dy = home.y - c.pos.y, d = Math.hypot(dx, dy);
+        if (d >= 0.3) { const step = Math.min(d, COURIER_STEP * Math.min(dt, 600)); c.pos = { x: c.pos.x + dx / d * step, y: c.pos.y + dy / d * step }; }
+        continue;
+      }
+      if (c.status !== 'busy') continue;
+      const o = s.orders.find(o => o.courierId === c.id && isActive(o.status));
+      if (!o || (o.status !== 'picking' && o.status !== 'delivering')) continue;
+      const target = o.status === 'delivering' ? o.dropoff : this.merchant(o.merchantId).pos;
+      if (Math.hypot(target.x - c.pos.x, target.y - c.pos.y) >= 0.3) continue;
+      const key = o.id + ':' + o.status;
+      if (!this.arrivedAt.has(key)) { this.arrivedAt.set(key, s.t); continue; }
+      if (s.t - this.arrivedAt.get(key)! < STAND_IN_STOP_SEC) continue;
+      this.arrivedAt.delete(key);
+      this.auto.delete(o.id);
+      if (o.status === 'picking') this.setStatus(o, 'delivering');
+      else { this.setStatus(o, 'delivered'); this.release(c.id); }
+    }
+  }
+
+  /**
+   * Offers orders nobody has taken: once the store has accepted and `afterSec` have passed without a courier.
+   * Couriers with the app open come first (so testers get jobs), then the nearest; each gets one try per round.
+   */
+  private autoDispatch(afterSec: number) {
+    const s = this.s;
+    for (const o of s.orders) {
+      if (o.courierId || (o.status !== 'preparing' && o.status !== 'ready')) { this.tried.delete(o.id); continue; }
+      if (o.offer) continue;
+      const since = Math.max(o.statusAt?.preparing ?? o.statusAt?.pending ?? 0, o.lastOffer ? o.lastOffer.at - afterSec + 2 : -Infinity);
+      if (s.t < since + afterSec) continue;
+      const m = this.merchant(o.merchantId), tried = this.tried.get(o.id) ?? new Set<string>();
+      const busy = new Set(s.orders.map(x => x.offer?.courierId).filter(Boolean));
+      const pick = (round: Set<string>) => s.couriers
+        .filter(c => c.status === 'idle' && !c.suspended && !busy.has(c.id) && !round.has(c.id) && pickupKm(c.pos, m.pos) <= DISPATCH_RADIUS_KM)
+        .sort((a, b) => Number(b.app) - Number(a.app) || pickupKm(a.pos, m.pos) - pickupKm(b.pos, m.pos))[0];
+      let c = pick(tried);
+      if (!c && tried.size) { tried.clear(); c = pick(tried); }
+      if (!c) continue;
+      tried.add(c.id);
+      this.tried.set(o.id, tried);
+      this.price(o, c);
+      o.offer = { courierId: c.id, offeredAt: s.t, expiresAt: s.t + OFFER_SEC };
+      this.emit({ type: 'offer', order: o, courierId: c.id });
+    }
+  }
+
+  /** Drops finished orders PRUNE_FINISHED_SEC after they ended (real time only). */
+  private prune() {
+    const s = this.s, cutoff = s.t - PRUNE_FINISHED_SEC;
+    const keep = s.orders.filter(o => isActive(o.status) || (o.statusAt?.[o.status] ?? -Infinity) >= cutoff);
+    if (keep.length === s.orders.length) return;
+    s.orders = keep;
+    this.scheduleSave();
   }
 
   placeOrder(body: PlaceOrderBody, by?: AuthUser): ApiOrder {
@@ -708,7 +900,8 @@ export class Store {
     this.otps.set(phone, { role, code, sentAt: Date.now(), attempts: 0 });
     // No SMS provider yet: the code goes to the server log, for whoever runs the demo to pass on.
     console.log(`[otp] ${role} ${phone}: code ${code}`);
-    return { sent: true as const, phone, expiresInSec: OTP_TTL_MS / 1000 };
+    // Fixed codes (dev and the public demo) are no secret: say which, so the apps can show it on the code screen.
+    return { sent: true as const, phone, expiresInSec: OTP_TTL_MS / 1000, ...(this.otpMode === 'dev' ? { fixedCode: DEV_OTP_CODE } : {}) };
   }
 
   /** Completes a sign-in. Returns a session token and the user (created on a customer's first sign-in). */
@@ -916,7 +1109,7 @@ export class Store {
   viewFor(user: AuthUser | undefined): LiveState {
     const s = this.s;
     if (user?.role === 'ops') return s;
-    const base = { epoch: s.epoch, t: s.t, merchants: s.merchants, applications: [], payouts: { ...s.payouts, lines: [] as LiveState['payouts']['lines'] } };
+    const base = { epoch: s.epoch, t: s.t, ...(s.clock ? { clock: s.clock } : {}), merchants: s.merchants, applications: [], payouts: { ...s.payouts, lines: [] as LiveState['payouts']['lines'] } };
     if (user?.role === 'courier') {
       const me = user.courierId!;
       return { ...base, couriers: s.couriers.filter(c => c.id === me),

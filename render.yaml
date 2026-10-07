@@ -1,0 +1,92 @@
+# Render blueprint for the public Yallo demo (docs/DEMO.md). Repo LoloziAnas/yallo, branch main.
+# Everything is on the free plan. Values marked `sync: false` are asked for when the blueprint is first applied.
+# The apps depend on ../shared, so each service also redeploys when shared/ changes (buildFilter).
+services:
+  # The API: REST + the WebSocket live feed (wss on the same host). Free web services sleep after 15 min without
+  # inbound requests and take about a minute to wake: ping /api/health every 10 min from an external monitor.
+  - type: web
+    name: yallo-api
+    runtime: node
+    plan: free
+    repo: https://github.com/LoloziAnas/yallo
+    branch: main
+    rootDir: api
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run start:prod
+    healthCheckPath: /api/health
+    buildFilter:
+      paths: [api/**, shared/**]
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DEPLOY_PROFILE
+        value: demo
+      # Morocco's clock. Node's bundled zone data can lag behind the official change (tzdata 2026: UTC+0 since
+      # 20 Sep 2026), so this is a fixed offset; check "time" in /api/health and change it if it's wrong.
+      - key: DEMO_TIME_ZONE
+        value: "+00:00"
+      # The free Neon database's connection string (…?sslmode=require). The disk here is wiped on every restart.
+      - key: DATABASE_URL
+        sync: false
+      # The three static sites' URLs, comma-separated, e.g.
+      # https://yallo-ops.onrender.com,https://yallo-app.onrender.com,https://yallo-courier.onrender.com
+      - key: CORS_ORIGINS
+        sync: false
+
+  # Back office (ops). Static build; any path serves index.html.
+  - type: web
+    name: yallo-ops
+    runtime: static
+    repo: https://github.com/LoloziAnas/yallo
+    branch: main
+    rootDir: back-office
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    buildFilter:
+      paths: [back-office/**, shared/**]
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      # The API's URL, e.g. https://yallo-api.onrender.com (read at build time).
+      - key: VITE_API_URL
+        sync: false
+
+  # Customer app, web build (owned by the customer app session; see mobile/README.md).
+  - type: web
+    name: yallo-app
+    runtime: static
+    repo: https://github.com/LoloziAnas/yallo
+    branch: main
+    rootDir: mobile
+    buildCommand: npm ci && npm run web:build -- --api "$YALLO_API_URL"
+    staticPublishPath: web-dist
+    buildFilter:
+      paths: [mobile/**, shared/**]
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: YALLO_API_URL
+        sync: false
+
+  # Courier app, web build. PLACEHOLDER: the courier app session sets the build command and output folder.
+  - type: web
+    name: yallo-courier
+    runtime: static
+    repo: https://github.com/LoloziAnas/yallo
+    branch: main
+    rootDir: courier
+    buildCommand: npm ci && npx expo export --platform web --output-dir web-dist
+    staticPublishPath: web-dist
+    buildFilter:
+      paths: [courier/**, shared/**]
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: EXPO_PUBLIC_API_URL
+        sync: false

@@ -176,6 +176,19 @@ export const PAYOUTS: PayoutRun = {
   ],
 };
 
+/**
+ * Couriers for public-demo testers, one per person so testers don't share a courier: offline in Guéliz until they
+ * sign in (code 123456 on the demo server) and go online. Seeded only by the API's demo profile.
+ */
+export const DEMO_TESTER_COURIERS: Courier[] = [
+  { id: 'c21', name: 'Adam Benjelloun', phone: '+212 600 00 00 01', vehicle: 'Motorcycle', zone: 'Guéliz', status: 'off', pos: { x: 31, y: 28 }, rating: 4.8, ratingCount: 120, docsNote: 'Valid', offerStats: { accepted: 0, declined: 0, expired: 0 } },
+  { id: 'c22', name: 'Nora El Fassi', phone: '+212 600 00 00 02', vehicle: 'Motorcycle', zone: 'Guéliz', status: 'off', pos: { x: 34, y: 31 }, rating: 4.9, ratingCount: 87, docsNote: 'Valid', offerStats: { accepted: 0, declined: 0, expired: 0 } },
+  { id: 'c23', name: 'Rayan Ouazzani', phone: '+212 600 00 00 03', vehicle: 'Bicycle', zone: 'Guéliz', status: 'off', pos: { x: 28, y: 25 }, rating: 4.7, ratingCount: 64, docsNote: 'Valid', offerStats: { accepted: 0, declined: 0, expired: 0 } },
+  { id: 'c24', name: 'Lina Cherkaoui', phone: '+212 600 00 00 04', vehicle: 'Motorcycle', zone: 'Guéliz', status: 'off', pos: { x: 36, y: 27 }, rating: 4.8, ratingCount: 143, docsNote: 'Valid', offerStats: { accepted: 0, declined: 0, expired: 0 } },
+  { id: 'c25', name: 'Ilyas Mernissi', phone: '+212 600 00 00 05', vehicle: 'Car', zone: 'Guéliz', status: 'off', pos: { x: 30, y: 34 }, rating: 4.6, ratingCount: 52, docsNote: 'Valid', offerStats: { accepted: 0, declined: 0, expired: 0 } },
+  { id: 'c26', name: 'Yasmine Lahlou', phone: '+212 600 00 00 06', vehicle: 'Motorcycle', zone: 'Guéliz', status: 'off', pos: { x: 33, y: 23 }, rating: 4.9, ratingCount: 98, docsNote: 'Valid', offerStats: { accepted: 0, declined: 0, expired: 0 } },
+];
+
 /** Ops staff allowed to sign in to the back office. */
 export const OPS_STAFF: { id: string; name: string; phone: string; title: string }[] = [
   { id: 'o1', name: 'Leila Amrani', phone: '+212 661 00 10 01', title: 'Ops lead' },

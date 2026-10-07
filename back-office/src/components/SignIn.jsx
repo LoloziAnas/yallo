@@ -6,6 +6,8 @@ import { api, saveToken } from '../api.js';
 export default function SignIn({ onSignedIn }) {
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
+  // The demo server (and local runs) use one fixed code and say so.
+  const [fixedCode, setFixedCode] = useState(null);
   const [sent, setSent] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -19,6 +21,7 @@ export default function SignIn({ onSignedIn }) {
   const sendCode = run(async () => {
     const r = await api.requestOtp(phone, 'ops');
     setSent(r.phone);
+    setFixedCode(r.fixedCode ?? null);
   });
   const signIn = run(async () => {
     const { token, user } = await api.verifyOtp(sent, code);
@@ -59,7 +62,8 @@ export default function SignIn({ onSignedIn }) {
           </form>
         )}
         {error && <div role="alert" style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-accent-700)' }}>{error}</div>}
-        {import.meta.env.DEV && <div className="faint" style={{ fontSize: 12 }}>Development: the code is always {DEV_OTP_CODE}.</div>}
+        {fixedCode ? <div className="faint" style={{ fontSize: 12 }}>Demo: the code is always {fixedCode}.</div>
+          : import.meta.env.DEV && <div className="faint" style={{ fontSize: 12 }}>Development: the code is always {DEV_OTP_CODE}.</div>}
       </div>
     </div>
   );

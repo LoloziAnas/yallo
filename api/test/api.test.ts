@@ -2,8 +2,8 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import { createYalloClient, type LiveState, type YalloClient } from '@yallo/shared';
-import { COURIERS, DEV_OTP_CODE, DEV_TOKENS, DISPATCH_RADIUS_KM, GEO_ANCHOR, GPS_STALE_SEC, geoToMap, mapToGeo, OFFER_SEC, courierPayFor, normalizePhone, pickupKm, tripKm } from '@yallo/shared';
-import { AUTO_ACCEPT_SEC, AUTO_READY_SEC, STAND_IN_ACCEPT_SEC, STATE_VERSION, Store } from '../src/store';
+import { COURIERS, DEMO_TESTER_COURIERS, clockAt, dateAt, DEV_OTP_CODE, DEV_TOKENS, DISPATCH_RADIUS_KM, GEO_ANCHOR, GPS_STALE_SEC, geoToMap, mapToGeo, OFFER_SEC, courierPayFor, normalizePhone, pickupKm, tripKm } from '@yallo/shared';
+import { AUTO_ACCEPT_SEC, AUTO_READY_SEC, PRUNE_FINISHED_SEC, STAND_IN_ACCEPT_SEC, STATE_VERSION, Store, type SavedState } from '../src/store';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -732,7 +732,7 @@ describe('HTTP and live feed', () => {
 
   test('sign-in over HTTP: the client keeps the token and sends it', async () => {
     const sent = await client.requestOtp('0661 23 45 78', 'courier');
-    assert.deepEqual(sent, { sent: true, phone: '+212661234578', expiresInSec: 300 });
+    assert.deepEqual(sent, { sent: true, phone: '+212661234578', expiresInSec: 300, fixedCode: DEV_OTP_CODE });
     const session = await client.verifyOtp('0661234578', DEV_OTP_CODE);
     assert.equal(client.token, session.token);
     assert.equal((await client.me()).courierId, 'c1');
@@ -1264,5 +1264,102 @@ describe('Rate limits', () => {
     s.requestOtp('0612345678', 'customer');
     const { token } = s.verifyOtp('0612345678', DEV_OTP_CODE);
     assert.equal(s.userForToken(token), undefined);
+  });
+});
+
+describe('Demo profile', () => {
+  // Each Store applies its clock to the shared module; a default Store puts the demo evening back.
+  after(() => { new Store(); });
+
+  test('real time: t = 0 is now in the time zone, and the seed labels move with it', () => {
+    const s = new Store({ clock: 'real', timeZone: '+00:00' });
+    const now = new Date(), hhmm = now.toISOString().slice(11, 16);
+    assert.equal(s.state.clock?.realTime, true);
+    assert.equal(clockAt(s.state.t), hhmm);
+    assert.equal(dateAt(s.state.t), now.toISOString().slice(0, 10));
+    // #48217 was placed 2 minutes before the demo started (18:32 vs 18:34).
+    assert.equal(order(s, '#48217').placedAt, clockAt(-120));
+  });
+
+  test('real time: the clock catches up after a sleep, and only meaningful ticks are saved', () => {
+    const saves: SavedState[] = [];
+    const s = new Store({ clock: 'real', timeZone: '+00:00', persist: { saved: undefined, save: x => saves.push(structuredClone(x)) } });
+    // t = 0 is the start of the current minute, so t starts at the seconds into it.
+    s.tick();
+    const t0 = s.state.t;
+    assert.ok(t0 >= 0 && t0 < 62, 'within the current minute: ' + t0);
+    s.state.clock!.startMs! -= 3600_000;
+    s.tick();
+    assert.ok(s.state.t - t0 >= 3600 && s.state.t - t0 < 3603, 'an hour later: ' + (s.state.t - t0));
+    s.flush();
+    const n = saves.length;
+    s.state.clock!.startMs! -= 5000;
+    s.tick();
+    s.flush();
+    assert.equal(saves.length, n + 1, 'flush still writes');
+    const again = new Store({ clock: 'real', timeZone: '+01:00', persist: { saved: saves.at(-1), save: () => {} } });
+    assert.equal(again.state.epoch, s.state.epoch, 'resumes the saved state');
+    assert.equal(again.state.clock?.timeZone, '+01:00', 'a changed time zone re-reads the start');
+    assert.equal(new Store({ persist: { saved: saves.at(-1), save: () => {} } }).state.clock, undefined, 'a demo-clock server reseeds');
+  });
+
+  test('hours not enforced: a store outside its hours takes orders', () => {
+    // m9 opens at 19:00; the demo evening starts at 18:34.
+    assert.throws(() => new Store().placeOrder({ merchantId: 'm9', customerName: 'A', zone: 'Guéliz', pay: 'cash', items: [{ productId: 'p9-1', qty: 2 }] }), /closed/);
+    const s = new Store({ enforceHours: false });
+    assert.equal(s.placeOrder({ merchantId: 'm9', customerName: 'A', zone: 'Guéliz', pay: 'cash', items: [{ productId: 'p9-1', qty: 2 }] }).status, 'pending');
+  });
+
+  test('tester couriers are seeded offline and can sign in', () => {
+    const s = new Store({ testerCouriers: true });
+    assert.equal(DEMO_TESTER_COURIERS.length, 6);
+    for (const t of DEMO_TESTER_COURIERS) assert.equal(courier(s, t.id).status, 'off');
+    s.requestOtp('0600000003', 'courier');
+    assert.equal(s.verifyOtp('0600000003', DEV_OTP_CODE).user.courierId, 'c23');
+    assert.equal(new Store().state.couriers.some(c => c.id === 'c21'), false, 'not seeded by default');
+  });
+
+  test('auto-dispatch and stand-in couriers deliver an order with nobody at the controls', () => {
+    const s = new Store({ standInCourier: true, autoDispatchSec: 30 });
+    const o = s.placeOrder({ merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz', pay: 'cash', items: [{ productId: 'p1-6', qty: 2 }] });
+    for (let i = 0; i < 900 && order(s, o.id).status !== 'delivered'; i++) s.tick();
+    const done = order(s, o.id);
+    assert.equal(done.status, 'delivered');
+    assert.ok(done.statusAt?.picking! < done.statusAt?.delivering! && done.statusAt?.delivering! < done.statusAt?.delivered!);
+    assert.equal(courier(s, done.courierId!).status, 'idle');
+  });
+
+  test('auto-dispatch tries a courier with the app first, then moves on when they let it expire', () => {
+    const s = new Store({ standInCourier: true, autoDispatchSec: 30, testerCouriers: true });
+    s.setCourierAvailability('c21', 'idle');
+    s.attachApp('c21');
+    // Another tester online, without the app: the stand-in plays them.
+    s.setCourierAvailability('c22', 'idle');
+    const o = s.placeOrder({ merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz', pay: 'cash', items: [{ productId: 'p1-6', qty: 2 }] });
+    for (let i = 0; i < 120 && !order(s, o.id).offer; i++) s.tick();
+    assert.equal(order(s, o.id).offer?.courierId, 'c21');
+    tick(s, OFFER_SEC + 5);
+    const next = order(s, o.id).offer?.courierId ?? order(s, o.id).courierId;
+    assert.ok(next && next !== 'c21', 'then the nearest other courier: ' + next);
+  });
+
+  test('real time: finished orders are pruned after two days', () => {
+    const s = new Store({ clock: 'real', timeZone: '+00:00' });
+    const before = s.state.orders.length;
+    s.state.clock!.startMs! -= (PRUNE_FINISHED_SEC + 3600) * 1000;
+    s.tick();
+    assert.ok(s.state.orders.length < before);
+    assert.ok(s.state.orders.every(o => !['delivered', 'cancelled'].includes(o.status)));
+  });
+
+  test('sign-in says which code to use when codes are fixed, and health says it is a demo', async () => {
+    assert.equal(new Store().requestOtp('0612345678', 'customer').fixedCode, DEV_OTP_CODE);
+    assert.equal(new Store({ otpMode: 'random' }).requestOtp('0612345678', 'customer').fixedCode, undefined);
+    const { http } = createApi({ tickMs: 0, demo: true });
+    await new Promise<void>(r => http.listen(0, r));
+    const health = await (await fetch(`http://localhost:${(http.address() as AddressInfo).port}/api/health`)).json();
+    http.close();
+    assert.equal(health.demo, true);
+    assert.equal(health.time, '18:34');
   });
 });

@@ -99,7 +99,10 @@ apps drop anything they remembered about the old data.
 | `ALLOW_RESET` | on (off in production) | `1` allows `POST /api/reset` in production |
 | `PUSH` / `EXPO_ACCESS_TOKEN` | log only | `expo` sends real push notifications through Expo |
 | `STAND_IN_MERCHANT` | on | the stand-in accepts orders after 20 s and has them ready 40 s later; `off` when stores are run by ops |
-| `YALLO_VERSION` | dev | shown by `GET /api/health` |
+| `YALLO_VERSION` | dev (or the Render commit) | shown by `GET /api/health` |
+| `DEPLOY_PROFILE` | (none) | `demo`: the public demo server (see [`DEMO.md`](DEMO.md)) |
+| `DEMO_TIME_ZONE` | Africa/Casablanca | demo profile: the clock's time zone, or a fixed offset like `+00:00` |
+| `DATABASE_URL` / `STATE_KEY` | (none) / main | keep the state in Postgres (table `yallo_state`, one row per key) instead of `STATE_FILE` |
 
 ### Back office (`back-office/`)
 
@@ -114,6 +117,18 @@ apps drop anything they remembered about the old data.
 |---|---|
 | `EXPO_PUBLIC_API_URL` | the API's address (e.g. `http://192.168.1.20:5190` for a phone on the same Wi-Fi); by default the Expo dev host on port 5190 |
 | `EXPO_PUBLIC_DEMO=1` | courier app: allow its offline demo outside development |
+
+## Public demo
+
+The hosted demo for investors and testers (Render + Neon, `DEPLOY_PROFILE=demo`) is described in
+[`DEMO.md`](DEMO.md): links, tester phones, setup and limits. To try the profile locally:
+
+```sh
+cd api && npm run build && PORT=5196 DEPLOY_PROFILE=demo STATE_FILE=off node dist/server.mjs
+```
+
+Add `DATABASE_URL=postgres://…` to keep the state in Postgres instead (e.g. `docker run -p 55432:5432
+-e POSTGRES_PASSWORD=test postgres:16-alpine`).
 
 ## Production mode
 

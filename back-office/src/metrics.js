@@ -1,6 +1,6 @@
 // Figures the back office shows, worked out from the live orders and couriers (shared shapes) instead of
 // hardcoded numbers. Pure functions, so they can be unit-tested.
-import { DEMO_START_MIN, ACTIVE_STATUSES } from '@yallo/shared';
+import { ACTIVE_STATUSES, clockStartMin, dayAt } from '@yallo/shared';
 
 /** An order counts as late past this many minutes from placing. */
 export const SLA_MIN = 35;
@@ -25,6 +25,9 @@ export function isLate(o) {
 
 const mean = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
+/** Orders placed today (a public demo runs on real time for days; the overview is about today). */
+export const todayOrders = (orders, t) => orders.filter(o => dayAt(o.statusAt?.pending ?? t) === dayAt(t));
+
 /** Today's headline numbers. */
 export function overviewKpis(orders, couriers) {
   const live = orders.filter(o => o.status !== 'cancelled');
@@ -48,7 +51,7 @@ export function overviewKpis(orders, couriers) {
 
 /** Orders placed per demo-clock hour, from the first order's hour to now. */
 export function ordersPerHour(orders, t) {
-  const hourOf = sec => Math.floor((DEMO_START_MIN + Math.floor(sec / 60)) / 60) % 24;
+  const hourOf = sec => Math.floor((((clockStartMin() + Math.floor(sec / 60)) % 1440) + 1440) % 1440 / 60);
   const nowHour = hourOf(t);
   const counts = new Map();
   for (const o of orders) if (o.statusAt?.pending !== undefined) counts.set(hourOf(o.statusAt.pending), (counts.get(hourOf(o.statusAt.pending)) ?? 0) + 1);
@@ -110,7 +113,7 @@ export function avgFirstReplyMin(tickets) {
   const toMin = hhmm => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
   const waits = tickets.map(tk => {
     const reply = tk.messages.find(m => m.from === 'ops');
-    return reply ? Math.max(0, toMin(reply.at) - (DEMO_START_MIN + Math.floor(tk.openedAt / 60))) : null;
+    return reply ? (toMin(reply.at) - (clockStartMin() + Math.floor(tk.openedAt / 60)) % 1440 + 1440) % 1440 : null;
   }).filter(x => x !== null);
   return waits.length ? Math.round(mean(waits) * 10) / 10 : null;
 }

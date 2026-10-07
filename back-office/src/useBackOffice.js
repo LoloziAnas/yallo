@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { DISPATCH_RADIUS_KM, clockAt, pickupKm, storeAvailability } from '@yallo/shared';
+import { DISPATCH_RADIUS_KM, clockAt, dateAt, pickupKm, storeAvailability } from '@yallo/shared';
 import { api } from './api.js';
-import { avgFirstReplyMin, ordersPerHour, overviewKpis, zoneStats } from './metrics.js';
+import { avgFirstReplyMin, ordersPerHour, overviewKpis, todayOrders, zoneStats } from './metrics.js';
 import { IC } from './icons.jsx';
 import { ZONES, STATUS, ACTIVE, DOCDEF, applyLive, fromLive } from './data.js';
 
@@ -104,12 +104,13 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
     bg:s.page === k ? 'rgba(255,255,255,.12)' : 'transparent', fg:s.page === k ? '#fff' : 'var(--color-neutral-300)' }));
 
   const firstReply = avgFirstReplyMin(s.rawTickets);
-  const TITLES = { overview:['Overview','Tuesday 6 October 2026 · Marrakech · all figures live'], live:['Live operations', active.length + ' active orders · ' + s.couriers.filter(c => c.st !== 'off').length + ' couriers online · ' + needs.length + ' need action'], orders:['Orders','Search, inspect and refund orders'], couriers:['Couriers','Fleet status, documents and new applications'], merchants:['Merchants','Store status, prep times and quality'], support:['Support', openT.length + ' open tickets' + (firstReply === null ? '' : ' · avg first reply ' + firstReply + ' min')], payouts:['Payouts','Weekly settlement for couriers and merchants'] };
+  const TITLES = { overview:['Overview',new Date(dateAt(s.t) + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC' }).replace(',', '') + ' · Marrakech · all figures live'], live:['Live operations', active.length + ' active orders · ' + s.couriers.filter(c => c.st !== 'off').length + ' couriers online · ' + needs.length + ' need action'], orders:['Orders','Search, inspect and refund orders'], couriers:['Couriers','Fleet status, documents and new applications'], merchants:['Merchants','Store status, prep times and quality'], support:['Support', openT.length + ' open tickets' + (firstReply === null ? '' : ' · avg first reply ' + firstReply + ' min')], payouts:['Payouts','Weekly settlement for couriers and merchants'] };
   const nowMin = 18 * 60 + 34 + Math.floor(s.t / 60), clock = String(Math.floor(nowMin / 60)).padStart(2, '0') + ':' + String(nowMin % 60).padStart(2, '0') + ':' + String(s.t % 60).padStart(2, '0');
 
   // overview
   const lateCount = active.filter(o => lateInfo(o)).length;
-  const K = overviewKpis(s.rawOrders, s.rawCouriers);
+  const today = todayOrders(s.rawOrders, s.t);
+  const K = overviewKpis(today, s.rawCouriers);
   const kpis = [
     { label:'Orders today', value:fmt(K.orders), delta:K.active + ' active', note:K.cancelled + ' cancelled', good:true, onClick:go('orders') },
     { label:'GMV today', value:fmt(K.gmv) + ' DH', delta:K.delivered + ' delivered', note:'excl. cancelled', good:true, onClick:go('orders') },
@@ -117,9 +118,9 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
     { label:'Late orders', value:K.latePct + '%', delta:K.lateNow + ' late now', note:'SLA 35 min', good:K.lateNow === 0, onClick:go('live') },
     { label:'Couriers online', value:K.online + ' / ' + K.couriers, delta:K.free + ' free', note:'in Marrakech', good:K.free > 0, onClick:go('couriers') }
   ].map(k => ({ ...k, dBg:k.good ? 'var(--color-accent-2-100)' : 'var(--color-accent-100)', dFg:k.good ? 'var(--color-accent-2-700)' : 'var(--color-accent-800)' }));
-  const perHour = ordersPerHour(s.rawOrders, s.t), maxHour = Math.max(1, ...perHour.map(h => h.count));
+  const perHour = ordersPerHour(today, s.t), maxHour = Math.max(1, ...perHour.map(h => h.count));
   const hours = perHour.map(h => ({ label:h.hour + 'h', v:h.count || '', vOp:h.count ? 1 : 0, hLast:Math.max(4, Math.round(h.count / maxHour * 100)) + '%', hRel:h.count ? '100%' : '0%', bg:h.current ? 'var(--color-accent-500)' : 'var(--color-accent)' }));
-  const zoneRows = zoneStats(Object.keys(ZONES), s.rawOrders, s.rawCouriers);
+  const zoneRows = zoneStats(Object.keys(ZONES), today, s.rawCouriers);
   const tightZone = zoneRows.filter(z => z.active && z.ratio > 2).sort((a, b) => b.ratio - a.ratio)[0];
   const urgentT = s.tickets.find(tk => !tk.resolved && (tk.prio === 'Urgent' || tk.prio === 'High'));
   const alerts = [

@@ -1,6 +1,7 @@
 // Contract for the Yallo mock API (../api) and a small client usable from the web and React Native.
 import type { OrderLineInput } from './pricing';
 import type { CourierEarnings } from './earnings';
+import { applyClock, type ClockSettings } from './clock';
 import type { Courier, CourierApplication, DocKey, PayoutRun, DeliveryAddress, GeoPoint, Merchant, Order, OrderStatus, PayMethod, Ticket, TicketPriority, TicketSource, ZoneName } from './model';
 
 export type ApiOrder = Order & {
@@ -53,8 +54,13 @@ export type LiveState = {
    * saved state), so order ids and other references a client remembers are only valid for the same epoch.
    */
   epoch: string;
-  /** Seconds since the demo started. The demo clock reads DEMO_START_MIN + t / 60. */
+  /** Seconds since t = 0. The wall clock reads `clockAt(t)`. */
   t: number;
+  /**
+   * The server's clock: when t = 0 is, and whether store hours are enforced. Absent = the fixed demo evening
+   * (18:34, 6 Oct 2026). The shared client applies it (`applyClock`) on every snapshot it receives.
+   */
+  clock?: ClockSettings;
   merchants: Merchant[];
   couriers: ApiCourier[];
   orders: ApiOrder[];
@@ -181,6 +187,9 @@ export type YalloClient = ReturnType<typeof createYalloClient>;
  * @param baseUrl e.g. "http://localhost:5190", or "" for same-origin behind a dev proxy.
  *   On a phone, use the dev machine's LAN address, not localhost.
  */
+/** Snapshots carry the server's clock settings; actions that return one are applied too. */
+const isLiveState = (d: unknown): d is LiveState => typeof d === 'object' && d !== null && 'epoch' in d && 't' in d && 'orders' in d;
+
 export function createYalloClient(baseUrl: string, opts: { token?: string } = {}) {
   /** Sent as `Authorization: Bearer …` on every request and as `?token=` on the live feed. */
   let token = opts.token;
@@ -203,6 +212,7 @@ export function createYalloClient(baseUrl: string, opts: { token?: string } = {}
     if (!res.ok || data === null) {
       throw new Error((data as ApiError | null)?.error || (res.status >= 500 ? 'Cannot reach the Yallo API' : `Request failed (${res.status})`));
     }
+    if (isLiveState(data)) applyClock(data.clock);
     return data as T;
   };
   const post = <T = LiveState>(path: string, body?: unknown) => call<T>('POST', path, body);
@@ -214,7 +224,8 @@ export function createYalloClient(baseUrl: string, opts: { token?: string } = {}
     setToken(t: string | null) { token = t ?? undefined; },
 
     /** Sends a one-time code to the phone (in dev it's always DEV_OTP_CODE). */
-    requestOtp: (phone: string, role: AuthRole) => post<{ sent: true; phone: string; expiresInSec: number }>('/auth/otp', { phone, role }),
+    /** `fixedCode` is set when every code is the same (local runs and the public demo), for a hint on the code screen. */
+    requestOtp: (phone: string, role: AuthRole) => post<{ sent: true; phone: string; expiresInSec: number; fixedCode?: string }>('/auth/otp', { phone, role }),
     /** Checks the code; on success the client keeps the token for later calls. `name` sets a new customer's name. */
     verifyOtp: async (phone: string, code: string, name?: string) => {
       const session = await post<AuthSession>('/auth/verify', { phone, code, ...(name ? { name } : {}) });
@@ -247,7 +258,10 @@ export function createYalloClient(baseUrl: string, opts: { token?: string } = {}
         ws.onopen = () => onStatus?.(true);
         ws.onmessage = e => {
           const msg = JSON.parse(String(e.data)) as LiveMessage;
-          if (msg.type === 'state') onState(msg.state);
+          if (msg.type === 'state') {
+            applyClock(msg.state.clock);
+            onState(msg.state);
+          }
         };
         ws.onclose = () => {
           onStatus?.(false);

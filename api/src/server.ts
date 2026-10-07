@@ -2,6 +2,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { AuthUser, LiveMessage, LiveState } from '@yallo/shared';
+import { clockAt } from '@yallo/shared';
 import { ActionError, Store, type StoreEvent } from './store';
 import { createPush, type PushMessage, type PushSender } from './push';
 
@@ -14,7 +15,7 @@ const MAX_BODY = 64 * 1024;
 export type AuthMode = 'warn' | 'enforce';
 
 /** Per-request context: the bearer token and who it belongs to, if anyone. */
-type Ctx = { token?: string; user?: AuthUser; query: URLSearchParams; enforce: boolean; allowReset: boolean };
+type Ctx = { token?: string; user?: AuthUser; query: URLSearchParams; enforce: boolean; allowReset: boolean; demo: boolean };
 type Handler = (store: Store, params: string[], body: any, ctx: Ctx) => unknown;
 /** Returns true when allowed, or the reason it isn't. */
 type Rule = (ctx: Ctx, params: string[], body: any, store: Store) => true | string;
@@ -66,7 +67,7 @@ const ticketParty: Rule = (c, [id], b, s) => {
 
 /** [method, path, who may call it, handler]. Handlers return the response body; most return the new state. */
 const ROUTES: [string, RegExp, Rule, Handler][] = [
-  ['GET', /^\/api\/health$/, anyone, (s, _, __, ctx) => ({ ok: true, version: process.env.YALLO_VERSION ?? 'dev', auth: ctx.enforce ? 'enforce' : 'warn', epoch: s.state.epoch, t: s.state.t })],
+  ['GET', /^\/api\/health$/, anyone, (s, _, __, ctx) => ({ ok: true, version: process.env.YALLO_VERSION ?? process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? 'dev', demo: ctx.demo, auth: ctx.enforce ? 'enforce' : 'warn', clock: s.state.clock?.realTime ? 'real' : 'demo', time: clockAt(s.state.t), epoch: s.state.epoch, t: s.state.t })],
   ['GET', /^\/api\/state$/, anyone, s => s.state],
   ['POST', /^\/api\/auth\/otp$/, anyone, (s, _, b) => s.requestOtp(b?.phone, b?.role)],
   ['POST', /^\/api\/auth\/verify$/, anyone, (s, _, b) => s.verifyOtp(b?.phone, b?.code, b?.name)],
@@ -155,6 +156,11 @@ export const DEFAULT_LIMITS: Record<string, { max: number; windowMs: number }> =
   ['GET ' + /^\/api\/courier-applications\/status$/.source]: { max: 30, windowMs: 60_000 },
 };
 
+/** A public demo: higher limits, since a room of testers often shares one address. */
+export const DEMO_LIMITS: typeof DEFAULT_LIMITS = Object.fromEntries(
+  Object.entries(DEFAULT_LIMITS).map(([route, l]) => [route, { ...l, max: l.max * 6 }]),
+);
+
 /** A fixed-window counter. Returns 0 when allowed, else the seconds to wait. */
 function createLimiter(limits: typeof DEFAULT_LIMITS) {
   const hits = new Map<string, { start: number; n: number }>();
@@ -182,7 +188,7 @@ const bearer = (header: string | undefined) => (header?.startsWith('Bearer ') ? 
  *   Unset allows any origin (development). Requests without an Origin (mobile apps, curl) are always allowed.
  */
 export function createApi({ tickMs = 1000, store = new Store(), authMode = 'warn' as AuthMode, push = createPush('log') as PushSender,
-  corsOrigins = undefined as string[] | undefined, allowReset = true, trustProxy = false, limits = {} as typeof DEFAULT_LIMITS } = {}) {
+  corsOrigins = undefined as string[] | undefined, allowReset = true, demo = false, trustProxy = false, limits = {} as typeof DEFAULT_LIMITS } = {}) {
   const limiter = createLimiter(limits);
   const originAllowed = (origin: string | undefined) => !origin || !corsOrigins || corsOrigins.includes(origin);
   const enforce = authMode === 'enforce';
@@ -211,7 +217,7 @@ export function createApi({ tickMs = 1000, store = new Store(), authMode = 'warn
       const ip = (trustProxy && String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim()) || req.socket.remoteAddress || '?';
       const wait = limiter(req.method + ' ' + route[1].source, ip);
       if (wait) { res.setHeader('retry-after', String(wait)); throw new ActionError(`Too many requests. Try again in ${wait} s`, 429); }
-      const ctx: Ctx = { token, user: store.userForToken(token), query: url.searchParams, enforce, allowReset };
+      const ctx: Ctx = { token, user: store.userForToken(token), query: url.searchParams, enforce, allowReset, demo };
       const allowed = route[2](ctx, params, body, store);
       if (allowed !== true) {
         if (enforce) throw new ActionError(allowed, ctx.user ? 403 : 401);

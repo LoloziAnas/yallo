@@ -36,7 +36,12 @@ How to run it all, the demo accounts and every setting: [`docs/RUNBOOK.md`](docs
   store takes orders now (paused by ops, or outside its hours on the demo clock).
 - `quoteOrder(merchantId, lines, promoCode)`, `priceLine`, `PROMOS` (MARHABA, LIVRAISON), `SERVICE_FEE`: order pricing.
   The API prices orders with it; the customer app shows the same numbers.
-- `ZONES`, `COURIERS`, `ORDERS`, `TICKETS`: the Marrakech demo seed (Tue 6 Oct 2026, ~18:34). `clockAt`, `DEMO_START_MIN`.
+- `ZONES`, `COURIERS`, `ORDERS`, `TICKETS`: the Marrakech demo seed (Tue 6 Oct 2026, ~18:34). `DEMO_TESTER_COURIERS`
+  (c21–c26) are seeded only on the public demo.
+- The clock: `clockAt(t)`, `dateAt(t)`, `dayAt(t)`, `minuteOfDayAt(t)`. By default t = 0 is 18:34 on the demo day; the
+  public demo sends real Moroccan time as `LiveState.clock`, which `createYalloClient` applies (`applyClock`) on every
+  snapshot, so these functions and `storeAvailability` follow it with no app changes. Don't compute times from
+  `DEMO_START_MIN` yourself; use these functions.
 - `Ticket`, `TicketMessage`, `TicketSource`, `TicketPriority`, and the `TICKETS` seed: support tickets.
 - `KM_PER_MAP_PCT` (0.2, so the map is 20 km across), `COURIER_PAY`, `courierPayFor`, `tripKm`, `pickupKm`, `DISPATCH_RADIUS_KM` (5):
   courier pay is max(15, 12 + 3 × trip km) DH, and jobs only go to couriers within 5 km of the store.
@@ -138,6 +143,13 @@ Karim, Karim accepts, picks it up and delivers, and the customer's tracking foll
 checked from each side, with screenshots in `e2e/out/`. It takes about 2 minutes, mostly simulated
 driving. It resets the API first. `CUSTOMER=api` skips the customer app; `HEADED=1` shows the browsers.
 Tell the app owners before changing their screen text, because the run asserts on it.
+
+## Public demo
+
+`DEPLOY_PROFILE=demo` runs the API as the public demo server (Render + Neon, `render.yaml` at the root). Everything
+about it (links, tester phones, what changes, setup) is in [`docs/DEMO.md`](docs/DEMO.md). In short: auth enforced,
+no dev tokens, every code 123456 (`/api/auth/otp` answers `fixedCode`, and `/api/health` has `demo: true`), real
+time with every store open, stand-in merchants and couriers, auto-dispatch, state in Postgres via `DATABASE_URL`.
 
 ## Production
 
