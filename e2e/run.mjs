@@ -274,7 +274,9 @@ try {
     await waitForOrder(orderId, o => o.chat?.some(m => m.from === 'customer' && m.text === 'Blue door, 2nd floor'), 'carrying the customer\'s message', 5000);
     // Karim answers from his app when the build has order chat, otherwise through the API as him.
     const k = pages.courier, openChat = k.getByRole('button', { name: `Chat with ${CUSTOMER.first}`, exact: true });
-    if (await openChat.count()) {
+    // Give the screen a moment to render the button before falling back.
+    const hasChat = await openChat.first().waitFor({ state: 'visible', timeout: 5000 }).then(() => true, () => false);
+    if (hasChat) {
       await openChat.first().tap();
       await seen(k, 'Blue door, 2nd floor');
       await k.getByLabel('Write a message', { exact: true }).fill('On my way to Dar Zitoun');
