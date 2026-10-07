@@ -40,6 +40,12 @@ function OrderDetail({ v }) {
           </div>
         )}
 
+        {od.storeAction && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+            <h6 className="label">Store</h6>
+            <button className="btn btn-secondary" onClick={od.storeAction.onClick} style={{ height: 32, fontSize: 12, padding: '0 12px' }}>{od.storeAction.label}</button>
+          </div>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h6 className="label">Courier</h6>

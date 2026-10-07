@@ -17,7 +17,9 @@ const authMode = process.env.AUTH_MODE === 'enforce' ? 'enforce' : 'warn';
 // DEV_TOKENS=off turns off the fixed test tokens (dev-ops, dev-courier-<id>, dev-customer).
 const devTokens = process.env.DEV_TOKENS !== 'off' && process.env.NODE_ENV !== 'production';
 
-const store = new Store({ file, devTokens });
+// STAND_IN_MERCHANT=off: nobody moves new orders through accepted → ready except ops.
+const standInMerchant = process.env.STAND_IN_MERCHANT !== 'off';
+const store = new Store({ file, devTokens, standInMerchant });
 // PUSH=expo sends notifications through the Expo push service; anything else only logs them.
 const pushMode = process.env.PUSH === 'expo' ? 'expo' : 'log';
 const { http } = createApi({ store, authMode, push: createPush(pushMode, process.env.EXPO_ACCESS_TOKEN) });
@@ -25,7 +27,7 @@ const { http } = createApi({ store, authMode, push: createPush(pushMode, process
 http.listen(port, host, () => {
   console.log(`Yallo mock API on http://localhost:${port}  (live feed: ws://localhost:${port}/api/live)`);
   console.log(file ? `State: ${file} (epoch ${store.state.epoch}, demo clock t=${store.state.t}s)` : 'State: in memory only');
-  console.log(`Auth: ${authMode}${devTokens ? ', dev tokens on' : ''} · Push: ${pushMode}`);
+  console.log(`Auth: ${authMode}${devTokens ? ', dev tokens on' : ''} · Push: ${pushMode} · Stand-in merchant: ${standInMerchant ? 'on' : 'off'}`);
 });
 
 // Save the latest state before exiting.

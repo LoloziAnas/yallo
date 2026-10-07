@@ -59,7 +59,8 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
   const lateInfo = o => {
     const e = el(o);
     if (o.st === 'ready' && !o.courier && e > 8 * 60) return 'Ready without courier for ' + Math.floor(e / 60 - 4) + ' min';
-    if (ACTIVE.includes(o.st) && e > 35 * 60) return 'Over 35 min SLA by ' + Math.floor(e / 60 - 35) + ' min';
+    // A scheduled order waiting for its slot isn't late.
+    if (ACTIVE.includes(o.st) && e > 35 * 60 && !(o.scheduledFor && o.st === 'pending')) return 'Over 35 min SLA by ' + Math.floor(e / 60 - 35) + ' min';
     return null;
   };
   // Ops offers the job; the courier (or a stand-in for couriers without the app) accepts or declines.
@@ -235,6 +236,9 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
       hasCourier:!!c, noCourier:!c && !o.offer && o.st !== 'cancelled', courier:c && c.name, cIni:c && ini(c.name), cVeh:c && c.veh, cPhone:c && c.phone, cEta:!c ? '' : o.st === 'delivering' ? 'Drop-off in ' + etaMin + ' min' : ACTIVE.includes(o.st) ? 'At store in ' + etaMin + ' min' : 'Done', openCourier:c ? openCourier(c.id) : null,
       hasOffer:!!o.offer, offerName:o.offer && CBY[o.offer.courier].name, offerLeft:o.offer && mmss(o.offer.left),
       offerNote:!o.offer && !c && o.lastOffer && o.lastOffer.outcome !== 'withdrawn' ? CBY[o.lastOffer.courierId].name + (o.lastOffer.outcome === 'declined' ? ' declined the offer' : ' didn\'t answer the offer') : null,
+      // No merchant app yet: ops moves the order through the store's steps by hand.
+      storeAction:o.st === 'pending' ? { label:'Mark accepted', onClick:() => act(() => api.setOrderStatus(o.id, 'preparing'), o.id + ' accepted for ' + o.m) }
+        : o.st === 'preparing' ? { label:'Mark ready', onClick:() => act(() => api.setOrderStatus(o.id, 'ready'), o.id + ' is ready') } : null,
       canAssign:ACTIVE.includes(o.st), cantCancel:!ACTIVE.includes(o.st), refunded:!!o.refund, refundAmt:o.refund,
       items:o.items.map(([q, n, pp]) => ({ q, n, p:q * pp })),
       timeline:steps.map((st, i, arr) => {

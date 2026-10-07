@@ -1002,3 +1002,37 @@ describe('Customer cancel and history', () => {
     assert.deepEqual(sent, []);
   });
 });
+
+describe('Merchant side', () => {
+  const lines = [{ productId: 'p1-6', qty: 1 }];
+  const base = { merchantId: 'm1', customerName: 'A', zone: 'Guéliz' as const, pay: 'cash' as const, items: lines };
+
+  test('ops marks an order accepted, then ready, by hand', () => {
+    const s = new Store({ standInMerchant: false });
+    const o = s.placeOrder(base);
+    tick(s, AUTO_READY_SEC * 2);
+    assert.equal(order(s, o.id).status, 'pending', 'no stand-in: nothing moves on its own');
+    s.setOrderStatus(o.id, 'preparing', undefined, { byOps: true });
+    s.setOrderStatus(o.id, 'ready', undefined, { byOps: true });
+    assert.equal(order(s, o.id).status, 'ready');
+  });
+
+  test('the stand-in starts a scheduled order only at slot minus prep time', () => {
+    const s = new Store();
+    // Demo clock starts 18:34; Dar Zitoun preps in 18 min, so a 19:00 slot starts cooking at 18:42.
+    const o = s.placeOrder({ ...base, scheduledFor: '19:00' });
+    tick(s, 7 * 60);
+    assert.equal(order(s, o.id).status, 'pending', '18:41: too early');
+    tick(s, 60);
+    assert.equal(order(s, o.id).status, 'preparing', '18:42: start cooking');
+    tick(s, AUTO_READY_SEC - AUTO_ACCEPT_SEC);
+    assert.equal(order(s, o.id).status, 'ready');
+  });
+
+  test('a scheduled slot that has already passed counts as now', () => {
+    const s = new Store();
+    const o = s.placeOrder({ ...base, scheduledFor: '18:00' });
+    tick(s, AUTO_ACCEPT_SEC);
+    assert.equal(order(s, o.id).status, 'preparing');
+  });
+});

@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { dirname } from 'node:path';
 // In-memory state for the mock API: the shared demo seed plus the rules every app's actions go through.
 import {
-  ACTIVE_STATUSES, APPLICATIONS, OPS_STAFF, DEV_TOKENS, GPS_STALE_SEC, geoToMap, PAYOUTS, COURIERS, courierEarnings, normalizePhone as normPhone, requiredDocs, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, MERCHANTS, clockAt, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
+  ACTIVE_STATUSES, DEMO_START_MIN, APPLICATIONS, OPS_STAFF, DEV_TOKENS, GPS_STALE_SEC, geoToMap, PAYOUTS, COURIERS, courierEarnings, normalizePhone as normPhone, requiredDocs, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, MERCHANTS, clockAt, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
   type ApiCourier, type ApiOrder, type LiveState, type OpenTicketBody, type OrderStatus, type PlaceOrderBody, type Ticket, type TicketPriority,
   type TicketSource, type ZoneName, type ApplyBody, type ApplicationStatus, type CourierApplication, type DocKey, type Vehicle, type AuthRole, type AuthSession, type AuthUser, DEV_OTP_CODE, normalizePhone, type OrderItem, type OrderLineInput, type Quote, PricingError, quoteOrder, storeAvailability,
 } from '@yallo/shared';
@@ -125,6 +125,11 @@ export type StoreOptions = {
   saveDelayMs?: number;
   /** Accept the fixed DEV_TOKENS (on by default; turn off in production). */
   devTokens?: boolean;
+  /**
+   * Play the merchants: accept new orders after AUTO_ACCEPT_SEC (scheduled ones when it's time to start cooking)
+   * and have them ready AUTO_READY_SEC − AUTO_ACCEPT_SEC later. On by default; ops can always do it by hand.
+   */
+  standInMerchant?: boolean;
 };
 
 export class Store {
@@ -132,6 +137,7 @@ export class Store {
   private readonly file?: string;
   private readonly saveDelayMs: number;
   private readonly devTokens: boolean;
+  private readonly standIn: boolean;
   private saveTimer?: ReturnType<typeof setTimeout>;
   /** Ids of orders placed through the API, which the stand-in merchant advances. */
   private auto = new Set<string>();
@@ -147,6 +153,7 @@ export class Store {
     this.file = opts.file;
     this.saveDelayMs = opts.saveDelayMs ?? 1000;
     this.devTokens = opts.devTokens ?? true;
+    this.standIn = opts.standInMerchant ?? true;
     this.s = this.load() ?? seed();
     if (this.file) this.flush();
   }
@@ -197,6 +204,18 @@ export class Store {
   private changed() {
     this.scheduleSave();
     this.listeners.forEach(fn => fn(this.s));
+  }
+
+  /**
+   * Whether a scheduled order should start now: at its slot minus the store's prep time. Unscheduled orders always
+   * should. A slot that's already passed (within 12 h) counts as now.
+   */
+  private timeToCook(o: ApiOrder) {
+    if (!o.scheduledFor) return true;
+    const [h, m] = o.scheduledFor.split(':').map(Number);
+    const now = (DEMO_START_MIN + Math.floor(this.s.t / 60)) % 1440;
+    const minutesToSlot = (h * 60 + m - now + 1440) % 1440;
+    return minutesToSlot > 720 || minutesToSlot <= this.merchant(o.merchantId).prepMin;
   }
 
   /** Moves an order to a status and records when it first got there. */
@@ -262,9 +281,9 @@ export class Store {
     for (const o of s.orders) {
       if (!isActive(o.status)) continue;
       o.elapsedSec += 1;
-      if (this.auto.has(o.id)) {
-        if (o.status === 'pending' && o.elapsedSec >= AUTO_ACCEPT_SEC) this.setStatus(o, 'preparing');
-        else if (o.status === 'preparing' && o.elapsedSec >= AUTO_READY_SEC) this.setStatus(o, readyStatus(o));
+      if (this.standIn && this.auto.has(o.id)) {
+        if (o.status === 'pending' && o.elapsedSec >= AUTO_ACCEPT_SEC && this.timeToCook(o)) this.setStatus(o, 'preparing');
+        else if (o.status === 'preparing' && s.t - (o.statusAt?.preparing ?? s.t) >= AUTO_READY_SEC - AUTO_ACCEPT_SEC) this.setStatus(o, readyStatus(o));
       }
     }
     for (const o of s.orders) {
