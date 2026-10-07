@@ -352,9 +352,13 @@ try {
     await p.getByRole('button', { name: 'View cart, 1', exact: true }).first().click();
     await p.getByRole('button', { name: /^Place order/ }).first().click();
     await p.getByRole('button', { name: /^Confirm order/ }).first().click();
-    const pill = p.getByText(/^#48\d{3}$/).first();
-    await pill.waitFor({ timeout: 10_000 });
-    const second = await pill.innerText();
+    // The newest order is this one (the earlier tracking screen stays mounted, so its #id is still in the page).
+    let second;
+    for (const end = Date.now() + 10_000; !second && Date.now() < end; await new Promise(r => setTimeout(r, 300))) {
+      const newest = (await getState()).orders[0];
+      if (newest.id !== orderId && newest.status === 'pending') second = newest.id;
+    }
+    if (!second) throw new Error('The second order did not reach the API');
     const cancel = p.getByRole('button', { name: 'Cancel order', exact: true });
     if (!(await cancel.count())) return skip('the customer build has no customer cancel');
     p.once('dialog', d => d.accept());   // "Cancel this order?" on web
