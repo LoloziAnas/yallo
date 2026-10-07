@@ -19,6 +19,7 @@ function OrderDetail({ v }) {
             <h2 style={{ margin: 0, fontSize: 22 }}>{od.id}</h2><StatusPill st={od.st} height={24} />
           </div>
           <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Placed {od.placed} · {od.timer} elapsed · {od.pay}</div>
+          {od.scheduled && <span className="tag tag-accent" style={{ marginTop: 6 }}>{od.scheduled}</span>}
         </div>
         <button className="btn btn-ghost btn-icon close-btn" onClick={v.closeDrawer} aria-label="Close">{ic.x}</button>
       </div>
@@ -30,8 +31,14 @@ function OrderDetail({ v }) {
         )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 14, borderRadius: 14, background: 'var(--color-surface)' }}>
           <Stop marker={{ borderRadius: 3, background: 'var(--color-accent)' }} name={od.m} addr={od.maddr} onCall={v.callMerchant} ic={ic} />
-          <Stop marker={{ borderRadius: '50%', background: 'var(--color-accent-2)' }} name={od.c} addr={od.caddr} onCall={v.callCustomer} ic={ic} />
+          <Stop marker={{ borderRadius: '50%', background: 'var(--color-accent-2)' }} name={od.c} addr={od.caddr} note={od.clandmark} onCall={v.callCustomer} ic={ic} />
         </div>
+        {od.instructions && (
+          <div style={{ display: 'flex', gap: 10, padding: '10px 12px', borderRadius: 12, border: '1px solid var(--color-divider)', fontSize: 13 }}>
+            <span className="ico muted" style={{ fontSize: 15, marginTop: 2 }}>{ic.msg}</span>
+            <span><strong style={{ display: 'block', fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--color-neutral-700)' }}>Instructions</strong>{od.instructions}</span>
+          </div>
+        )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -122,11 +129,11 @@ function OrderDetail({ v }) {
   );
 }
 
-function Stop({ marker, name, addr, onCall, ic }) {
+function Stop({ marker, name, addr, note, onCall, ic }) {
   return (
     <div style={{ display: 'flex', gap: 10 }}>
       <span style={{ width: 10, height: 10, marginTop: 5, flex: 'none', ...marker }} />
-      <div style={{ flex: 1 }}><strong>{name}</strong><div className="muted" style={{ fontSize: 12 }}>{addr}</div></div>
+      <div style={{ flex: 1 }}><strong>{name}</strong><div className="muted" style={{ fontSize: 12 }}>{addr}</div>{note && <div className="faint" style={{ fontSize: 12 }}>{note}</div>}</div>
       <button className="btn btn-ghost btn-icon" onClick={onCall} aria-label={'Call ' + name} style={{ width: 32, height: 32 }}>{ic.phone}</button>
     </div>
   );

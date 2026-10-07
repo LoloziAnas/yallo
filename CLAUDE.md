@@ -59,7 +59,8 @@ or calling `POST /api/reset`, restores the demo seed.
   every change and every second (the demo clock: timers and courier movement run on the server).
 - `GET /api/state` returns the current snapshot. Actions are `POST`s that return the new state, or
   `{ error }` with a 4xx when refused:
-  - `/api/orders` places an order (body `PlaceOrderBody`) and returns the new order. A stand-in
+  - `/api/orders` places an order (body `PlaceOrderBody`) and returns the new order. Optional delivery details:
+    `address`, `location` {lat, lon}, `instructions` (≤ 500), `scheduledFor` "HH:MM" (informational for now), `customerPhone`. A stand-in
     merchant accepts it after 20 s and has it ready at 60 s.
   - Job offers: `/api/orders/:n/offer {courierId}` (ops), `/offer/accept {courierId}` and `/offer/decline {courierId}`
     (courier), `/offer/withdraw` (ops). A pending offer is `order.offer = { courierId, offeredAt, expiresAt }` in demo

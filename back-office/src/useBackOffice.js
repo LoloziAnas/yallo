@@ -204,7 +204,8 @@ export function useBackOffice({ startPage } = {}) {
     const idx = { pending:0, preparing:1, ready:2, picking:2, delivering:3, delivered:4, cancelled:-1 }[o.st];
     // Minutes to go for the courier: to the store until pickup, then to the drop-off (2.9 min/km, as in the picker).
     const etaMin = c ? Math.max(1, Math.round(pickupKm({ x:c.x, y:c.y }, o.st === 'delivering' ? { x:o.ux, y:o.uy } : { x:m.x, y:m.y }) * 2.9)) : 0;
-    od = { ...o, st:STATUS[o.st], timer:mmss(el(o)), late:!!late, lateMsg:late, maddr:m.addr, caddr:o.cz + ', Marrakech · ' + (o.pay === 'Cash' ? 'collect ' + o.total + ' DH' : 'paid online'),
+    od = { ...o, st:STATUS[o.st], timer:mmss(el(o)), late:!!late, lateMsg:late, maddr:m.addr, caddr:(o.address ? [o.address.street, o.address.building].filter(Boolean).join(' · ') : o.cz + ', Marrakech') + ' · ' + (o.pay === 'Cash' ? 'collect ' + o.total + ' DH' : 'paid online'),
+      clandmark:o.address && o.address.landmark ? '📍 ' + o.address.landmark : null, scheduled:o.scheduledFor ? 'Scheduled ' + o.scheduledFor : null,
       hasCourier:!!c, noCourier:!c && !o.offer && o.st !== 'cancelled', courier:c && c.name, cIni:c && ini(c.name), cVeh:c && c.veh, cPhone:c && c.phone, cEta:!c ? '' : o.st === 'delivering' ? 'Drop-off in ' + etaMin + ' min' : ACTIVE.includes(o.st) ? 'At store in ' + etaMin + ' min' : 'Done', openCourier:c ? openCourier(c.id) : null,
       hasOffer:!!o.offer, offerName:o.offer && CBY[o.offer.courier].name, offerLeft:o.offer && mmss(o.offer.left),
       offerNote:!o.offer && !c && o.lastOffer && o.lastOffer.outcome !== 'withdrawn' ? CBY[o.lastOffer.courierId].name + (o.lastOffer.outcome === 'declined' ? ' declined the offer' : ' didn\'t answer the offer') : null,
@@ -258,7 +259,7 @@ export function useBackOffice({ startPage } = {}) {
     toggleAll:() => setState(() => { const d = {}; if (!allOn) selectable.forEach(r => d[r.key] = true); return { paySel:d }; }), allMark:allOn ? '✓' : '', allBg:allOn ? 'var(--color-accent)' : 'var(--color-card)', allBd:allOn ? 'var(--color-accent)' : 'var(--color-neutral-400)',
     hasDrawer:!!(dOrderObj || dCourierObj), dOrder:!!dOrderObj, dCourier:!!dCourierObj, od, cd, nearest, radiusKm:DISPATCH_RADIUS_KM, showAssign:!!dOrderObj && s.assignOpen && ACTIVE.includes(dOrderObj.st) && dOrderObj.st !== 'delivering',
     assignLabel:s.assignOpen ? 'Hide' : dOrderObj && dOrderObj.courier ? 'Reassign' : 'Assign courier', toggleAssign:set({ assignOpen:!s.assignOpen }),
-    closeDrawer:set({ drawer:null }), withdrawOffer:() => act(api.withdrawOffer(dOrderObj.id), 'Offer withdrawn'), callMerchant:() => toast('Calling ' + (dOrderObj && dOrderObj.m) + '…'), callCustomer:() => toast('Calling ' + (dOrderObj && dOrderObj.c) + '…'),
+    closeDrawer:set({ drawer:null }), withdrawOffer:() => act(api.withdrawOffer(dOrderObj.id), 'Offer withdrawn'), callMerchant:() => toast('Calling ' + (dOrderObj && dOrderObj.m) + '…'), callCustomer:() => toast('Calling ' + (dOrderObj && dOrderObj.c) + (dOrderObj && dOrderObj.phone ? ' · ' + dOrderObj.phone : '') + '…'),
     openRefund:() => setState({ modal:'refund', reason:null, refundMode:'full', refundAmt:String(dOrderObj.total) }), openCancel:set({ modal:'cancel', reason:null, comp:true }),
     msgCourier:() => toast('Message sent to ' + (dCourierObj && dCourierObj.name)),
     suspendLabel:dCourierObj && s.suspended[dCourierObj.id] ? 'Reactivate' : 'Suspend',

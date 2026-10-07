@@ -87,6 +87,20 @@ export type OrderItem = {
   price: number;
 };
 
+export type DeliveryAddress = {
+  /** e.g. "Home". */
+  label: string;
+  street: string;
+  district: string;
+  city: string;
+  /** Building, floor, apartment. */
+  building?: string;
+  landmark?: string;
+};
+
+/** A real GPS fix, for navigation apps. Separate from `dropoff`, the position on the demo map. */
+export type GeoPoint = { lat: number; lon: number };
+
 export type Order = {
   /** Display id, e.g. "#48213". */
   id: string;
@@ -117,6 +131,13 @@ export type Order = {
   /** Customer's tip for the courier, in DH. */
   tip?: number;
   pay: PayMethod;
+  address?: DeliveryAddress;
+  location?: GeoPoint;
+  /** Notes for the courier, e.g. "Please call when you arrive · Blue door, 2nd floor". */
+  instructions?: string;
+  /** Delivery slot the customer picked, "HH:MM" on the demo clock. Absent means as soon as possible. */
+  scheduledFor?: string;
+  customerPhone?: string;
   /** Local time the order was placed, "HH:MM". */
   placedAt: string;
   /**

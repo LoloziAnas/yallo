@@ -1,5 +1,5 @@
 // Contract for the Yallo mock API (../api) and a small client usable from the web and React Native.
-import type { Courier, Merchant, Order, OrderItem, OrderStatus, PayMethod, Ticket, TicketPriority, TicketSource, ZoneName } from './model';
+import type { Courier, DeliveryAddress, GeoPoint, Merchant, Order, OrderItem, OrderStatus, PayMethod, Ticket, TicketPriority, TicketSource, ZoneName } from './model';
 
 export type ApiOrder = Order & {
   /** Seconds since the order was placed. Frozen once the order is delivered or cancelled. */
@@ -56,6 +56,14 @@ export type PlaceOrderBody = {
    */
   discount?: number;
   promoCode?: string;
+  /** Delivery details. Strings are trimmed and empty ones dropped; see Order for the meaning of each. */
+  address?: DeliveryAddress;
+  location?: GeoPoint;
+  /** Up to 500 characters. */
+  instructions?: string;
+  /** "HH:MM". */
+  scheduledFor?: string;
+  customerPhone?: string;
 };
 
 export type OpenTicketBody = {

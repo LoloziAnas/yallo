@@ -28,6 +28,50 @@ const SOURCES: TicketSource[] = ['customer', 'courier', 'merchant'];
 const PRIORITIES: TicketPriority[] = ['urgent', 'high', 'normal', 'low'];
 const MAX_TEXT = 2000;
 
+/** An optional string: trimmed, empty → undefined, refused if not a string or too long. */
+function optText(v: unknown, name: string, max: number): string | undefined {
+  if (v === undefined || v === null) return undefined;
+  if (typeof v !== 'string') throw new ActionError(name + ' must be a string');
+  const s = v.trim();
+  if (s.length > max) throw new ActionError(`${name} is too long (max ${max} characters)`);
+  return s || undefined;
+}
+
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** Validates the optional delivery details of a new order. */
+function deliveryDetails(body: PlaceOrderBody) {
+  const out: Pick<ApiOrder, 'address' | 'location' | 'instructions' | 'scheduledFor' | 'customerPhone'> = {};
+  if (body.address !== undefined && body.address !== null) {
+    if (!isObject(body.address)) throw new ActionError('address must be an object');
+    const a = body.address;
+    const [label, street, district, city] = (['label', 'street', 'district', 'city'] as const).map(k => optText(a[k], 'address.' + k, 120));
+    if (!label || !street || !district || !city) throw new ActionError('address needs a label, street, district and city');
+    const building = optText(a.building, 'address.building', 120), landmark = optText(a.landmark, 'address.landmark', 120);
+    out.address = { label, street, district, city, ...(building ? { building } : {}), ...(landmark ? { landmark } : {}) };
+  }
+  if (body.location !== undefined && body.location !== null) {
+    const l = body.location as unknown;
+    if (!isObject(l) || typeof l.lat !== 'number' || typeof l.lon !== 'number' || !(Math.abs(l.lat) <= 90) || !(Math.abs(l.lon) <= 180)) {
+      throw new ActionError('location must be { lat, lon } with lat in -90..90 and lon in -180..180');
+    }
+    out.location = { lat: l.lat, lon: l.lon };
+  }
+  const instructions = optText(body.instructions, 'instructions', 500);
+  if (instructions) out.instructions = instructions;
+  const scheduledFor = optText(body.scheduledFor, 'scheduledFor', 5);
+  if (scheduledFor) {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(scheduledFor)) throw new ActionError('scheduledFor must be "HH:MM"');
+    out.scheduledFor = scheduledFor;
+  }
+  const customerPhone = optText(body.customerPhone, 'customerPhone', 20);
+  if (customerPhone) {
+    if (!/^\+?[0-9][0-9 ]{5,18}$/.test(customerPhone)) throw new ActionError('customerPhone must be digits, optionally starting with +');
+    out.customerPhone = customerPhone;
+  }
+  return out;
+}
+
 function cleanText(text: unknown, what: string) {
   if (typeof text !== 'string' || !text.trim()) throw new ActionError(what + ' is required');
   if (text.length > MAX_TEXT) throw new ActionError(what + ' is too long (max ' + MAX_TEXT + ' characters)');
@@ -160,6 +204,7 @@ export class Store {
     const discount = money(body.discount, 'discount', 0);
     const gross = body.items.reduce((sum, i) => sum + i.qty * i.price, 0) + fee + serviceFee;
     if (discount > gross) throw new ActionError(`discount (${discount}) can't exceed the order (${gross} DH)`);
+    const details = deliveryDetails(body);
     const promoCode = typeof body.promoCode === 'string' && body.promoCode.trim() ? body.promoCode.trim().slice(0, 32) : undefined;
     const nextNum = Math.max(...this.s.orders.map(o => Number(o.id.slice(1)))) + 1;
     const centre = ZONES[body.zone as ZoneName];
@@ -179,6 +224,7 @@ export class Store {
       ...(serviceFee ? { serviceFee } : {}),
       ...(discount ? { discount } : {}),
       ...(promoCode ? { promoCode } : {}),
+      ...details,
       total: gross - discount,
       pay: body.pay,
       placedAt: clockAt(this.s.t),

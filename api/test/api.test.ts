@@ -123,6 +123,28 @@ describe('Store', () => {
     assert.equal(order(s, '#48216').status, 'ready', 'no courier: waits at ready');
   });
 
+  test('delivery details are cleaned and kept on the order', () => {
+    const o = s.placeOrder({ merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz', pay: 'cash', items: [{ qty: 1, name: 'Tea', price: 9 }],
+      address: { label: ' Home ', street: '12 Rue de la Liberté', district: 'Guéliz', city: 'Marrakech', building: 'Imm. Nour, 3rd floor, Apt 7', landmark: '  ' },
+      location: { lat: 31.634, lon: -8.0105 }, instructions: ' Please call when you arrive · Blue door ', scheduledFor: '21:30', customerPhone: '+212 661234567' });
+    assert.deepEqual(o.address, { label: 'Home', street: '12 Rue de la Liberté', district: 'Guéliz', city: 'Marrakech', building: 'Imm. Nour, 3rd floor, Apt 7' });
+    assert.deepEqual([o.location, o.instructions, o.scheduledFor, o.customerPhone],
+      [{ lat: 31.634, lon: -8.0105 }, 'Please call when you arrive · Blue door', '21:30', '+212 661234567']);
+    const guest = s.placeOrder({ merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz', pay: 'cash', items: [{ qty: 1, name: 'Tea', price: 9 }], instructions: '   ' });
+    assert.deepEqual([guest.address, guest.instructions, guest.customerPhone], [undefined, undefined, undefined]);
+  });
+
+  test('rejects malformed delivery details', () => {
+    const base = { merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz' as const, pay: 'cash' as const, items: [{ qty: 1, name: 'Tea', price: 9 }] };
+    const addr = { label: 'Home', street: '12 Rue', district: 'Guéliz', city: 'Marrakech' };
+    assert.throws(() => s.placeOrder({ ...base, address: 'Guéliz' as never }), /address must be an object/);
+    assert.throws(() => s.placeOrder({ ...base, address: { ...addr, street: ' ' } }), /needs a label, street/);
+    assert.throws(() => s.placeOrder({ ...base, location: { lat: 91, lon: 0 } }), /location must be/);
+    assert.throws(() => s.placeOrder({ ...base, instructions: 'x'.repeat(501) }), /too long/);
+    assert.throws(() => s.placeOrder({ ...base, scheduledFor: '9:30' }), /HH:MM/);
+    assert.throws(() => s.placeOrder({ ...base, customerPhone: 'call me' }), /customerPhone/);
+  });
+
   test('rejects bad orders', () => {
     const ok = { merchantId: 'm2', customerName: 'Amal', zone: 'Hivernage' as const, pay: 'card' as const, items: [{ qty: 1, name: 'Fries', price: 19 }] };
     assert.throws(() => s.placeOrder({ ...ok, merchantId: 'nope' }), /No merchant/);
