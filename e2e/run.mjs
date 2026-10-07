@@ -31,7 +31,7 @@ const STORE = {
   /** Customer-app steps from Home to the item in the cart. */
   async ui(p, click) {
     // The store cards are labelled divs, not buttons, because they hold a favourite button.
-    await p.getByLabel('Dar Zitoun', { exact: true }).first().click();
+    await p.getByLabel('Dar Zitoun', { exact: true }).filter({ visible: true }).first().click();
     await click('Add to cart: Chicken tajine, preserved lemon & olives');
     await click('Add to cart · 85 DH');
     await seen(p, 'Added · 1× Chicken tajine, preserved lemon & olives');
@@ -99,7 +99,8 @@ const skip = why => console.log('  · skipped: ' + why);
 /** The courier's side through the API, for features whose courier screens the run doesn't drive yet. */
 const asCourier = (path, body) => fetch(API + path, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer dev-courier-' + COURIER.id },
   body: JSON.stringify(body) }).then(async r => { const j = await r.json(); if (!r.ok) throw new Error(`POST ${path} → ${r.status}: ${j.error}`); return j; });
-const seen = (page, text, timeout = 10_000) => page.getByText(text).first().waitFor({ timeout });
+// Visible matches only: the apps keep earlier screens mounted but hidden, and their text would otherwise match first.
+const seen = (page, text, timeout = 10_000) => page.getByText(text).filter({ visible: true }).first().waitFor({ timeout });
 const tap = (page, name, opts = {}) => page.getByRole(opts.role ?? 'button', { name, exact: opts.exact ?? true }).first().tap();
 
 // ---------- customer ----------
@@ -359,7 +360,7 @@ try {
     if (!p) return skip('no customer app in this run');
     // Back to Home (the tab bar's tabs are role="tab"), then the same store and item; the customer is signed in.
     await p.getByRole('tab', { name: 'Home', exact: true }).first().click();
-    await p.getByLabel(STORE.customerName, { exact: true }).first().waitFor({ timeout: 10_000 });
+    await p.getByLabel(STORE.customerName, { exact: true }).filter({ visible: true }).first().waitFor({ timeout: 10_000 });
     await STORE.ui(p, (name) => p.getByRole('button', { name, exact: typeof name === 'string' }).first().click());
     await p.getByRole('button', { name: 'View cart, 1', exact: true }).first().click();
     await p.getByRole('button', { name: /^Place order/ }).first().click();
