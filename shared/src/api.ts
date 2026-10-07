@@ -298,6 +298,12 @@ export function createYalloClient(baseUrl: string, opts: { token?: string } = {}
     approvePayouts: (lineIds: string[]) => post('/payouts/approve', { lineIds }),
     /** A courier's jobs, earnings, tips and cash held, worked out from orders. */
     courierEarnings: (courierId: string) => call<CourierEarnings>('GET', `/couriers/${courierId}/earnings`),
+    /**
+     * Registers this device's Expo push token for the signed-in courier or customer. Couriers get a push for each
+     * offer, customers for their order's status changes. Without a sign-in, pass role and id (warn mode only).
+     */
+    registerPushToken: (pushToken: string, who?: { role: 'courier' | 'customer'; id: string }) =>
+      post<{ ok: true }>('/push-token', { token: pushToken, ...(who ?? {}) }),
     /** Restores the demo seed. */
     reset: () => post('/reset'),
   };

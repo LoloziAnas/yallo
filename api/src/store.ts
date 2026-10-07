@@ -97,8 +97,19 @@ function seed(): LiveState {
 
 /** Bump when the saved state's shape changes; an older file is set aside and the demo reseeds. */
 export const STATE_VERSION = 3;
+
+/** Things worth telling someone about, e.g. with a push notification. */
+export type StoreEvent =
+  | { type: 'offer'; order: ApiOrder; courierId: string }
+  | { type: 'status'; order: ApiOrder; status: OrderStatus };
 /** Accounts and sessions: saved with the state but never broadcast. */
-type AuthData = { users: AuthUser[]; sessions: { token: string; userId: string; createdAt: string }[]; nextCustomer: number };
+type AuthData = {
+  users: AuthUser[];
+  sessions: { token: string; userId: string; createdAt: string }[];
+  nextCustomer: number;
+  /** Expo push tokens by recipient, "courier:c1" or "customer:u1". */
+  pushTokens?: Record<string, string[]>;
+};
 type SavedState = { version: number; savedAt: string; state: LiveState; auto: string[]; auth: AuthData };
 const emptyAuth = (): AuthData => ({ users: [], sessions: [], nextCustomer: 1 });
 
@@ -125,6 +136,7 @@ export class Store {
   /** Ids of orders placed through the API, which the stand-in merchant advances. */
   private auto = new Set<string>();
   private listeners = new Set<(s: LiveState) => void>();
+  private eventListeners = new Set<(e: StoreEvent) => void>();
   /** Open courier-app connections per courier id. */
   private apps = new Map<string, number>();
   private auth: AuthData = emptyAuth();
@@ -192,7 +204,15 @@ export class Store {
     o.status = status;
     o.statusAt ??= {};
     o.statusAt[status] ??= this.s.t;
+    this.emit({ type: 'status', order: o, status });
   }
+
+  onEvent(fn: (e: StoreEvent) => void) {
+    this.eventListeners.add(fn);
+    return () => { this.eventListeners.delete(fn); };
+  }
+
+  private emit(e: StoreEvent) { this.eventListeners.forEach(fn => fn(e)); }
 
   private order(id: string) {
     const key = id.startsWith('#') ? id : '#' + id;
@@ -414,6 +434,7 @@ export class Store {
     this.endOffer(o, 'withdrawn');
     this.price(o, c);
     o.offer = { courierId: c.id, offeredAt: this.s.t, expiresAt: this.s.t + OFFER_SEC };
+    this.emit({ type: 'offer', order: o, courierId: c.id });
     this.changed();
   }
 
@@ -831,5 +852,26 @@ export class Store {
     c.pos = geoToMap(lat, lon);
     c.lastFixAt = this.s.t;
     this.changed();
+  }
+
+  // ---------- push tokens ----------
+
+  /** Remembers an Expo push token for a courier or customer (a device may register again; duplicates are ignored). */
+  registerPushToken(role: 'courier' | 'customer', id: string, token: string) {
+    if (role !== 'courier' && role !== 'customer') throw new ActionError("role must be 'courier' or 'customer'");
+    if (typeof token !== 'string' || !/^Expo(nent)?PushToken\[[^\]]{1,200}\]$/.test(token.trim())) {
+      throw new ActionError('token must be an Expo push token, ExponentPushToken[…]');
+    }
+    if (role === 'courier') this.courier(id);
+    else if (!id) throw new ActionError('id is required');
+    const key = role + ':' + id;
+    this.auth.pushTokens ??= {};
+    const list = (this.auth.pushTokens[key] ??= []);
+    if (!list.includes(token.trim())) list.push(token.trim());
+    this.scheduleSave();
+  }
+
+  pushTokensFor(role: 'courier' | 'customer', id: string): string[] {
+    return this.auth.pushTokens?.[role + ':' + id] ?? [];
   }
 }

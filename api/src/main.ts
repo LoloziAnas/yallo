@@ -2,6 +2,7 @@ import { API_PORT } from '@yallo/shared';
 import { fileURLToPath } from 'node:url';
 import { createApi } from './server';
 import { Store } from './store';
+import { createPush } from './push';
 
 const port = Number(process.env.PORT) || API_PORT;
 // Listen on all interfaces so phones on the same network can reach the API.
@@ -17,12 +18,14 @@ const authMode = process.env.AUTH_MODE === 'enforce' ? 'enforce' : 'warn';
 const devTokens = process.env.DEV_TOKENS !== 'off' && process.env.NODE_ENV !== 'production';
 
 const store = new Store({ file, devTokens });
-const { http } = createApi({ store, authMode });
+// PUSH=expo sends notifications through the Expo push service; anything else only logs them.
+const pushMode = process.env.PUSH === 'expo' ? 'expo' : 'log';
+const { http } = createApi({ store, authMode, push: createPush(pushMode, process.env.EXPO_ACCESS_TOKEN) });
 
 http.listen(port, host, () => {
   console.log(`Yallo mock API on http://localhost:${port}  (live feed: ws://localhost:${port}/api/live)`);
   console.log(file ? `State: ${file} (epoch ${store.state.epoch}, demo clock t=${store.state.t}s)` : 'State: in memory only');
-  console.log(`Auth: ${authMode}${devTokens ? ', dev tokens on' : ''}`);
+  console.log(`Auth: ${authMode}${devTokens ? ', dev tokens on' : ''} · Push: ${pushMode}`);
 });
 
 // Save the latest state before exiting.

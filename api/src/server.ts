@@ -2,7 +2,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { AuthUser, LiveMessage, LiveState } from '@yallo/shared';
-import { ActionError, Store } from './store';
+import { ActionError, Store, type StoreEvent } from './store';
+import { createPush, type PushMessage, type PushSender } from './push';
 
 const MAX_BODY = 64 * 1024;
 
@@ -80,6 +81,15 @@ const ROUTES: [string, RegExp, Rule, Handler][] = [
   ['POST', /^\/api\/courier-applications\/(a\d+)\/reject$/, ops, (s, [id], b) => (s.rejectApplication(id, b?.reason), s.state)],
   ['POST', /^\/api\/payouts\/approve$/, ops, (s, _, b) => (s.approvePayouts(b?.lineIds), s.state)],
   ['GET', /^\/api\/couriers\/([\w-]+)\/earnings$/, selfCourier, (s, [id]) => s.courierEarnings(id)],
+  ['POST', /^\/api\/push-token$/, signedIn, (s, _, b, ctx) => {
+    // The signed-in courier or customer; in warn mode an anonymous app may name itself in the body.
+    const who = ctx.user?.role === 'courier' ? { role: 'courier' as const, id: ctx.user.courierId! }
+      : ctx.user?.role === 'customer' ? { role: 'customer' as const, id: ctx.user.id }
+      : !ctx.user && !ctx.enforce ? { role: b?.role, id: String(b?.id ?? '') } : undefined;
+    if (!who) throw new ActionError('Only couriers and customers get push notifications');
+    s.registerPushToken(who.role, who.id, b?.token);
+    return { ok: true };
+  }],
   ['POST', /^\/api\/reset$/, ops, s => (s.reset(), s.state)],
 ];
 
@@ -113,7 +123,7 @@ const bearer = (header: string | undefined) => (header?.startsWith('Bearer ') ? 
  * @param tickMs demo clock interval; 0 disables the clock (tests tick by hand).
  * @param authMode see AuthMode.
  */
-export function createApi({ tickMs = 1000, store = new Store(), authMode = 'warn' as AuthMode } = {}) {
+export function createApi({ tickMs = 1000, store = new Store(), authMode = 'warn' as AuthMode, push = createPush('log') as PushSender } = {}) {
   const enforce = authMode === 'enforce';
   /** The state this viewer gets: everything in warn mode, their own view when enforcing. */
   const viewFor = (user: AuthUser | undefined): LiveState => (enforce ? store.viewFor(user) : store.state);
@@ -183,8 +193,35 @@ export function createApi({ tickMs = 1000, store = new Store(), authMode = 'warn
     });
   });
 
+  store.onEvent(e => {
+    const messages = notifications(store, e);
+    if (messages.length) void push(messages);
+  });
+
   const timer = tickMs > 0 ? setInterval(() => store.tick(), tickMs) : undefined;
   http.on('close', () => { clearInterval(timer); wss.clients.forEach(c => c.terminate()); wss.close(); });
 
   return { http, store };
+}
+
+/** The push messages an event triggers: an offer for the courier, status news for the order's customer. */
+export function notifications(store: Store, e: StoreEvent): PushMessage[] {
+  const o = e.order;
+  const shop = store.state.merchants.find(m => m.id === o.merchantId)?.name ?? 'the store';
+  const rider = store.state.couriers.find(c => c.id === o.courierId)?.name.split(' ')[0] ?? 'Your rider';
+  const to = (tokens: string[], title: string, body: string) => tokens.map(t => ({ to: t, title, body, data: { orderId: o.id, type: e.type } }));
+  if (e.type === 'offer') {
+    const pay = o.courierPay !== undefined ? ` · ${o.courierPay} DH` : '';
+    return to(store.pushTokensFor('courier', e.courierId), 'New delivery', `${o.id} · ${shop}${pay}. Accept within 15 s`);
+  }
+  if (!o.customerId) return [];
+  const news: Partial<Record<typeof e.status, [string, string]>> = {
+    preparing: ['Order accepted', `${shop} is preparing your order`],
+    picking: ['Rider assigned', `${rider} is heading to ${shop}`],
+    delivering: ['On the way', `${rider} has picked up your order`],
+    delivered: ['Delivered', 'Enjoy your meal!'],
+    cancelled: ['Order cancelled', o.cancelReason ? `Reason: ${o.cancelReason}. You haven't been charged.` : "You haven't been charged."],
+  };
+  const n = news[e.status];
+  return n ? to(store.pushTokensFor('customer', o.customerId), n[0], n[1]) : [];
 }

@@ -7,7 +7,8 @@ import { AUTO_ACCEPT_SEC, AUTO_READY_SEC, STAND_IN_ACCEPT_SEC, STATE_VERSION, St
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createApi } from '../src/server';
+import { createApi, notifications } from '../src/server';
+import { createPush, type PushMessage } from '../src/push';
 
 const order = (s: Store, id: string) => s.state.orders.find(o => o.id === id)!;
 const courier = (s: Store, id: string) => s.state.couriers.find(c => c.id === id)!;
@@ -864,6 +865,84 @@ describe('Authorization (warn mode)', () => {
       assert.match(logged[0], /\[auth\] would refuse POST \/api\/orders\/48219\/assign \(not signed in\): Only ops staff/);
     } finally {
       console.warn = warn;
+      await new Promise<void>(r => api.http.close(() => r()));
+    }
+  });
+});
+
+describe('Push notifications', () => {
+  const TOKEN = 'ExponentPushToken[abc123]';
+  const customer = { id: 'u7', role: 'customer' as const, phone: '+212600000007', name: 'Amal' };
+
+  test('push tokens are validated, de-duplicated and kept per recipient', () => {
+    const s = new Store();
+    assert.throws(() => s.registerPushToken('courier', 'c1', 'not-a-token'), /Expo push token/);
+    assert.throws(() => s.registerPushToken('courier', 'c99', TOKEN), /No courier c99/);
+    s.registerPushToken('courier', 'c1', TOKEN);
+    s.registerPushToken('courier', 'c1', TOKEN);
+    assert.deepEqual(s.pushTokensFor('courier', 'c1'), [TOKEN]);
+    assert.deepEqual(s.pushTokensFor('courier', 'c2'), []);
+  });
+
+  test('an offer notifies the courier; status changes notify the order\'s customer', () => {
+    const s = new Store();
+    const sent: PushMessage[] = [];
+    s.onEvent(e => sent.push(...notifications(s, e)));
+    s.registerPushToken('courier', 'c3', TOKEN);
+    s.registerPushToken('customer', 'u7', 'ExponentPushToken[cust]');
+    const o = s.placeOrder({ merchantId: 'm1', customerName: 'Amal', zone: 'Guéliz', pay: 'cash', items: [{ productId: 'p1-6', qty: 1 }] }, customer);
+    tick(s, AUTO_ACCEPT_SEC);
+    s.offerOrder(o.id, 'c3');
+    s.acceptOffer(o.id, 'c3');
+    tick(s, AUTO_READY_SEC - AUTO_ACCEPT_SEC);
+    s.setOrderStatus(o.id, 'delivering');
+    s.setOrderStatus(o.id, 'delivered', order(s, o.id).deliveryPin);
+    assert.deepEqual(sent.map(m => [m.to, m.title]), [
+      ['ExponentPushToken[cust]', 'Order accepted'],
+      [TOKEN, 'New delivery'],
+      ['ExponentPushToken[cust]', 'Rider assigned'],
+      ['ExponentPushToken[cust]', 'On the way'],
+      ['ExponentPushToken[cust]', 'Delivered'],
+    ]);
+    assert.match(sent[1].body, new RegExp(`${o.id} · Dar Zitoun · [\\d.]+ DH. Accept within 15 s`));
+    assert.equal(sent[3].body, 'Salma has picked up your order');
+  });
+
+  test('guest orders (no customerId) and recipients without tokens send nothing', () => {
+    const s = new Store();
+    const sent: PushMessage[] = [];
+    s.onEvent(e => sent.push(...notifications(s, e)));
+    const o = s.placeOrder({ merchantId: 'm1', customerName: 'A', zone: 'Guéliz', pay: 'cash', items: [{ productId: 'p1-6', qty: 1 }] });
+    tick(s, AUTO_ACCEPT_SEC);
+    s.offerOrder(o.id, 'c2');
+    assert.deepEqual(sent, []);
+  });
+
+  test('log mode only logs; expo mode swallows network failures', async () => {
+    const log = console.log, warn = console.warn, fetchFn = globalThis.fetch;
+    const lines: string[] = [];
+    console.log = (m: string) => lines.push(m); console.warn = (...a: unknown[]) => lines.push(a.join(' '));
+    globalThis.fetch = (() => Promise.reject(new Error('offline'))) as typeof fetch;
+    try {
+      await createPush('log')([{ to: TOKEN, title: 'Hi', body: 'There' }]);
+      await createPush('expo')([{ to: TOKEN, title: 'Hi', body: 'There' }]);
+    } finally { console.log = log; console.warn = warn; globalThis.fetch = fetchFn; }
+    assert.match(lines[0], /\[push\] \(log only\) to ExponentPushToken\[abc123\]…: Hi · There/);
+    assert.match(lines[1], /\[push\] could not reach the Expo push service: offline/);
+  });
+
+  test('over HTTP the signed-in app registers its own token', async () => {
+    const sent: PushMessage[] = [];
+    const api = createApi({ tickMs: 0, authMode: 'enforce', push: async m => { sent.push(...m); } });
+    await new Promise<void>(r => api.http.listen(0, '127.0.0.1', r));
+    const base = `http://127.0.0.1:${(api.http.address() as AddressInfo).port}`;
+    try {
+      const c3 = createYalloClient(base, { token: DEV_TOKENS.courier('c3') });
+      assert.deepEqual(await c3.registerPushToken(TOKEN), { ok: true });
+      await assert.rejects(createYalloClient(base).registerPushToken(TOKEN, { role: 'courier', id: 'c3' }), /Sign in first/);
+      await createYalloClient(base, { token: DEV_TOKENS.ops }).offerOrder('#48219', 'c3');
+      assert.deepEqual(sent.map(m => [m.to, m.title]), [[TOKEN, 'New delivery']]);
+    } finally {
       await new Promise<void>(r => api.http.close(() => r()));
     }
   });
