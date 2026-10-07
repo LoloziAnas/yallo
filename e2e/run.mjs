@@ -38,7 +38,12 @@ const STORE = {
   },
 };
 const TOTAL = STORE.item.price + STORE.fee + STORE.serviceFee;
-const CUSTOMER = { name: 'Salma El Amrani', first: 'Salma', zone: 'Guéliz', street: '10 Rue Sourya' };
+// The customer signs in at checkout (newer customer builds) with this test number, typed as 9 digits.
+const CUSTOMER = { name: 'Salma El Amrani', first: 'Salma', zone: 'Guéliz', street: '10 Rue Sourya', phone: '612345678' };
+/** Set when the customer app asked the customer to sign in before ordering. */
+let customerSignedIn = false;
+/** The delivery PIN read from the customer's tracking screen, when it shows one. */
+let customerPin = null;
 /** Set when the customer app asked for the street (web builds without reverse geocoding). */
 let typedStreet = false;
 
@@ -120,6 +125,17 @@ async function customerPlacesOrder() {
   await STORE.ui(p, click);
   await click('View cart, 1');
   await click(/^Place order/);
+  // Newer builds ask a guest to sign in before ordering (phone + one-time code), then go on to checkout.
+  const signInTitle = p.getByText('Sign in to place your order');
+  const confirm = p.getByRole('button', { name: /^Confirm order/ });
+  await Promise.race([signInTitle.waitFor({ timeout: 15_000 }), confirm.first().waitFor({ timeout: 15_000 })]).catch(() => {});
+  if (await signInTitle.isVisible()) {
+    await p.getByLabel('Phone number').fill(CUSTOMER.phone);
+    await p.getByLabel('Your name (optional)').fill(CUSTOMER.name);
+    await click('Continue');
+    await p.getByLabel('Enter the code').fill('123456'); // verifies on the 6th digit
+    customerSignedIn = true;
+  }
   await click(/^Confirm order/);
   const pill = p.getByText(/^#48\d{3}$/).first();
   await pill.waitFor({ timeout: 10_000 });
@@ -192,6 +208,13 @@ try {
     await seen(pages.ops, orderId);
     if (pages.customer) await seen(pages.customer, 'A rider will be assigned when your order is ready');
     if (typedStreet && o.address?.street !== CUSTOMER.street) throw new Error(`Order address is "${o.address?.street}", expected "${CUSTOMER.street}"`);
+    if (customerSignedIn && !o.customerId) throw new Error('The customer signed in, but the order has no customerId');
+    // Newer builds show the delivery PIN on tracking; it must be the order's PIN.
+    const pinEl = pages.customer?.getByTestId('delivery-pin');
+    if (pinEl && await pinEl.first().waitFor({ timeout: 5000 }).then(() => true, () => false)) {
+      customerPin = (await pinEl.first().innerText()).trim();
+      if (customerPin !== o.deliveryPin) throw new Error(`Tracking shows PIN ${customerPin}, the order's is ${o.deliveryPin}`);
+    }
   });
 
   await step(`Ops opens ${'the order'} and offers it to Karim`, async () => {
@@ -255,7 +278,10 @@ try {
     const o = await getOrder(orderId);
     await seen(p, 'Confirm delivery');
     if (o.pay === 'cash') await p.getByRole('checkbox', { name: `I collected ${o.total} DH in cash` }).tap();
-    for (const d of '2580') await tap(p, d);
+    // Older courier builds check a fixed demo PIN on the phone; newer ones send what's typed to the API.
+    const demoPin = await p.getByText('Demo PIN: 2580').count() > 0;
+    const pin = demoPin ? '2580' : customerPin ?? o.deliveryPin;
+    for (const d of pin) await tap(p, d);
     await tap(p, 'Confirm delivery');
     await seen(p, 'Delivery completed');
   });
