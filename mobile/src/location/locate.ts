@@ -1,6 +1,7 @@
 // The device's real location, turned into a delivery address.
 import type { ZoneName } from '@yallo/shared';
 import * as Location from 'expo-location';
+import { Platform } from 'react-native';
 
 import type { Address } from '@/data/catalog';
 
@@ -72,9 +73,13 @@ export async function locate(): Promise<LocateResult> {
   if (!fix) return { ok: false, reason: 'unavailable' };
   const { latitude, longitude } = fix.coords;
 
-  const place = await Location.reverseGeocodeAsync({ latitude, longitude })
-    .then((r) => r[0] ?? null)
-    .catch(() => null);
+  // expo-location has no reverse geocoding on web (it only warns), so skip it there.
+  const place =
+    Platform.OS === 'web'
+      ? null
+      : await Location.reverseGeocodeAsync({ latitude, longitude })
+          .then((r) => r[0] ?? null)
+          .catch(() => null);
   const zone = nearestZone(latitude, longitude);
 
   // Without a street name (web, or the geocoder had none), the coordinates still guide the rider.
@@ -91,6 +96,8 @@ export async function locate(): Promise<LocateResult> {
       building: '',
       landmark: '',
       ...(zone ? { zone } : {}),
+      lat: latitude,
+      lon: longitude,
     },
   };
 }

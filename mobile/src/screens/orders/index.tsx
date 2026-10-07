@@ -78,7 +78,9 @@ export function Orders() {
                 <Tag label={stepLabel(step, t)} tone={step < 0 ? 'neutral' : 'accent'} />
                 {step >= 0 && step < 4 && (
                   <Txt size={13} color={colors.neutral700}>
-                    {arriveAtText(live?.eta ?? 1, t, live?.now)}
+                    {active.scheduledFor
+                      ? `${t.arriveAround} ${active.scheduledFor}`
+                      : arriveAtText(live?.eta ?? 1, t, live?.now)}
                   </Txt>
                 )}
               </View>

@@ -28,7 +28,9 @@ export function SignIn() {
   const onOtp = (v: string) => {
     const code = v.replace(/\D/g, '').slice(0, 4);
     setOtp(code);
-    if (code.length === 4) timer.current = setTimeout(enterApp, 350);
+    // The verified number goes on orders (national format 06… or 6…, stored as +212 and 9 digits).
+    if (code.length === 4)
+      timer.current = setTimeout(() => enterApp('+212' + digits.slice(-9)), 350);
   };
 
   return (
@@ -116,14 +118,14 @@ export function SignIn() {
                   variant="secondary"
                   label={t.google}
                   fontSize={16}
-                  onPress={enterApp}
+                  onPress={() => enterApp()}
                   style={{ height: 52 }}
                 />
                 <Button
                   variant="secondary"
                   label={t.apple}
                   fontSize={16}
-                  onPress={enterApp}
+                  onPress={() => enterApp()}
                   style={{ height: 52 }}
                 />
               </View>
@@ -132,7 +134,7 @@ export function SignIn() {
                 variant="ghost"
                 label={t.guest}
                 fontSize={16}
-                onPress={enterApp}
+                onPress={() => enterApp()}
                 style={{ height: 48, alignSelf: 'center' }}
               />
               <Txt size={12} color={colors.neutral600} center style={{ marginTop: 8 }}>

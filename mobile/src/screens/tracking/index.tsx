@@ -9,7 +9,7 @@ import { Txt } from '@/components/txt';
 import { storeById } from '@/data/catalog';
 import { useApp, useT } from '@/store/app-store';
 import { useLiveOrder, withName } from '@/hooks/use-live-order';
-import { demoClock, fmt } from '@/store/derive';
+import { demoClock, fmt, stepTime } from '@/store/derive';
 import { colors, photoPlaceholder, radius, shadow } from '@/theme';
 
 import { arriveAtText, payLabel, statusLabels } from './order-text';
@@ -37,6 +37,8 @@ export function Tracking() {
   const store = storeById[active.storeId];
   const labels = statusLabels(t);
   const subs = [t.s0b, t.s1b, t.s2b, t.s3b, t.s4b];
+  // When each step happened, from the API (the same times ops and the courier see).
+  const times = [0, 1, 2, 3, 4].map((i) => stepTime(order?.statusAt, i));
   const count = active.lines.reduce((a, l) => a + l.qty, 0);
   const mapH = MAP_H + insets.top;
 
@@ -102,16 +104,19 @@ export function Tracking() {
               borderBottomWidth: 1,
               borderBottomColor: colors.divider,
             }}>
-            <Txt label>{t.arriving}</Txt>
+            {/* Scheduled orders show the chosen slot instead of a countdown. */}
+            <Txt label>{active.scheduledFor ? t.eta : t.arriving}</Txt>
             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
               <Txt heading size={56} lh={1}>
-                {eta}
+                {active.scheduledFor ?? eta}
               </Txt>
-              <Txt heading size={24}>
-                {t.min}
-              </Txt>
+              {!active.scheduledFor && (
+                <Txt heading size={24}>
+                  {t.min}
+                </Txt>
+              )}
               <Txt size={14} color={colors.neutral700} style={{ marginStart: 'auto' }}>
-                {arriveAtText(eta, t, now)}
+                {active.scheduledFor ? t.schedule : arriveAtText(eta, t, now)}
               </Txt>
             </View>
             <ProgressSegments step={step} style={{ marginTop: 10 }} />
@@ -216,7 +221,7 @@ export function Tracking() {
                   )}
                 </View>
                 <Txt size={13} color={colors.neutral600}>
-                  {i <= step && active.stepTimes[i] !== null ? demoClock(active.stepTimes[i]!) : ''}
+                  {i <= step && times[i] !== undefined ? demoClock(times[i]!) : ''}
                 </Txt>
               </View>
             </View>

@@ -1,7 +1,7 @@
 // App state and actions, ported from the Yallo design's logic class.
 // Orders go to the shared mock API, and the live feed drives tracking.
 // Screen-local UI state (product options, store tab, form fields) lives in the screens instead.
-import type { ApiOrder, LiveState, PlaceOrderBody, ZoneName } from '@yallo/shared';
+import type { ApiOrder, DeliveryAddress, LiveState, PlaceOrderBody, ZoneName } from '@yallo/shared';
 import { router } from 'expo-router';
 import { create } from 'zustand';
 
@@ -28,9 +28,9 @@ import {
   clock,
   type Promo,
   type SortKey,
-  customerStep,
   demoClock,
   optionText,
+  SCHEDULE_SLOTS,
   totals,
   unitPrice,
 } from '@/store/derive';
@@ -41,10 +41,10 @@ const CUSTOMER_NAME = 'Salma El Amrani';
 /** The order being tracked: what the customer saw at checkout, plus the API's id for it. */
 export type ActiveOrder = Omit<Order, 'date' | 'status'> & {
   placedAt: number;
-  /** Demo-clock second (the API's state.t) each of the 5 customer steps was first seen, or null. */
-  stepTimes: (number | null)[];
   /** The order disappeared from the live feed (the API restarted or was reset). */
   lost?: boolean;
+  /** Delivery slot ("21:30") when the customer scheduled the order; absent for ASAP. */
+  scheduledFor?: string;
 };
 
 /** How long a just-placed order may be missing from the live feed before it counts as lost. */
@@ -56,6 +56,8 @@ type State = {
   lang: Lang;
   /** Set once the user has finished onboarding and signed in (or continued as guest). */
   signedIn: boolean;
+  /** Phone number verified at sign-in ("+212661234567"); null for guests and social sign-in. */
+  phone: string | null;
   addresses: Address[];
   addrId: string;
   cart: Cart;
@@ -109,7 +111,7 @@ type Actions = {
   showToast: (msg: string) => void;
   toggleFav: (kind: 'favStores' | 'favProducts', id: string) => void;
 
-  enterApp: () => void;
+  enterApp: (phone?: string) => void;
   logout: () => void;
   retryHome: () => void;
 
@@ -140,6 +142,40 @@ type Actions = {
   locateMe: () => Promise<'ok' | 'denied' | 'unavailable'>;
 };
 
+/** Max lengths the API accepts. */
+const MAX_FIELD = 120;
+const MAX_INSTRUCTIONS = 500;
+const clip = (v: string, n: number) => v.trim().slice(0, n);
+
+/**
+ * Where, when and how to deliver, for the courier and ops: the address (with its GPS fix when
+ * located), the rider instructions, the scheduled slot and the verified phone number.
+ */
+function deliveryDetails(s: State, addr: Address) {
+  const zone = (addr.zone as ZoneName | undefined) ?? zoneForDistrict(addr.district);
+  const address: DeliveryAddress = {
+    label: clip(addr.label, MAX_FIELD),
+    street: clip(addr.street || addr.label, MAX_FIELD),
+    district: clip(addr.district || zone, MAX_FIELD),
+    city: clip(addr.city || 'Marrakech', MAX_FIELD),
+    ...(addr.building.trim() ? { building: clip(addr.building, MAX_FIELD) } : {}),
+    ...(addr.landmark.trim() ? { landmark: clip(addr.landmark, MAX_FIELD) } : {}),
+  };
+  const instructions = clip(
+    [...s.instrChips, s.instr.trim()].filter(Boolean).join(' · '),
+    MAX_INSTRUCTIONS,
+  );
+  return {
+    address,
+    ...(addr.lat !== undefined && addr.lon !== undefined
+      ? { location: { lat: addr.lat, lon: addr.lon } }
+      : {}),
+    ...(instructions ? { instructions } : {}),
+    ...(s.when === 'sched' ? { scheduledFor: SCHEDULE_SLOTS[s.slot] } : {}),
+    ...(s.phone ? { customerPhone: s.phone } : {}),
+  };
+}
+
 const t = () => strings[useApp.getState().lang];
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -147,6 +183,7 @@ let searchTimer: ReturnType<typeof setTimeout> | undefined;
 export const useApp = create<State & Actions>()((set, get) => ({
   lang: 'en',
   signedIn: false,
+  phone: null,
   addresses: seedAddresses,
   addrId: 'a1',
   cart: { storeId: null, lines: [] },
@@ -199,14 +236,14 @@ export const useApp = create<State & Actions>()((set, get) => ({
       [kind]: s[kind].includes(id) ? s[kind].filter((x) => x !== id) : [...s[kind], id],
     })),
 
-  enterApp: () => {
-    set({ signedIn: true, homeLoading: true });
+  enterApp: (phone) => {
+    set({ signedIn: true, homeLoading: true, phone: phone ?? null });
     router.replace('/');
     setTimeout(() => set({ homeLoading: false }), 900);
   },
 
   logout: () => {
-    set({ signedIn: false });
+    set({ signedIn: false, phone: null });
     router.dismissAll();
     router.replace('/sign-in');
   },
@@ -296,6 +333,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
       serviceFee: tt.service,
       discount: tt.disc,
       ...(s.promo ? { promoCode: s.promo } : {}),
+      ...deliveryDetails(s, addr),
     };
     set({ placing: true });
     let placed: ApiOrder;
@@ -317,7 +355,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
       disc: tt.disc,
       total: placed.total,
       placedAt: Date.now(),
-      stepTimes: [s.live?.t ?? null, null, null, null, null],
+      ...(s.when === 'sched' ? { scheduledFor: SCHEDULE_SLOTS[s.slot] } : {}),
       addrId: s.addrId,
       pay: s.pay,
     };
@@ -338,7 +376,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
   finishOrder: () => {
     const s = get();
     if (!s.active) return;
-    const { placedAt, stepTimes, lost, ...rest } = s.active;
+    const { placedAt, lost, scheduledFor, ...rest } = s.active;
     const status = lost
       ? 'cancelled'
       : (s.live?.orders.find((o) => o.id === rest.id)?.status ?? 'delivered');
@@ -369,18 +407,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
         if (!active) return set({ live });
         const o = live.orders.find((x) => x.id === active.id);
         const lost = !o && Date.now() - active.placedAt > PLACE_GRACE_MS;
-        const step = o ? customerStep(o.status) : -1;
-        // Remember when each customer step was first seen, for the timeline.
-        const stepTimes =
-          step > 0 && active.stepTimes[step] === null
-            ? active.stepTimes.map((v, k) => (v === null && k <= step ? live.t : v))
-            : active.stepTimes;
-        set({
-          live,
-          ...(stepTimes !== active.stepTimes || lost !== !!active.lost
-            ? { active: { ...active, stepTimes, lost } }
-            : {}),
-        });
+        set({ live, ...(lost !== !!active.lost ? { active: { ...active, lost } } : {}) });
       },
       (connected) => set({ connected, networkError: !connected }),
     ),

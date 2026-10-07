@@ -12,7 +12,7 @@ import {
   storeById,
   stores,
 } from '@/data/catalog';
-import { DEMO_START_MIN } from '@yallo/shared';
+import { clockAt, type Order as ApiOrderBase } from '@yallo/shared';
 
 import type { Strings } from '@/data/strings';
 import type { IconName } from '@/components/icon';
@@ -20,6 +20,9 @@ import type { IconName } from '@/components/icon';
 export type Cart = { storeId: string | null; lines: CartLine[] };
 export type Promo = 'MARHABA' | 'LIVRAISON' | null;
 export type SortKey = 'rec' | 'fast' | 'rating' | 'fee';
+
+/** Delivery slots offered at checkout under "Schedule" (demo-clock times). */
+export const SCHEDULE_SLOTS = ['21:30', '22:00', '22:30'] as const;
 
 /** 85 → "85 DH", 19.6 → "19,60 DH". */
 export function fmt(n: number) {
@@ -33,9 +36,14 @@ export function norm(x: string) {
 }
 
 /** Shared demo clock (what ops and couriers see): "HH:MM" at demo second `t`, the API's `state.t`. */
-export function demoClock(t: number) {
-  const m = DEMO_START_MIN + Math.floor(t / 60);
-  return String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+export const demoClock = clockAt;
+
+/** Lifecycle status whose time each customer step shows (Picked up and On the way both start at pickup). */
+const stepStatus = ['pending', 'preparing', 'delivering', 'delivering', 'delivered'] as const;
+
+/** Demo second the order reached customer step `i`, from the API's `statusAt`. */
+export function stepTime(statusAt: ApiOrderBase['statusAt'], i: number) {
+  return statusAt?.[stepStatus[i]];
 }
 
 export function clock(ms: number) {

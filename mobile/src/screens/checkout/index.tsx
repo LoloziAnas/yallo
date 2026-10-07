@@ -14,10 +14,10 @@ import { TextField } from '@/components/text-field';
 import { Txt } from '@/components/txt';
 import { type PayMethod, productById } from '@/data/catalog';
 import { useApp, useT } from '@/store/app-store';
-import { clock, demoClock, fmt, sumRows, totals } from '@/store/derive';
+import { clock, demoClock, fmt, SCHEDULE_SLOTS, sumRows, totals } from '@/store/derive';
 import { colors, radius, shadow } from '@/theme';
 
-const slots = ['21:30', '22:00', '22:30'];
+const slots = SCHEDULE_SLOTS;
 
 export function CheckoutScreen() {
   const t = useT();
