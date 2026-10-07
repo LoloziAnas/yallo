@@ -4,7 +4,7 @@ import type { AuthUser } from '@yallo/shared';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-import { DEMO_COURIER, api } from '@/api/client';
+import { DEMO_COURIER, api, isUnreachable, whileWaking, within } from '@/api/client';
 import { getPushToken } from '@/device/notifications';
 import { setRefusalHook, useCourier } from '@/store/courier-store';
 
@@ -43,16 +43,29 @@ function signedIn(user: AuthUser) {
   });
 }
 
-/** Sends the one-time code. Resolves to the normalised phone; rejects with the server's reason. */
-export async function requestCode(local: string): Promise<string> {
-  if (!api) throw new Error('Cannot reach the Yallo API');
-  return (await api.requestOtp(fullPhone(local), 'courier')).phone;
+/**
+ * Sends the one-time code. Resolves to the normalised phone (and the code, when the server uses one
+ * fixed code for everyone: local runs and the public demo); rejects with the server's reason.
+ * While the API is waking up it keeps trying, and `onWaiting` lets the screen say so.
+ */
+export async function requestCode(
+  local: string,
+  onWaiting?: () => void,
+): Promise<{ phone: string; fixedCode?: string }> {
+  const client = api;
+  if (!client) throw new Error('Cannot reach the Yallo API');
+  const { phone, fixedCode } = await whileWaking(
+    () => client.requestOtp(fullPhone(local), 'courier'),
+    onWaiting,
+  );
+  return { phone, fixedCode };
 }
 
 /** Checks the code, then keeps the session. Rejects with the server's reason ("Wrong code"…). */
-export async function verifyCode(phone: string, code: string): Promise<void> {
-  if (!api) throw new Error('Cannot reach the Yallo API');
-  const { token, user } = await api.verifyOtp(phone, code);
+export async function verifyCode(phone: string, code: string, onWaiting?: () => void) {
+  const client = api;
+  if (!client) throw new Error('Cannot reach the Yallo API');
+  const { token, user } = await whileWaking(() => client.verifyOtp(phone, code), onWaiting);
   if (user.role !== 'courier') throw new Error('No courier account for this number');
   await storage.set(JSON.stringify({ token, user } satisfies Saved)).catch(() => {});
   signedIn(user);
@@ -75,11 +88,12 @@ export async function restoreSession(): Promise<boolean> {
   }
   api.setToken(saved.token);
   try {
-    signedIn(await api.me());
+    // A sleeping host holds the request for up to a minute: don't keep the courier on the splash.
+    signedIn(await within(api.me(), 5000));
     verified = true;
     return true;
   } catch (e) {
-    if (e instanceof Error && e.message === 'Cannot reach the Yallo API') {
+    if (isUnreachable(e)) {
       // Checked again as soon as the API answers (see `recheckSession`).
       verified = false;
       signedIn(saved.user);
@@ -105,7 +119,7 @@ export async function recheckSession() {
     signedIn(await api.me());
     verified = true;
   } catch (e) {
-    if (e instanceof Error && e.message === 'Cannot reach the Yallo API') return;
+    if (isUnreachable(e)) return;
     verified = true;
     await signOut();
     useCourier.getState().showToast('Your session ended. Sign in again');

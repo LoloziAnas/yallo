@@ -53,9 +53,10 @@ export function Screen({
   );
   if (!keyboard) return body;
   return (
+    // Android draws edge to edge, so the window no longer shrinks for the keyboard: pad on both.
     <KeyboardAvoidingView
       style={styles.fill}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      behavior={Platform.OS === 'web' ? undefined : 'padding'}>
       {body}
     </KeyboardAvoidingView>
   );

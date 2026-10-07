@@ -1,10 +1,18 @@
 import { DEV_OTP_CODE, type ApplicationStatus } from '@yallo/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { api, errorText } from '@/api/client';
 import { fullPhone, requestCode, verifyCode } from '@/api/session';
+import { BUILD_LABEL } from '@/data/build';
 import { BackButton, Btn, Spacer } from '@/components/button';
 import { Icon, type IconName } from '@/components/icon';
 import { Screen, useBottomPad } from '@/components/screen';
@@ -109,9 +117,25 @@ export function Welcome() {
             height={56}
             fontSize={17}
           />
+          <Txt size={12} color={colors.neutral600} style={{ textAlign: 'center', marginTop: 4 }}>
+            Yallo Courier {BUILD_LABEL}
+          </Txt>
         </View>
       </ScrollView>
     </Screen>
+  );
+}
+
+/** Shown while a sign-in call waits for the API to wake up (free demo host). */
+function WakingNote() {
+  const t = useT();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 }}>
+      <ActivityIndicator color={colors.accent} />
+      <Txt size={14} color={colors.neutral700} accessibilityLiveRegion="polite" style={{ flex: 1 }}>
+        {t('Connecting to Yallo… The server is waking up, this can take up to a minute.')}
+      </Txt>
+    </View>
   );
 }
 
@@ -123,6 +147,7 @@ export function Login() {
   const bottom = useBottomPad(8);
   const arabic = useCourier((s) => s.lang === 'ع');
   const [busy, setBusy] = useState(false);
+  const [waking, setWaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Live, the API texts a one-time code to a known courier number; the demo goes straight on.
@@ -131,13 +156,14 @@ export function Login() {
     setBusy(true);
     setError(null);
     try {
-      const phone = await requestCode(loginPhone);
-      router.push({ pathname: '/otp', params: { phone } });
+      const { phone, fixedCode } = await requestCode(loginPhone, () => setWaking(true));
+      router.push({ pathname: '/otp', params: { phone, code: fixedCode } });
     } catch (e) {
       haptic.error();
       setError(errorText(e));
     } finally {
       setBusy(false);
+      setWaking(false);
     }
   };
 
@@ -190,9 +216,10 @@ export function Login() {
             {t(error)}
           </Txt>
         )}
+        {waking && <WakingNote />}
         <Spacer />
         <Btn
-          label={t('Send code')}
+          label={t(waking ? 'Connecting…' : 'Send code')}
           onPress={sendCode}
           disabled={busy || loginPhone.replace(/\D/g, '').length < 9}
           height={60}
@@ -215,12 +242,13 @@ const RESEND_SECS = 30;
 
 export function Otp() {
   const t = useT();
-  const { phone } = useLocalSearchParams<{ phone?: string }>();
+  const { phone, code } = useLocalSearchParams<{ phone?: string; code?: string }>();
   const loginPhone = useCourier((s) => s.loginPhone);
   const set = useCourier((s) => s.set);
   const showToast = useCourier((s) => s.showToast);
   const [otp, setOtp] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [waking, setWaking] = useState(false);
   const [resendIn, setResendIn] = useState(RESEND_SECS);
   const bottom = useBottomPad();
   // A phone from the Login screen means the API sent a real code; otherwise this is the demo.
@@ -245,7 +273,8 @@ export function Otp() {
       return () => clearTimeout(id);
     }
     let cancelled = false;
-    verifyCode(phone, otp)
+    verifyCode(phone, otp, () => !cancelled && setWaking(true))
+      .finally(() => !cancelled && setWaking(false))
       .then(() => {
         haptic.success();
         const first = useCourier.getState().userName.split(' ')[0];
@@ -264,11 +293,13 @@ export function Otp() {
 
   const resend = async () => {
     try {
-      await requestCode(phone!);
+      await requestCode(phone!, () => setWaking(true));
+      setWaking(false);
       setResendIn(RESEND_SECS);
       setError(null);
       showToast('Code sent');
     } catch (e) {
+      setWaking(false);
       setError(errorText(e));
     }
   };
@@ -292,6 +323,7 @@ export function Otp() {
           height={live ? 64 : 76}
           fontSize={live ? 28 : 34}
         />
+        {waking && <WakingNote />}
         {error ? (
           <Txt
             size={14}
@@ -304,9 +336,11 @@ export function Otp() {
         ) : (
           <Txt size={14} color={colors.neutral700} style={{ marginTop: 16 }}>
             {live
-              ? __DEV__
-                ? t(`Development code: ${DEV_OTP_CODE}`)
-                : ''
+              ? code
+                ? t(`Demo code: ${code}`)
+                : __DEV__
+                  ? t(`Development code: ${DEV_OTP_CODE}`)
+                  : ''
               : t('Demo: any 4 digits work · Resend in 0:24')}
           </Txt>
         )}
@@ -736,8 +770,8 @@ export function Verify() {
       return;
     }
     try {
-      const phone = await requestCode(app.phone);
-      router.replace({ pathname: '/otp', params: { phone } });
+      const { phone, fixedCode } = await requestCode(app.phone);
+      router.replace({ pathname: '/otp', params: { phone, code: fixedCode } });
     } catch (e) {
       s.showToast(errorText(e));
     }

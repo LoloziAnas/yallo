@@ -95,6 +95,7 @@ const PHR: [string, string, string][] = [
   ['Resend in {0}', 'Renvoyer dans {0}', 'إعادة الإرسال بعد {0}'],
   ['Code sent', 'Code envoyé', 'تم إرسال الرمز'],
   ['Development code: {0}', 'Code de développement : {0}', 'رمز التطوير: {0}'],
+  ['Demo code: {0}', 'Code de démo : {0}', 'رمز العرض: {0}'],
   [
     'No courier account for this number',
     'Aucun compte livreur pour ce numéro',
@@ -128,14 +129,14 @@ const PHR: [string, string, string][] = [
   ],
   // Added for the live API: ops cancelling a job mid-delivery.
   [
-    "Order {0} was cancelled by Yallo support. You'll receive {1} DH for the trip — it won't affect your completion rate.",
-    'La commande {0} a été annulée par le support Yallo. Vous recevrez {1} DH pour le trajet — sans impact sur votre taux de réalisation.',
-    'ألغى دعم يالو الطلب {0}. ستحصل على {1} درهم عن الرحلة — دون تأثير على نسبة الإنجاز.',
+    "Order {0} was cancelled by Yallo support. You'll receive {1} DH for the trip.",
+    'La commande {0} a été annulée par le support Yallo. Vous recevrez {1} DH pour le trajet.',
+    'ألغى دعم يالو الطلب {0}. ستحصل على {1} درهم عن الرحلة.',
   ],
   [
-    "Order {0} was cancelled by Yallo support. It won't affect your completion rate.",
-    'La commande {0} a été annulée par le support Yallo. Sans impact sur votre taux de réalisation.',
-    'ألغى دعم يالو الطلب {0}. دون تأثير على نسبة الإنجاز.',
+    'Order {0} was cancelled by Yallo support.',
+    'La commande {0} a été annulée par le support Yallo.',
+    'ألغى دعم يالو الطلب {0}.',
   ],
   ['Deliver.', 'Livrez.', 'وصّل.'],
   ['Earn.', 'Gagnez.', 'اربح.'],
@@ -337,6 +338,14 @@ const PHR: [string, string, string][] = [
     'لا يوجد إنترنت · جارٍ إعادة الاتصال…',
   ],
   ['Actions will sync', 'Synchro à la reconnexion', 'ستتم المزامنة لاحقاً'],
+  ['Connecting to Yallo…', 'Connexion à Yallo…', 'جارٍ الاتصال بـ Yallo…'],
+  ['Server waking up', 'Réveil du serveur', 'الخادم قيد التشغيل'],
+  ['Connecting…', 'Connexion…', 'جارٍ الاتصال…'],
+  [
+    'Connecting to Yallo… The server is waking up, this can take up to a minute.',
+    'Connexion à Yallo… Le serveur se réveille, cela peut prendre jusqu’à une minute.',
+    'جارٍ الاتصال بـ Yallo… الخادم قيد التشغيل، قد يستغرق ذلك دقيقة.',
+  ],
   ['Pickup', 'Retrait', 'الاستلام'],
   ['Drop-off', 'Livraison', 'التسليم'],
   ['away', '', 'بعيداً'],
@@ -440,9 +449,9 @@ const PHR: [string, string, string][] = [
   ['Call support', 'Appeler le support', 'اتصل بالدعم'],
   ['Delivery cancelled', 'Livraison annulée', 'أُلغي التوصيل'],
   [
-    'Order #1284 was reassigned to another courier. Keep your completion rate above 95% to stay in priority dispatch.',
-    'La commande #1284 a été réattribuée. Gardez un taux de réalisation au-dessus de 95 % pour rester prioritaire.',
-    'أُعيد إسناد الطلب #1284 لموصّل آخر. حافظ على نسبة إنجاز أعلى من 95% لتبقى ذا أولوية.',
+    "Yallo support took order #1284 back; it will go to another courier. You don't need to do anything.",
+    'Le support Yallo a repris la commande #1284 ; elle ira à un autre livreur. Vous n’avez rien à faire.',
+    'استعاد دعم يالو الطلب #1284 وسيُسند لموصّل آخر. لا داعي لأي إجراء.',
   ],
   ['Location is off', 'Localisation désactivée', 'الموقع معطّل'],
   [

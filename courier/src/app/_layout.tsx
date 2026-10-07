@@ -19,6 +19,7 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { wakeApi } from '@/api/client';
 import { recheckSession, registerPush, restoreSession } from '@/api/session';
 import { useLiveSync } from '@/api/sync';
 import { setUpNotifications } from '@/device/notifications';
@@ -66,10 +67,12 @@ export default function RootLayout() {
   const offline = useCourier(
     (s) => s.simulate === 'no-internet' || (s.source === 'live' && !s.connected),
   );
+  const waking = useCourier((s) => s.source === 'live' && !s.connected && !s.epoch);
   const tick = useCourier((s) => s.tick);
   const onJob = useCourier((s) => inDelivery(s.phase) || s.phase === 'done');
   const pathname = usePathname();
 
+  useEffect(wakeApi, []);
   useLiveSync();
   const connected = useCourier((s) => s.connected);
   useEffect(() => {
@@ -149,7 +152,7 @@ export default function RootLayout() {
         </Stack>
         {requestUp && <RequestOverlay />}
         {edge && <EdgeOverlay kind={edge} />}
-        {offline && !brandSplash && <NoNetBanner />}
+        {offline && !brandSplash && <NoNetBanner waking={waking} />}
         <Toast />
         {brandSplash && <SplashOverlay />}
       </View>

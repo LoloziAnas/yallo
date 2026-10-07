@@ -1,4 +1,3 @@
-import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -9,6 +8,7 @@ import { Icon, type IconName } from '@/components/icon';
 import { Screen, Scroll } from '@/components/screen';
 import { SectionLabel, Txt } from '@/components/txt';
 import { Circle, ListCard, ListRow, PressCard, SegBar, card } from '@/components/ui';
+import { BUILD_LABEL } from '@/data/build';
 import type { Lang } from '@/data/i18n';
 import { useCourier, useT, type Simulate } from '@/store/courier-store';
 import { colors } from '@/theme';
@@ -256,7 +256,7 @@ export function Profile() {
           style={{ marginTop: 6 }}
         />
         <Txt size={12} color={colors.neutral600} style={{ textAlign: 'center' }}>
-          Yallo Courier {Constants.expoConfig?.version} · Marrakech
+          Yallo Courier {BUILD_LABEL}
         </Txt>
       </Scroll>
     </Screen>

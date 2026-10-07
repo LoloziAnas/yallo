@@ -374,7 +374,7 @@ export function EdgeOverlay({ kind }: { kind: EdgeKind }) {
       tone: 'calm',
       icon: 'x',
       title: 'Delivery cancelled',
-      body: `Order #1284 was reassigned to another courier. Keep your completion rate above 95% to stay in priority dispatch.`,
+      body: `Yallo support took order #1284 back; it will go to another courier. You don't need to do anything.`,
       primary: 'Back to dashboard',
       onPrimary: end(0, 'Order cancelled', 'Cancelled by courier'),
     },
@@ -383,8 +383,8 @@ export function EdgeOverlay({ kind }: { kind: EdgeKind }) {
       icon: 'x',
       title: 'Delivery cancelled',
       body: opsComp
-        ? `Order #1284 was cancelled by Yallo support. You'll receive ${opsComp} DH for the trip — it won't affect your completion rate.`
-        : "Order #1284 was cancelled by Yallo support. It won't affect your completion rate.",
+        ? `Order #1284 was cancelled by Yallo support. You'll receive ${opsComp} DH for the trip.`
+        : 'Order #1284 was cancelled by Yallo support.',
       primary: 'Back to dashboard',
       onPrimary: end(
         opsComp,
@@ -475,7 +475,8 @@ export function EdgeOverlay({ kind }: { kind: EdgeKind }) {
 
 /* ---------------- Banners, toast, splash ---------------- */
 
-export function NoNetBanner() {
+/** `waking`: the app hasn't reached the API yet since launch (a sleeping free host takes ~1 min). */
+export function NoNetBanner({ waking = false }: { waking?: boolean }) {
   const t = useT();
   const { top } = useSafeAreaInsets();
   const direction = useDirection();
@@ -488,10 +489,10 @@ export function NoNetBanner() {
       style={[styles.banner, { top: top + 4, direction }]}>
       <Icon name="wifiOff" size={18} color={colors.accent300} />
       <Txt size={14} weight={600} color={colors.neutral100} style={{ flex: 1 }}>
-        {t('No internet · Reconnecting…')}
+        {t(waking ? 'Connecting to Yallo…' : 'No internet · Reconnecting…')}
       </Txt>
       <Txt size={12} color={colors.neutral400}>
-        {t('Actions will sync')}
+        {t(waking ? 'Server waking up' : 'Actions will sync')}
       </Txt>
     </Animated.View>
   );
