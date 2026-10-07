@@ -1363,3 +1363,31 @@ describe('Demo profile', () => {
     assert.equal(health.time, '18:34');
   });
 });
+
+describe('API discovery (configUrl)', () => {
+  test('the client reads the address from the config file and follows it when the API moves', async () => {
+    const start = async () => { const a = createApi({ tickMs: 0 }); await new Promise<void>(r => a.http.listen(0, r)); return a; };
+    const url = (a: { http: import('node:http').Server }) => `http://localhost:${(a.http.address() as AddressInfo).port}`;
+    let one = await start();
+    const two = await start();
+    let current = url(one), reads = 0;
+    const config = (await import('node:http')).createServer((_, res) => { reads++; res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ api: current + '/', updatedAt: new Date().toISOString() })); });
+    await new Promise<void>(r => config.listen(0, r));
+    try {
+      const c = createYalloClient('http://localhost:1', { configUrl: `http://localhost:${(config.address() as AddressInfo).port}/api.json` });
+      assert.equal((await c.getState()).orders.length, 16);
+      assert.equal(c.baseUrl, current, 'trailing slash dropped');
+      assert.equal(reads, 1);
+      await c.getState();
+      assert.equal(reads, 1, 'not re-read while the API answers');
+      // The tunnel restarts: the old address goes away and the file names the new one.
+      one.http.closeAllConnections(); one.http.close();
+      current = url(two);
+      assert.equal((await c.getState()).orders.length, 16);
+      assert.equal(c.baseUrl, current);
+      assert.equal(reads, 2);
+    } finally {
+      config.close(); two.http.close(); two.http.closeAllConnections();
+    }
+  });
+});

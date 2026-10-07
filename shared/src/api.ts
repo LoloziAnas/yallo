@@ -183,32 +183,86 @@ export const orderPath = (id: string) => encodeURIComponent(id.replace(/^#/, '')
 
 export type YalloClient = ReturnType<typeof createYalloClient>;
 
-/**
- * @param baseUrl e.g. "http://localhost:5190", or "" for same-origin behind a dev proxy.
- *   On a phone, use the dev machine's LAN address, not localhost.
- */
 /** Snapshots carry the server's clock settings; actions that return one are applied too. */
 const isLiveState = (d: unknown): d is LiveState => typeof d === 'object' && d !== null && 'epoch' in d && 't' in d && 'orders' in d;
 
-export function createYalloClient(baseUrl: string, opts: { token?: string } = {}) {
+/**
+ * Where the public demo publishes the API's current address. The demo API runs behind a tunnel whose URL changes when
+ * it restarts, so apps read it from here at runtime (`configUrl`) instead of baking it in.
+ */
+export const DEMO_API_CONFIG_URL = 'https://lolozianas.github.io/yallo/api.json';
+/** The file at DEMO_API_CONFIG_URL. */
+export type ApiConfig = { api: string; updatedAt?: string };
+/** Don't re-read the config more often than this when the API keeps failing. */
+const REDISCOVER_MS = 5000;
+
+/** Reads an ApiConfig file, bypassing caches, and returns the API's base URL (no trailing slash). */
+export async function fetchApiConfig(configUrl: string): Promise<string> {
+  const res = await fetch(configUrl + (configUrl.includes('?') ? '&' : '?') + '_=' + Date.now(), { cache: 'no-store' });
+  const cfg = (await res.json()) as ApiConfig;
+  if (!res.ok || typeof cfg?.api !== 'string' || !/^https?:\/\/[^\s]+$/.test(cfg.api)) throw new Error('No API address in ' + configUrl);
+  return cfg.api.replace(/\/+$/, '');
+}
+
+/**
+ * @param baseUrl e.g. "http://localhost:5190", or "" for same-origin behind a dev proxy.
+ *   On a phone, use the dev machine's LAN address, not localhost.
+ * @param opts.configUrl read the API's address from this ApiConfig file (e.g. DEMO_API_CONFIG_URL) before the first
+ *   call, and again whenever the API can't be reached (at most every 5 s), so a moved API is found again. `baseUrl`
+ *   is then only the fallback while the file can't be read: pass the last address that worked, so a cold start
+ *   without the file still connects.
+ * @param opts.onBaseUrl called when a lookup finds a new address (e.g. to remember it for the next cold start).
+ */
+export function createYalloClient(baseUrl: string, opts: { token?: string; configUrl?: string; onBaseUrl?: (url: string) => void } = {}) {
   /** Sent as `Authorization: Bearer …` on every request and as `?token=` on the live feed. */
   let token = opts.token;
+  let base = baseUrl;
+  let found = !opts.configUrl;
+  /** When a failure last triggered a lookup; failures look up again at most every REDISCOVER_MS. */
+  let lastFailureLookup = 0;
+  let lookup: Promise<void> | undefined;
+  /** Reads the config now (one lookup at a time). Keeps the old address if the file can't be read. */
+  const rediscover = () => {
+    if (!opts.configUrl) return Promise.resolve();
+    lookup ??= fetchApiConfig(opts.configUrl)
+      .then(url => {
+        found = true;
+        if (url !== base) { base = url; opts.onBaseUrl?.(url); }
+      })
+      // Unreadable file: carry on with the fallback if there is one; a failure looks again later.
+      .catch(() => { if (base) found = true; })
+      .finally(() => { lookup = undefined; });
+    return lookup;
+  };
+  /** Before a call: the first lookup, or a fresh one after a failure (throttled while failures continue). */
+  const ready = (failed = false) => {
+    if (failed && Date.now() - lastFailureLookup > REDISCOVER_MS) { lastFailureLookup = Date.now(); return rediscover(); }
+    return found ? Promise.resolve() : rediscover();
+  };
   const call = async <T = LiveState>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> => {
-    let res: Response;
+    let res: Response | undefined;
     const headers: Record<string, string> = {};
     if (body !== undefined) headers['content-type'] = 'application/json';
     if (token) headers.authorization = 'Bearer ' + token;
-    try {
-      res = await fetch(baseUrl + '/api' + path, {
+    await ready();
+    let data: unknown = null;
+    // With a config file, an unreachable API (no answer, or a proxy's error page) re-reads it once and retries if the
+    // address changed.
+    for (let attempt = 0; ; attempt++) {
+      res = await fetch(base + '/api' + path, {
         method,
         headers,
         body: body === undefined ? undefined : JSON.stringify(body),
-      });
-    } catch {
-      throw new Error('Cannot reach the Yallo API');
+      }).catch(() => undefined);
+      // A dev proxy or tunnel answers with an empty or HTML error page when the API is down, so don't assume JSON.
+      data = res ? await res.json().catch(() => null) : null;
+      const unreachable = !res || (data === null && res.status >= 500);
+      if (!unreachable || attempt > 0 || !opts.configUrl) break;
+      const was = base;
+      await ready(true);
+      if (base === was) break;
     }
-    // A dev proxy answers with an empty or HTML error page when the API is down, so don't assume JSON.
-    const data = await res.json().catch(() => null);
+    if (!res) throw new Error('Cannot reach the Yallo API');
     if (!res.ok || data === null) {
       throw new Error((data as ApiError | null)?.error || (res.status >= 500 ? 'Cannot reach the Yallo API' : `Request failed (${res.status})`));
     }
@@ -218,6 +272,8 @@ export function createYalloClient(baseUrl: string, opts: { token?: string } = {}
   const post = <T = LiveState>(path: string, body?: unknown) => call<T>('POST', path, body);
 
   return {
+    /** The API address in use (after discovery, when a config file is used). */
+    get baseUrl() { return base; },
     /** The current token, if signed in. */
     get token() { return token; },
     /** Use a token from a previous sign-in (e.g. restored from storage), or null to sign out locally. */
@@ -247,15 +303,20 @@ export function createYalloClient(baseUrl: string, opts: { token?: string } = {}
      * `{ courierId }` so the server knows a real app is answering that courier's offers.
      */
     subscribe(onState: (s: LiveState) => void, onStatus?: (connected: boolean) => void, opts: { courierId?: string } = {}) {
-      const params = [opts.courierId && 'courier=' + encodeURIComponent(opts.courierId), token && 'token=' + encodeURIComponent(token)].filter(Boolean);
-      const query = params.length ? '?' + params.join('&') : '';
-      const wsUrl = (baseUrl || (typeof location !== 'undefined' ? location.origin : '')).replace(/^http/, 'ws') + '/api/live' + query;
       let ws: WebSocket | null = null;
       let stopped = false;
       let retry: ReturnType<typeof setTimeout> | undefined;
-      const open = () => {
+      let failures = 0;
+      const open = async () => {
+        // After a few failed connections, look the address up again (it may have moved).
+        await ready(failures >= 2);
+        if (stopped) return;
+        const params = [opts.courierId && 'courier=' + encodeURIComponent(opts.courierId), token && 'token=' + encodeURIComponent(token)].filter(Boolean);
+        const query = params.length ? '?' + params.join('&') : '';
+        const wsUrl = (base || (typeof location !== 'undefined' ? location.origin : '')).replace(/^http/, 'ws') + '/api/live' + query;
+        let opened = false;
         ws = new WebSocket(wsUrl);
-        ws.onopen = () => onStatus?.(true);
+        ws.onopen = () => { opened = true; failures = 0; onStatus?.(true); };
         ws.onmessage = e => {
           const msg = JSON.parse(String(e.data)) as LiveMessage;
           if (msg.type === 'state') {
@@ -265,10 +326,11 @@ export function createYalloClient(baseUrl: string, opts: { token?: string } = {}
         };
         ws.onclose = () => {
           onStatus?.(false);
+          failures = opened ? 1 : failures + 1;
           if (!stopped) retry = setTimeout(open, 1500);
         };
       };
-      open();
+      void open();
       return () => {
         stopped = true;
         clearTimeout(retry);

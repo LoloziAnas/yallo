@@ -7,6 +7,8 @@ import { API_PORT } from '../shared/src/api';
 const target = process.env.API_URL || `http://localhost:${API_PORT}`;
 
 export default defineConfig({
+  // VITE_BASE=/yallo/ops/ serves the build from a sub-path (the public demo on GitHub Pages).
+  base: process.env.VITE_BASE || '/',
   plugins: [react()],
   server: { proxy: { '/api': { target, ws: true } } },
   preview: { proxy: { '/api': { target, ws: true } } },
