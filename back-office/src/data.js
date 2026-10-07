@@ -39,6 +39,15 @@ export const fromLive = live => ({
   suspended:Object.fromEntries(live.couriers.filter(c => c.suspended).map(c => [c.id, true]))
 });
 
+/**
+ * Applies a live snapshot to the back office's state. Selections (the open drawer, a modal) survive updates; a new
+ * epoch means the API reseeded, so order ids may name other orders now and the selections are dropped.
+ */
+export function applyLive(st, live) {
+  const reseeded = !!st.epoch && st.epoch !== live.epoch;
+  return { reseeded, next:{ ...fromLive(live), epoch:live.epoch, loaded:true, ...(reseeded ? { drawer:null, modal:null, assignOpen:false } : {}) } };
+}
+
 export const STATUS = {
   pending:{ label:'New', bg:'var(--color-neutral-200)', fg:'var(--color-neutral-800)', dot:'var(--color-neutral-600)' },
   preparing:{ label:'Preparing', bg:'var(--color-saffron-100)', fg:'var(--color-neutral-800)', dot:'var(--color-saffron)' },

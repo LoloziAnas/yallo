@@ -54,6 +54,9 @@ module.exports = config;
 
 Typecheck the package with `cd shared && npm run typecheck`.
 
+Tests: `cd api && npm test` (API rules, auth, persistence, over HTTP and the live feed) and `cd back-office && npm test`
+(Vitest: the figures in `src/metrics.js`, the data adapters, and how live snapshots apply to the screen state).
+
 ## Mock API
 
 One server holds the orders, couriers, merchants and tickets every app shares. Start it with

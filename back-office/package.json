@@ -7,7 +7,8 @@
     "dev": "vite",
     "api": "npm --prefix ../api start",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "@yallo/shared": "file:../shared",
@@ -16,6 +17,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "vitest": "^3.2.7"
   }
 }

@@ -3,7 +3,7 @@ import { DISPATCH_RADIUS_KM, clockAt, pickupKm, storeAvailability } from '@yallo
 import { api } from './api.js';
 import { avgFirstReplyMin, ordersPerHour, overviewKpis, zoneStats } from './metrics.js';
 import { IC } from './icons.jsx';
-import { ZONES, STATUS, ACTIVE, DOCDEF, fromLive } from './data.js';
+import { ZONES, STATUS, ACTIVE, DOCDEF, applyLive, fromLive } from './data.js';
 
 
 const fmt = n => Math.round(n).toLocaleString('en-US');
@@ -29,9 +29,10 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
     // Orders, couriers, merchants and the demo clock come from the API's live feed.
     // A new epoch means the API reseeded: order ids may now name different orders, so drop selections.
     const stop = api.subscribe(live => setState(st => {
+      const { next, reseeded } = applyLive(st, live);
       // A reseed also clears sessions, so check this one is still valid.
-      if (st.epoch && st.epoch !== live.epoch) api.me().catch(() => onSignOut?.());
-      return { ...fromLive(live), epoch:live.epoch, loaded:true, ...(st.epoch && st.epoch !== live.epoch ? { drawer:null, modal:null, assignOpen:false } : {}) };
+      if (reseeded) api.me().catch(() => onSignOut?.());
+      return next;
     }), connected => setState({ connected }));
     // Nothing is shown until the first live snapshot; after a few seconds without one, say so.
     const slow = setTimeout(() => setState(st => st.loaded ? {} : { slow:true }), 5000);
