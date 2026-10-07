@@ -814,6 +814,14 @@ describe('Authorization (enforce mode)', () => {
     assert.ok((await ops.getState()).orders.find(x => x.id === o.id)!.deliveryPin);
   });
 
+  test('only the ordering customer cancels as customer; history needs a customer sign-in', async () => {
+    const o = await as(DEV_TOKENS.customer).placeOrder(tajine);
+    assert.equal((await raw('POST', `/orders/${o.id.slice(1)}/cancel-by-customer`, DEV_TOKENS.courier('c2'))).status, 403);
+    assert.equal((await raw('POST', `/orders/${o.id.slice(1)}/cancel-by-customer`, DEV_TOKENS.customer)).status, 200);
+    assert.equal((await as(DEV_TOKENS.customer).myHistory()).orders[0].cancelledBy, 'customer');
+    assert.equal((await raw('GET', '/me/history')).status, 401);
+  });
+
   test('only the courier themself (or ops) posts their location', async () => {
     assert.equal((await raw('POST', '/couriers/c1/location', DEV_TOKENS.courier('c2'), { lat: 31.63, lon: -8.0 })).status, 403);
     assert.equal((await raw('POST', '/couriers/c1/location', DEV_TOKENS.courier('c1'), { lat: 31.63, lon: -8.0 })).status, 200);
@@ -945,5 +953,52 @@ describe('Push notifications', () => {
     } finally {
       await new Promise<void>(r => api.http.close(() => r()));
     }
+  });
+});
+
+describe('Customer cancel and history', () => {
+  const amal = { id: 'u7', role: 'customer' as const, phone: '+212600000007', name: 'Amal' };
+  const other = { ...amal, id: 'u8' };
+  const place = (s: Store) => s.placeOrder({ merchantId: 'm1', customerName: 'Amal', zone: 'Guéliz', pay: 'cash', items: [{ productId: 'p1-6', qty: 1 }] }, amal);
+
+  test('a customer cancels their own order while it is new; ops sees who cancelled', () => {
+    const s = new Store();
+    const o = place(s);
+    s.offerOrder(o.id, 'c2');
+    assert.throws(() => s.cancelOrderAsCustomer(o.id, other), /This is not your order/);
+    s.cancelOrderAsCustomer(o.id, amal);
+    const c = order(s, o.id);
+    assert.deepEqual([c.status, c.cancelReason, c.cancelledBy, c.offer, c.courierCompensation], ['cancelled', 'Cancelled by customer', 'customer', undefined, undefined]);
+    assert.equal(c.statusAt!.cancelled, 0);
+    assert.throws(() => s.cancelOrderAsCustomer(o.id, amal), /already cancelled/);
+  });
+
+  test('once the store accepts, the customer must contact support', () => {
+    const s = new Store();
+    const o = place(s);
+    tick(s, AUTO_ACCEPT_SEC);
+    assert.throws(() => s.cancelOrderAsCustomer(o.id, amal), /can't be cancelled any more/);
+  });
+
+  test('history lists only the customer\'s own orders and tickets, newest first', () => {
+    const s = new Store();
+    const first = place(s);
+    tick(s, 10);
+    const second = place(s);
+    s.placeOrder({ merchantId: 'm1', customerName: 'B', zone: 'Guéliz', pay: 'cash', items: [{ productId: 'p1-6', qty: 1 }] }, other);
+    s.openTicket({ source: 'customer', requesterName: 'Amal', subject: 'Late', text: 'Where is it?' }, amal);
+    const h = s.customerHistory(amal);
+    assert.deepEqual(h.orders.map(o => o.id), [second.id, first.id]);
+    assert.equal(h.tickets.length, 1);
+    assert.throws(() => s.customerHistory(undefined), /Sign in as a customer/);
+  });
+
+  test('no push to the customer for their own cancellation', () => {
+    const s = new Store();
+    const sent: PushMessage[] = [];
+    s.onEvent(e => sent.push(...notifications(s, e)));
+    s.registerPushToken('customer', 'u7', 'ExponentPushToken[cust]');
+    s.cancelOrderAsCustomer(place(s).id, amal);
+    assert.deepEqual(sent, []);
   });
 });

@@ -34,6 +34,12 @@ const assignedCourier: Rule = (c, [n], _, s) => {
   const o = s.state.orders.find(o => o.id === '#' + n);
   return !o || isCourier(c, o.courierId) || 'Only the assigned courier can do this';
 };
+/** The customer who placed the order (or ops). */
+const orderCustomer: Rule = (c, [n], _, s) => {
+  if (isOps(c)) return true;
+  const o = s.state.orders.find(o => o.id === '#' + n);
+  return (c.user?.role === 'customer' && (!o || o.customerId === c.user.id)) || 'Only the customer who placed the order can cancel it here';
+};
 /** The courier in the path, acting on themself. */
 const selfCourier: Rule = (c, [id]) => isOps(c) || isCourier(c, id) || 'Couriers can only do this for themselves';
 /** Ops, or the ticket's requester writing as the requester. */
@@ -65,6 +71,8 @@ const ROUTES: [string, RegExp, Rule, Handler][] = [
   ['POST', /^\/api\/orders\/(\d+)\/status$/, assignedCourier, (s, [id], b, ctx) =>
     (s.setOrderStatus(id, b?.status, b?.pin, { byOps: ctx.user?.role === 'ops', strictPin: ctx.enforce }), s.state)],
   ['POST', /^\/api\/orders\/(\d+)\/cancel$/, ops, (s, [id], b) => (s.cancelOrder(id, b?.reason, !!b?.compensateCourier), s.state)],
+  ['POST', /^\/api\/orders\/(\d+)\/cancel-by-customer$/, orderCustomer, (s, [id], _, ctx) => (s.cancelOrderAsCustomer(id, ctx.user), s.state)],
+  ['GET', /^\/api\/me\/history$/, signedIn, (s, _, __, ctx) => s.customerHistory(ctx.user)],
   ['POST', /^\/api\/orders\/(\d+)\/refund$/, ops, (s, [id], b) => (s.refundOrder(id, b?.amount, b?.reason), s.state)],
   ['POST', /^\/api\/merchants\/([\w-]+)\/open$/, ops, (s, [id], b) => (s.setMerchantOpen(id, b?.open), s.state)],
   ['POST', /^\/api\/couriers\/([\w-]+)\/suspend$/, ops, (s, [id], b) => (s.setCourierSuspended(id, b?.suspended), s.state)],
@@ -214,7 +222,7 @@ export function notifications(store: Store, e: StoreEvent): PushMessage[] {
     const pay = o.courierPay !== undefined ? ` · ${o.courierPay} DH` : '';
     return to(store.pushTokensFor('courier', e.courierId), 'New delivery', `${o.id} · ${shop}${pay}. Accept within 15 s`);
   }
-  if (!o.customerId) return [];
+  if (!o.customerId || (e.status === 'cancelled' && o.cancelledBy === 'customer')) return [];
   const news: Partial<Record<typeof e.status, [string, string]>> = {
     preparing: ['Order accepted', `${shop} is preparing your order`],
     picking: ['Rider assigned', `${rider} is heading to ${shop}`],

@@ -96,7 +96,7 @@ function seed(): LiveState {
 }
 
 /** Bump when the saved state's shape changes; an older file is set aside and the demo reseeds. */
-export const STATE_VERSION = 3;
+export const STATE_VERSION = 4;
 
 /** Things worth telling someone about, e.g. with a push notification. */
 export type StoreEvent =
@@ -506,6 +506,7 @@ export class Store {
     if (!reason?.trim()) throw new ActionError('A cancellation reason is required');
     this.setStatus(o, 'cancelled');
     o.cancelReason = reason.trim();
+    o.cancelledBy = 'ops';
     this.endOffer(o, 'withdrawn');
     if (compensateCourier && o.courierId) o.courierCompensation = COMPENSATION_DH;
     this.auto.delete(o.id);
@@ -873,5 +874,29 @@ export class Store {
 
   pushTokensFor(role: 'courier' | 'customer', id: string): string[] {
     return this.auth.pushTokens?.[role + ':' + id] ?? [];
+  }
+
+  // ---------- customers ----------
+
+  /** A customer cancels their own order, only while it's new. Nothing is owed to anyone at that point. */
+  cancelOrderAsCustomer(orderId: string, by?: AuthUser) {
+    const o = this.order(orderId);
+    if (by?.role === 'customer' && o.customerId !== by.id) throw new ActionError('This is not your order', 403);
+    if (o.status !== 'pending') {
+      throw new ActionError(o.status === 'cancelled' ? o.id + ' is already cancelled' : `${o.id} can't be cancelled any more: the store has accepted it. Contact support`, 409);
+    }
+    this.endOffer(o, 'withdrawn');
+    o.cancelReason = 'Cancelled by customer';
+    o.cancelledBy = 'customer';
+    this.auto.delete(o.id);
+    this.setStatus(o, 'cancelled');
+    this.changed();
+  }
+
+  /** A signed-in customer's orders (newest first) and tickets. */
+  customerHistory(user: AuthUser | undefined) {
+    if (user?.role !== 'customer') throw new ActionError('Sign in as a customer', 401);
+    const orders = this.s.orders.filter(o => o.customerId === user.id).sort((a, b) => (b.statusAt?.pending ?? 0) - (a.statusAt?.pending ?? 0));
+    return { orders, tickets: this.s.tickets.filter(t => t.requesterId === user.id) };
   }
 }

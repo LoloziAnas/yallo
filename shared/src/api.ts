@@ -10,6 +10,8 @@ export type ApiOrder = Order & {
   refund?: number;
   refundReason?: string;
   cancelReason?: string;
+  /** Who cancelled: ops from the back office, or the customer while the order was still new. */
+  cancelledBy?: 'ops' | 'customer';
   /** Trip fee in DH paid to the courier when ops cancels with compensation. */
   courierCompensation?: number;
   /**
@@ -156,6 +158,8 @@ export type ApplyBody = {
 /** What an applicant sees about their application. */
 export type ApplicationStatus = Pick<CourierApplication, 'id' | 'status' | 'docs' | 'docNotes' | 'rejectReason' | 'courierId'>;
 
+export type CustomerHistory = { orders: ApiOrder[]; tickets: Ticket[] };
+
 export type LiveMessage = { type: 'state'; state: LiveState };
 
 /** Error body returned with any 4xx. */
@@ -270,6 +274,10 @@ export function createYalloClient(baseUrl: string, opts: { token?: string } = {}
     setOrderStatus: (orderId: string, status: OrderStatus, pin?: string) => post(`/orders/${orderPath(orderId)}/status`, { status, ...(pin ? { pin } : {}) }),
     cancelOrder: (orderId: string, reason: string, compensateCourier: boolean) =>
       post(`/orders/${orderPath(orderId)}/cancel`, { reason, compensateCourier }),
+    /** The customer cancels their own order. Only while it's new (before the store accepts it). */
+    cancelOrderAsCustomer: (orderId: string) => post(`/orders/${orderPath(orderId)}/cancel-by-customer`),
+    /** The signed-in customer's orders (newest first) and tickets: their history, kept with the account. */
+    myHistory: () => call<CustomerHistory>('GET', '/me/history'),
     refundOrder: (orderId: string, amount: number, reason: string) => post(`/orders/${orderPath(orderId)}/refund`, { amount, reason }),
     setMerchantOpen: (merchantId: string, open: boolean) => post(`/merchants/${merchantId}/open`, { open }),
     setCourierSuspended: (courierId: string, suspended: boolean) => post(`/couriers/${courierId}/suspend`, { suspended }),
