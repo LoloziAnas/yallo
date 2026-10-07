@@ -48,6 +48,8 @@ const sha =
   (hostedSha?.slice(0, 7) ?? git('rev-parse', '--short', 'HEAD') ?? 'unknown') +
   (dirty ? '-dirty' : '');
 
+// Metro's cache doesn't notice a different EXPO_PUBLIC_API_URL: start this kind of build from an empty one.
+rmSync(path.join(root, '.expo', 'metro-cache-release', 'web'), { recursive: true, force: true });
 rmSync(out, { recursive: true, force: true });
 const r = spawnSync('npx', ['expo', 'export', '--platform', 'web', '--output-dir', out], {
   cwd: root,

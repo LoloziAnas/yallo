@@ -9,7 +9,7 @@
 //
 // Options: --api <url> (required), --init-keystore, --allow-dirty (build with uncommitted changes).
 import { execFileSync, spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -131,6 +131,8 @@ const run = (cmd, a, cwd = root) => {
   if (r.status !== 0) fail(`${cmd} ${a[0]} failed`);
 };
 
+// Metro's cache doesn't notice a different EXPO_PUBLIC_API_URL: start this kind of build from an empty one.
+rmSync(path.join(root, '.expo', 'metro-cache-release', 'apk'), { recursive: true, force: true });
 console.log(`Building Yallo ${version} (${sha}), versionCode ${versionCode}, API ${api}`);
 // A clean prebuild so app.json / plugin changes always reach android/ (generated, git-ignored).
 run('npx', ['expo', 'prebuild', '--platform', 'android', '--clean', '--no-install']);
