@@ -16,7 +16,7 @@ export default function Payouts({ v }) {
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <SegTabs items={v.payTabs} fontSize={13} padding="0 16px" />
-        <span className="muted" style={{ fontSize: 13 }}>Week 40 · 28 Sep – 4 Oct 2026 · payout Mon 5 Oct</span>
+        <span className="muted" style={{ fontSize: 13 }}>{v.payPeriod}</span>
         <div style={{ flex: 1 }} />
         <span className="muted" style={{ fontSize: 13 }}>{v.selCount} selected</span>
         <button className="btn btn-primary" onClick={v.approveSel} disabled={v.noSel} style={{ height: 38, padding: '0 16px', boxShadow: 'none' }}>Approve selected</button>

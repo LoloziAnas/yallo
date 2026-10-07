@@ -1,6 +1,7 @@
 // Contract for the Yallo mock API (../api) and a small client usable from the web and React Native.
 import type { OrderLineInput } from './pricing';
-import type { Courier, DeliveryAddress, GeoPoint, Merchant, Order, OrderItem, OrderStatus, PayMethod, Ticket, TicketPriority, TicketSource, ZoneName } from './model';
+import type { CourierEarnings } from './earnings';
+import type { Courier, CourierApplication, DocKey, PayoutRun, DeliveryAddress, GeoPoint, Merchant, Order, OrderItem, OrderStatus, PayMethod, Ticket, TicketPriority, TicketSource, ZoneName } from './model';
 
 export type ApiOrder = Order & {
   /** Seconds since the order was placed. Frozen once the order is delivered or cancelled. */
@@ -44,6 +45,10 @@ export type LiveState = {
   orders: ApiOrder[];
   /** Support tickets, in display order (newest opened first). */
   tickets: Ticket[];
+  /** Courier applications, newest first. */
+  applications: CourierApplication[];
+  /** The weekly settlement waiting for approval. */
+  payouts: PayoutRun;
 };
 
 export type PlaceOrderBody = {
@@ -122,6 +127,22 @@ export function normalizePhone(raw: string): string | null {
   else if (digits.length === 9) digits = '212' + digits;
   return digits.length >= 8 && digits.length <= 15 ? '+' + digits : null;
 }
+
+/** A courier sign-up from the courier app. */
+export type ApplyBody = {
+  name: string;
+  phone: string;
+  email?: string;
+  city: string;
+  vehicle: Courier['vehicle'];
+  /** Required unless the vehicle is a bicycle. */
+  plate?: string;
+  /** Documents uploaded with the application; must include every `requiredDocs(vehicle)`. */
+  documents: DocKey[];
+};
+
+/** What an applicant sees about their application. */
+export type ApplicationStatus = Pick<CourierApplication, 'id' | 'status' | 'docs' | 'docNotes' | 'rejectReason' | 'courierId'>;
 
 export type LiveMessage = { type: 'state'; state: LiveState };
 
@@ -248,6 +269,20 @@ export function createYalloClient(baseUrl: string, opts: { token?: string } = {}
       post(`/tickets/${ticketId}/messages`, { from, author, text }),
     resolveTicket: (ticketId: string) => post(`/tickets/${ticketId}/resolve`),
     escalateTicket: (ticketId: string) => post(`/tickets/${ticketId}/escalate`),
+    /** Courier sign-up: creates an application for ops to review. */
+    applyAsCourier: (body: ApplyBody) => post<CourierApplication>('/courier-applications', body),
+    /** The latest application for a phone number (404 if none). */
+    applicationStatus: (phone: string) => call<ApplicationStatus>('GET', '/courier-applications/status?phone=' + encodeURIComponent(phone)),
+    /** Ops: accept or reject one document. A note explains a rejection to the applicant. */
+    reviewDocument: (applicationId: string, doc: DocKey, verdict: 'ok' | 'bad', note?: string) =>
+      post(`/courier-applications/${applicationId}/documents/${doc}`, { verdict, ...(note ? { note } : {}) }),
+    /** Ops: every document must be accepted. Creates the courier, who can then sign in with their phone. */
+    approveApplication: (applicationId: string) => post(`/courier-applications/${applicationId}/approve`),
+    rejectApplication: (applicationId: string, reason: string) => post(`/courier-applications/${applicationId}/reject`, { reason }),
+    /** Ops: approves payout lines; lines on hold or already approved are refused. */
+    approvePayouts: (lineIds: string[]) => post('/payouts/approve', { lineIds }),
+    /** A courier's jobs, earnings, tips and cash held, worked out from orders. */
+    courierEarnings: (courierId: string) => call<CourierEarnings>('GET', `/couriers/${courierId}/earnings`),
     /** Restores the demo seed. */
     reset: () => post('/reset'),
   };

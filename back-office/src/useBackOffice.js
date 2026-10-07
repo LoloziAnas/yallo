@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { DISPATCH_RADIUS_KM, clockAt, createYalloClient, pickupKm, storeAvailability } from '@yallo/shared';
 import { IC } from './icons.jsx';
-import { ZONES, MERCH, MBY, COURIERS0, ORDERS0, STATUS, ACTIVE, APPS0, DOCDEF, TICKETS0, PAY_C, PAY_M, fromLive } from './data.js';
+import { ZONES, MERCH, MBY, COURIERS0, ORDERS0, STATUS, ACTIVE, APPS0, PAYOUTS0, DOCDEF, TICKETS0, fromLive } from './data.js';
 
 // Same origin: Vite proxies /api to the mock API (see vite.config.js).
 const api = createYalloClient('');
@@ -15,8 +15,8 @@ const chip = on => ({ bg:on ? 'var(--color-text)' : 'var(--color-card)', fg:on ?
 const initialState = startPage => ({
   page:startPage ?? 'live', city:'Marrakech', t:0, orders:ORDERS0, couriers:COURIERS0, merchants:MERCH.map(m => ({ ...m })),
   drawer:startPage && startPage !== 'live' ? null : { type:'order', id:'#48214' }, assignOpen:true, qTab:'action', layers:{ couriers:true, merchants:true },
-  oFilter:'all', oq:'', gq:'', cTab:'fleet', apps:APPS0, appSel:'a1', tickets:TICKETS0, tSel:'T-9011', tFilter:'open', draft:'',
-  payTab:'couriers', paySel:{}, payDone:{}, modal:null, reason:null, refundMode:'full', refundAmt:'', comp:true, toast:null, suspended:{}, connected:false,
+  oFilter:'all', oq:'', gq:'', cTab:'fleet', apps:APPS0, payouts:PAYOUTS0, appSel:null, tickets:TICKETS0, tSel:'T-9011', tFilter:'open', draft:'',
+  payTab:'couriers', paySel:{}, modal:null, reason:null, refundMode:'full', refundAmt:'', comp:true, toast:null, suspended:{}, connected:false,
   w:typeof window === 'undefined' ? 1440 : window.innerWidth
 });
 
@@ -70,7 +70,13 @@ export function useBackOffice({ startPage } = {}) {
   const active = s.orders.filter(o => ACTIVE.includes(o.st));
   const needs = active.filter(o => !o.courier && (o.st === 'ready' || o.st === 'preparing' || o.st === 'pending') || lateInfo(o));
   const openT = s.tickets.filter(t => !t.resolved);
-  const pendingApps = s.apps.length;
+  const pendingList = s.apps.filter(a => a.status === 'pending');
+  const pendingApps = pendingList.length;
+  // How long ago a demo-clock second was, as the Applications list shows it.
+  const ago = at => { const sec = s.t - at; return sec < 3600 ? Math.max(1, Math.floor(sec / 60)) + 'm ago' : sec < 86400 ? Math.floor(sec / 3600) + 'h ago' : 'yesterday'; };
+  const payPending = s.payouts.lines.filter(l => l.status === 'pending');
+  const payDue = payPending.reduce((a, l) => a + l.net, 0);
+  const payWeekLabel = 'Week ' + s.payouts.week.replace(/^W/, '');
   const p = {}; ['overview','live','orders','couriers','merchants','support','payouts'].forEach(k => p[k] = s.page === k);
 
   const NAV = [['overview','Overview','grid'],['live','Live operations','radar',needs.length,'var(--color-accent)'],['orders','Orders','receipt'],['couriers','Couriers','bike',pendingApps,'var(--color-neutral-600)'],['merchants','Merchants','store'],['support','Support','headset',openT.length,'var(--color-accent)'],['payouts','Payouts','wallet']];
@@ -96,8 +102,8 @@ export function useBackOffice({ startPage } = {}) {
     { icon:IC.clock, title:needs.length + ' orders need action', body:'Ready without courier or over SLA · Guéliz, Hivernage', cta:'Open queue', tone:'hot', onClick:() => setState({ page:'live', qTab:'action' }) },
     { icon:IC.headset, title:'Urgent: restaurant closed on arrival', body:'Karim E. at Dar Zitoun · #48213', cta:'Reply', tone:'hot', onClick:() => setState({ page:'support', tSel:'T-9011', drawer:null }) },
     { icon:IC.bike, title:'Low supply in Médina', body:'3.4 orders per courier · consider a +8 DH surge', cta:'View map', tone:'warm', onClick:go('live') },
-    { icon:IC.file, title:pendingApps + ' courier applications waiting', body:'Oldest submitted yesterday', cta:'Review', tone:'calm', onClick:() => setState({ page:'couriers', cTab:'apps', drawer:null }) },
-    { icon:IC.wallet, title:'Week 40 payouts ready', body:'214,980 DH to 1,082 recipients · due Mon 5 Oct', cta:'Approve', tone:'calm', onClick:go('payouts') }
+    { icon:IC.file, title:pendingApps + ' courier applications waiting', body:pendingApps ? 'Oldest submitted ' + ago(Math.min(...pendingList.map(a => a.submittedAt))) : 'All reviewed', cta:'Review', tone:'calm', onClick:() => setState({ page:'couriers', cTab:'apps', drawer:null }) },
+    { icon:IC.wallet, title:payWeekLabel + ' payouts ready', body:fmt(payDue) + ' DH to ' + payPending.length + ' recipients · due ' + s.payouts.payDate, cta:'Approve', tone:'calm', onClick:go('payouts') }
   ].map(a => ({ ...a, bg:a.tone === 'hot' ? 'var(--color-accent-100)' : a.tone === 'warm' ? 'var(--color-saffron-100)' : 'var(--color-surface)', iBg:a.tone === 'hot' ? 'var(--color-accent)' : a.tone === 'warm' ? 'var(--color-saffron)' : 'var(--color-card)', iFg:a.tone === 'calm' ? 'var(--color-text)' : '#fff' }));
   const ZD = [['Guéliz',412,4,24,3.1,38,1.6],['Hivernage',268,4,26,4.8,24,2.1],['Médina',231,2,33,7.9,13,3.4],['Daoudiate',142,1,28,3.6,15,1.4],['Semlalia',118,1,25,2.4,16,1.1],['Targa',64,0,29,4.1,9,1.0],['Agdal',49,0,31,5.0,7,1.3]];
   const zones = ZD.map(([name, orders, a, avg, late, cour, ratio]) => ({ name, orders, active:active.filter(o => o.cz === name).length, avg, late, ratio:ratio.toFixed(1), supW:Math.min(100, Math.round(ratio / 3.5 * 100)) + '%',
@@ -141,13 +147,13 @@ export function useBackOffice({ startPage } = {}) {
   const CL = { idle:['Available','var(--color-accent-2-700)'], busy:['On delivery','var(--color-accent-700)'], off:['Offline','var(--color-neutral-600)'] };
   const stOf = c => s.suspended[c.id] ? ['Suspended','var(--color-accent-800)','var(--color-accent-800)'] : [CL[c.st][0], CL[c.st][1], CC[c.st]];
   const fleetRows = s.couriers.map(c => { const st = stOf(c); return { ...c, ini:ini(c.name), stLabel:st[0], stFg:st[1], stDot:st[2], accFg:c.acc < 85 ? 'var(--color-accent-700)' : 'var(--color-text)', docFg:c.docs === 'Valid' ? 'var(--color-accent-2-700)' : 'var(--color-accent-700)', onClick:openCourier(c.id) }; });
-  const appCur = s.apps.find(a => a.id === s.appSel) || s.apps[0];
-  const appTag = a => { const keys = Object.keys(a.docs), vals = keys.map(k => a.docs[k]); if (vals.includes('bad')) return ['Needs re-upload','var(--color-accent-100)','var(--color-accent-800)']; if (vals.every(v => v === 'ok')) return ['Ready to activate','var(--color-accent-2-100)','var(--color-accent-2-700)']; if (vals.some(v => v)) return ['In review','var(--color-saffron-100)','var(--color-neutral-800)']; return ['New','var(--color-neutral-200)','var(--color-neutral-800)']; };
-  const appList = s.apps.map(a => { const t = appTag(a); return { ...a, ini:ini(a.name), tag:t[0], tagBg:t[1], tagFg:t[2], sh:appCur && a.id === appCur.id ? '0 0 0 2px var(--color-accent)' : 'var(--shadow-sm)', onClick:set({ appSel:a.id }) }; });
-  const setDoc = (k, v) => () => setState(st => ({ apps:st.apps.map(a => a.id === appCur.id ? { ...a, docs:{ ...a.docs, [k]:v } } : a) }));
-  const app = appCur ? (() => { const t = appTag(appCur), keys = Object.keys(appCur.docs); return { ...appCur, ini:ini(appCur.name), tag:t[0], tagBg:t[1], tagFg:t[2], docsTotal:keys.length, docsDone:keys.filter(k => appCur.docs[k]).length, cantApprove:!keys.every(k => appCur.docs[k] === 'ok'),
-    docs:keys.map(k => { const v = appCur.docs[k], d = DOCDEF[k]; return { label:d[0], file:d[1], meta:v === 'bad' ? 'Insurance certificate expired 08/2026' : d[2], state:v === 'ok' ? 'Approved' : v === 'bad' ? 'Rejected' : 'Pending', fg:v === 'ok' ? 'var(--color-accent-2-700)' : v === 'bad' ? 'var(--color-accent-700)' : 'var(--color-neutral-600)', bd:v === 'ok' ? 'var(--color-accent-2-300)' : v === 'bad' ? 'var(--color-accent-300)' : 'var(--color-divider)', approve:setDoc(k, 'ok'), reject:setDoc(k, 'bad') }; }) }; })() : { docs:[], cantApprove:true };
-  const removeApp = msg => { const rest = s.apps.filter(a => a.id !== appCur.id); setState({ apps:rest, appSel:rest[0] ? rest[0].id : null, modal:null }); toast(msg); };
+  const appCur = pendingList.find(a => a.id === s.appSel) || pendingList[0];
+  const appTag = a => { const vals = Object.values(a.docs); if (vals.includes('bad')) return ['Needs re-upload','var(--color-accent-100)','var(--color-accent-800)']; if (vals.every(v => v === 'ok')) return ['Ready to activate','var(--color-accent-2-100)','var(--color-accent-2-700)']; if (vals.some(v => v)) return ['In review','var(--color-saffron-100)','var(--color-neutral-800)']; return ['New','var(--color-neutral-200)','var(--color-neutral-800)']; };
+  const appView = a => ({ ...a, veh:a.vehicle, plate:a.plate ?? '—', sub:ago(a.submittedAt), ini:ini(a.name) });
+  const appList = pendingList.map(a => { const t = appTag(a); return { ...appView(a), tag:t[0], tagBg:t[1], tagFg:t[2], sh:appCur && a.id === appCur.id ? '0 0 0 2px var(--color-accent)' : 'var(--shadow-sm)', onClick:set({ appSel:a.id }) }; });
+  const setDoc = (k, v) => () => act(api.reviewDocument(appCur.id, k, v), null);
+  const app = appCur ? (() => { const t = appTag(appCur), keys = Object.keys(appCur.docs); return { ...appView(appCur), tag:t[0], tagBg:t[1], tagFg:t[2], docsTotal:keys.length, docsDone:keys.filter(k => appCur.docs[k]).length, cantApprove:!keys.every(k => appCur.docs[k] === 'ok'),
+    docs:keys.map(k => { const v = appCur.docs[k], d = DOCDEF[k]; return { label:d[0], file:d[1], meta:v === 'bad' ? (appCur.docNotes?.[k] ?? 'Rejected · ask for a new upload') : d[2], state:v === 'ok' ? 'Approved' : v === 'bad' ? 'Rejected' : 'Pending', fg:v === 'ok' ? 'var(--color-accent-2-700)' : v === 'bad' ? 'var(--color-accent-700)' : 'var(--color-neutral-600)', bd:v === 'ok' ? 'var(--color-accent-2-300)' : v === 'bad' ? 'var(--color-accent-300)' : 'var(--color-divider)', approve:setDoc(k, 'ok'), reject:setDoc(k, 'bad') }; }) }; })() : { docs:[], cantApprove:true };
 
   // merchants
   const merchantRows = s.merchants.map(m => ({ ...m, prepFg:m.prep > 20 ? 'var(--color-accent-700)' : 'var(--color-text)', hoursLabel:m.hours.open + '–' + m.hours.close, stLabel:!m.open ? 'Paused' : takingOrders(m) ? 'Open' : 'Closed · opens ' + m.hours.open, stBg:takingOrders(m) ? 'var(--color-accent-2-100)' : 'var(--color-neutral-200)', stFg:takingOrders(m) ? 'var(--color-accent-2-700)' : 'var(--color-neutral-700)', trk:m.open ? 'var(--color-accent-2-500)' : 'var(--color-neutral-400)', knob:m.open ? '18px' : '2px',
@@ -175,23 +181,25 @@ export function useBackOffice({ startPage } = {}) {
 
   // payouts
   const isC = s.payTab === 'couriers';
-  const payData = isC ? PAY_C.map(([name, n, earn, tips, cash, method]) => ({ key:name, name, n, earn:earn + tips, adj:cash, method })) : PAY_M.map(([name, n, gmv, com, method]) => ({ key:name, name, n, earn:gmv, adj:com, method }));
+  const payData = s.payouts.lines.filter(l => l.kind === (isC ? 'courier' : 'merchant'));
   const payRows = payData.map(r => {
-    const net = r.earn + r.adj, hold = net < 0, done = s.payDone[r.key], sel = !!s.paySel[r.key] && !done && !hold;
-    return { name:r.name, n:r.n, earn:fmt(r.earn), adj:r.adj ? fmt(r.adj) : '—', adjFg:r.adj ? 'var(--color-accent-700)' : 'var(--color-neutral-600)', net:fmt(net), netFg:hold ? 'var(--color-accent-700)' : 'var(--color-text)', method:r.method,
+    const hold = r.status === 'on_hold', done = r.status === 'approved', sel = !!s.paySel[r.id] && !done && !hold;
+    return { name:r.name, n:r.count, earn:fmt(r.gross), adj:r.adjustment ? fmt(r.adjustment) : '—', adjFg:r.adjustment ? 'var(--color-accent-700)' : 'var(--color-neutral-600)', net:fmt(r.net), netFg:hold ? 'var(--color-accent-700)' : 'var(--color-text)', method:r.method,
       st:done ? 'Approved' : hold ? 'On hold · cash due' : 'Pending', stBg:done ? 'var(--color-accent-2-100)' : hold ? 'var(--color-accent-100)' : 'var(--color-saffron-100)', stFg:done ? 'var(--color-accent-2-700)' : hold ? 'var(--color-accent-800)' : 'var(--color-neutral-800)',
       locked:done || hold, op:done || hold ? .35 : 1, mark:sel || done ? '✓' : '', bx:sel || done ? 'var(--color-accent)' : 'var(--color-card)', bd:sel || done ? 'var(--color-accent)' : 'var(--color-neutral-400)', rowBg:sel ? 'var(--color-accent-100)' : 'var(--color-card)',
-      toggle:() => setState(st => ({ paySel:{ ...st.paySel, [r.key]:!st.paySel[r.key] } })) };
+      toggle:() => setState(st => ({ paySel:{ ...st.paySel, [r.id]:!st.paySel[r.id] } })) };
   });
-  const selectable = payData.filter(r => r.earn + r.adj >= 0 && !s.payDone[r.key]);
-  const selKeys = selectable.filter(r => s.paySel[r.key]).map(r => r.key);
+  const selectable = payData.filter(r => r.status === 'pending');
+  const selKeys = selectable.filter(r => s.paySel[r.id]).map(r => r.id);
   const allOn = selectable.length && selKeys.length === selectable.length;
-  const selTotal = payData.filter(r => selKeys.includes(r.key)).reduce((a, r) => a + r.earn + r.adj, 0);
+  const selTotal = payData.filter(r => selKeys.includes(r.id)).reduce((a, r) => a + r.net, 0);
+  const owed = kind => s.payouts.lines.filter(l => l.kind === kind && l.status !== 'on_hold');
+  const held = s.payouts.lines.filter(l => l.status === 'on_hold');
   const payKpis = [
-    { label:'Total to pay this week', value:'214,980 DH', note:'1,082 recipients', fg:'var(--color-text)' },
-    { label:'Couriers', value:'61,410 DH', note:'642 couriers', fg:'var(--color-text)' },
-    { label:'Merchants', value:'153,570 DH', note:'440 merchants · after commission', fg:'var(--color-text)' },
-    { label:'On hold', value:'2,140 DH', note:'Cash collected not yet remitted', fg:'var(--color-accent-700)' }
+    { label:'Total to pay this week', value:fmt(owed('courier').concat(owed('merchant')).reduce((a, l) => a + l.net, 0)) + ' DH', note:owed('courier').length + owed('merchant').length + ' recipients', fg:'var(--color-text)' },
+    { label:'Couriers', value:fmt(owed('courier').reduce((a, l) => a + l.net, 0)) + ' DH', note:owed('courier').length + ' couriers', fg:'var(--color-text)' },
+    { label:'Merchants', value:fmt(owed('merchant').reduce((a, l) => a + l.net, 0)) + ' DH', note:owed('merchant').length + ' merchants · after commission', fg:'var(--color-text)' },
+    { label:'On hold', value:fmt(held.reduce((a, l) => a - l.net, 0)) + ' DH', note:'Cash collected not yet remitted', fg:'var(--color-accent-700)' }
   ];
 
   // drawer
@@ -237,8 +245,8 @@ export function useBackOffice({ startPage } = {}) {
     refund:{ title:'Refund ' + (dOrderObj ? dOrderObj.id : ''), sub:dOrderObj ? 'Paid ' + dOrderObj.total + ' DH · ' + (dOrderObj.pay === 'Cash' ? 'cash refund goes to Yallo wallet' : 'back to card in 3–5 days') : '', isRefund:true, confirm:'Issue refund', onConfirm:() => {
       const amt = s.refundMode === 'full' ? dOrderObj.total : Math.min(dOrderObj.total, Number(s.refundAmt) || 0);
       act(api.refundOrder(dOrderObj.id, amt, s.reason), amt + ' DH refunded on ' + dOrderObj.id, { modal:null }); } },
-    reject:{ title:'Reject ' + (appCur ? appCur.name : ''), sub:'The applicant gets an SMS with the reason and can re-apply in 30 days.', confirm:'Reject application', onConfirm:() => removeApp(appCur.name + ' rejected') },
-    payout:{ title:'Approve ' + selKeys.length + ' payouts', sub:fmt(selTotal) + ' DH will be sent by bank transfer on Mon 5 Oct.', confirm:'Approve payouts', onConfirm:() => { setState(st => { const d = { ...st.payDone }; selKeys.forEach(k => d[k] = true); return { payDone:d, paySel:{}, modal:null }; }); toast(selKeys.length + ' payouts approved'); } }
+    reject:{ title:'Reject ' + (appCur ? appCur.name : ''), sub:'The applicant gets an SMS with the reason and can re-apply in 30 days.', confirm:'Reject application', onConfirm:() => act(api.rejectApplication(appCur.id, s.reason), appCur.name + ' rejected', { modal:null }) },
+    payout:{ title:'Approve ' + selKeys.length + ' payouts', sub:fmt(selTotal) + ' DH will be sent by bank transfer on ' + s.payouts.payDate + '.', confirm:'Approve payouts', onConfirm:() => act(api.approvePayouts(selKeys), selKeys.length + ' payouts approved', { paySel:{}, modal:null }) }
   };
   const md = MD[s.modal] ? { isRefund:false, isCancel:false, ...MD[s.modal], reasons, disabled:(s.modal === 'cancel' || s.modal === 'refund' || s.modal === 'reject') && !s.reason } : { reasons:[] };
 
@@ -251,16 +259,16 @@ export function useBackOffice({ startPage } = {}) {
     qTabs, queue, queueEmpty:!queue.length, zoneLabels, mapMerchants, mapCouriers, hasRoute, route, layers:s.layers, layerBtns, fleetLegend,
     oFilters, oq:s.oq, onOq:e => setState({ oq:e.target.value }), orderRows, orderRowsCount:orderRows.length, ordersEmpty:!orderRows.length,
     cTabs, cFleet:s.cTab === 'fleet', cApps:s.cTab === 'apps' && !!appCur, fleetRows, appList, app,
-    approveApp:() => removeApp(appCur.name + ' activated · welcome SMS sent'), rejectApp:set({ modal:'reject', reason:null }),
+    approveApp:() => act(api.approveApplication(appCur.id), appCur.name + ' activated · welcome SMS sent'), rejectApp:set({ modal:'reject', reason:null }),
     merchantRows,
     tFilters, ticketList, tkt, macros, resolveLabel:T.resolved ? 'Resolved' : 'Resolve',
     resolveTicket:() => act(api.resolveTicket(T.id), T.id + ' resolved'),
     escalate:() => act(api.escalateTicket(T.id), T.id + ' escalated to Tier 2'), escalateLabel:T.escalated ? 'Escalated' : 'Escalate',
     draft:s.draft, onDraft:e => setState({ draft:e.target.value }), onDraftKey:e => { if (e.key === 'Enter') addMsg(s.draft); }, sendMsg:() => addMsg(s.draft),
     payTabs:[['couriers','Couriers'],['merchants','Merchants']].map(([k, label]) => ({ label, onClick:set({ payTab:k, paySel:{} }), ...pill(s.payTab === k) })),
-    payKpis, payRows, payColName:isC ? 'Courier' : 'Merchant', payColN:isC ? 'Deliv.' : 'Orders', payColAdj:isC ? 'Cash held' : 'Commission',
+    payKpis, payRows, payPeriod:payWeekLabel + ' · ' + s.payouts.period + ' · payout ' + s.payouts.payDate, payColName:isC ? 'Courier' : 'Merchant', payColN:isC ? 'Deliv.' : 'Orders', payColAdj:isC ? 'Cash held' : 'Commission',
     selCount:selKeys.length, noSel:!selKeys.length, approveSel:set({ modal:'payout' }),
-    toggleAll:() => setState(() => { const d = {}; if (!allOn) selectable.forEach(r => d[r.key] = true); return { paySel:d }; }), allMark:allOn ? '✓' : '', allBg:allOn ? 'var(--color-accent)' : 'var(--color-card)', allBd:allOn ? 'var(--color-accent)' : 'var(--color-neutral-400)',
+    toggleAll:() => setState(() => { const d = {}; if (!allOn) selectable.forEach(r => d[r.id] = true); return { paySel:d }; }), allMark:allOn ? '✓' : '', allBg:allOn ? 'var(--color-accent)' : 'var(--color-card)', allBd:allOn ? 'var(--color-accent)' : 'var(--color-neutral-400)',
     hasDrawer:!!(dOrderObj || dCourierObj), dOrder:!!dOrderObj, dCourier:!!dCourierObj, od, cd, nearest, radiusKm:DISPATCH_RADIUS_KM, showAssign:!!dOrderObj && s.assignOpen && ACTIVE.includes(dOrderObj.st) && dOrderObj.st !== 'delivering',
     assignLabel:s.assignOpen ? 'Hide' : dOrderObj && dOrderObj.courier ? 'Reassign' : 'Assign courier', toggleAssign:set({ assignOpen:!s.assignOpen }),
     closeDrawer:set({ drawer:null }), withdrawOffer:() => act(api.withdrawOffer(dOrderObj.id), 'Offer withdrawn'), callMerchant:() => toast('Calling ' + (dOrderObj && dOrderObj.m) + '…'), callCustomer:() => toast('Calling ' + (dOrderObj && dOrderObj.c) + (dOrderObj && dOrderObj.phone ? ' · ' + dOrderObj.phone : '') + '…'),

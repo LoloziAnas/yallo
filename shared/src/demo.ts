@@ -1,7 +1,8 @@
 // Marrakech demo seed: Tuesday 6 October 2026, about 18:34. The apps' shared starting state.
-import type { Courier, MapPoint, Order, OrderStatus, Ticket, ZoneName } from './model';
+import type { Courier, CourierApplication, MapPoint, Order, OrderStatus, PayoutLine, PayoutRun, Ticket, ZoneName } from './model';
 import { quoteOrder, type OrderLineInput } from './pricing';
 import { DEMO_START_MIN } from './clock';
+import { merchantById } from './catalog';
 
 /** Zone centres on the shared demo map. */
 export const ZONES: Record<ZoneName, MapPoint> = {
@@ -135,3 +136,42 @@ export const DEMO_STATUS_AT: Record<string, Partial<Record<OrderStatus, number>>
   if (o.status === 'cancelled') at.cancelled = start + 6 * 60;
   return [o.id, at];
 }));
+
+/** Courier applications waiting for review at the demo's start. */
+export const APPLICATIONS: CourierApplication[] = [
+  { id: 'a1', name: 'Ayoub Mernissi', phone: '+212 661 77 20 14', email: 'ayoub.m@gmail.com', city: 'Marrakech', vehicle: 'Motorcycle', plate: '45821-أ-40',
+    submittedAt: -2 * 3600, docs: { cin: null, lic: null, veh: null, rib: null }, status: 'pending' },
+  { id: 'a2', name: 'Ghita Benjelloun', phone: '+212 670 31 64 88', email: 'ghita.bj@outlook.com', city: 'Marrakech', vehicle: 'Bicycle',
+    submittedAt: -5 * 3600, docs: { cin: 'ok', rib: null }, status: 'pending' },
+  { id: 'a3', name: 'Soufiane Hajji', phone: '+212 668 05 92 33', email: 's.hajji@gmail.com', city: 'Marrakech', vehicle: 'Car', plate: '71204-ب-40',
+    submittedAt: -28 * 3600, docs: { cin: 'ok', lic: 'ok', veh: 'bad', rib: null }, docNotes: { veh: 'Insurance certificate expired 08/2026' }, status: 'pending' },
+  { id: 'a4', name: 'Meryem Lazrak', phone: '+212 677 48 10 56', email: 'meryem.lz@gmail.com', city: 'Marrakech', vehicle: 'Motorcycle', plate: '38977-د-40',
+    submittedAt: -29 * 3600, docs: { cin: null, lic: null, veh: null, rib: null }, status: 'pending' },
+];
+
+// [courier id, deliveries, pay, tips, cash still held (negative), bank]
+const PAY_COURIERS: [string, number, number, number, number, string][] = [
+  ['c6', 68, 2386, 95, 0, 'CIH •••• 2290'], ['c2', 61, 2104, 40, 0, 'Attijari •••• 8812'], ['c1', 57, 1952, 120, -146, 'CIH •••• 4417'],
+  ['c4', 54, 1880, 35, -1940, 'BMCE •••• 0316'], ['c11', 49, 1702, 0, -54, 'CIH •••• 7741'], ['c9', 44, 1390, 60, 0, 'Barid •••• 5520'],
+  ['c7', 41, 1428, 0, 0, 'CIH •••• 1093'], ['c5', 30, 1104, 0, 0, 'Attijari •••• 6630'], ['c3', 28, 896, 25, 0, 'Barid •••• 3381'], ['c8', 19, 612, 0, 0, 'CIH •••• 9902'],
+];
+// [merchant id, orders, sales, commission (negative, 15 %), bank]
+const PAY_MERCHANTS: [string, number, number, number, string][] = [
+  ['m1', 402, 48620, -7293, 'Attijari •••• 1180'], ['m2', 377, 39215, -5882, 'CIH •••• 5023'], ['m5', 318, 21460, -3219, 'BMCE •••• 7710'],
+  ['m4', 266, 61240, -6124, 'Attijari •••• 0045'], ['m8', 231, 28870, -4330, 'CIH •••• 3349'], ['m7', 214, 30180, -4527, 'BMCE •••• 2286'],
+  ['m6', 176, 14590, -2189, 'CIH •••• 6612'], ['m3', 143, 8420, -842, 'Barid •••• 4470'],
+];
+
+const payoutLine = (kind: PayoutLine['kind'], partyId: string, name: string, count: number, gross: number, adjustment: number, method: string): PayoutLine => {
+  const net = gross + adjustment;
+  return { id: `${kind[0]}-${partyId}`, kind, partyId, name, count, gross, adjustment, net, method, status: net < 0 ? 'on_hold' : 'pending' };
+};
+
+/** Last week's settlement, waiting for ops to approve. */
+export const PAYOUTS: PayoutRun = {
+  week: 'W40', period: '28 Sep – 4 Oct 2026', payDate: 'Mon 5 Oct',
+  lines: [
+    ...PAY_COURIERS.map(([id, n, pay, tips, cash, bank]) => payoutLine('courier', id, COURIERS.find(c => c.id === id)!.name, n, pay + tips, cash, bank)),
+    ...PAY_MERCHANTS.map(([id, n, sales, com, bank]) => payoutLine('merchant', id, merchantById[id].name, n, sales, com, bank)),
+  ],
+};

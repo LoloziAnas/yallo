@@ -92,6 +92,11 @@ back office deploy with `deploy/prepare.sh` (builds the commit into `.deploy/<sh
     non-suspended courier number; customers get an account on first sign-in. `GET /api/auth/me` and
     `/api/auth/logout` take `Authorization: Bearer <token>`; `createYalloClient` handles it (`verifyOtp` keeps the token,
     `setToken` restores one). Accounts persist with the state but are never in LiveState.
+  - Courier applications: `/api/courier-applications` (sign-up from the courier app: name, phone, city, vehicle, plate,
+    documents), `GET /api/courier-applications/status?phone=`, and for ops `/:id/documents/:doc {verdict, note?}`,
+    `/:id/approve` (creates the courier, who can then sign in) and `/:id/reject {reason}`. In LiveState as `applications`.
+  - Payouts: `LiveState.payouts` (weekly run) and `/api/payouts/approve {lineIds}`. Earnings: `GET /api/couriers/:id/earnings`
+    and `courierEarnings(orders, courierId)` in shared (jobs, pay, tips, compensation, cash held, history).
   - `/api/merchants/:id/open {open}`, `/api/couriers/:id/suspend {suspended}`,
     `/api/couriers/:id/availability {status: 'idle'|'off'}`, `/api/reset`.
 - Use `createYalloClient(url)` rather than calling these by hand. The back office uses `''`, because Vite

@@ -504,6 +504,92 @@ describe('Sign-in (mock OTP)', () => {
   });
 });
 
+describe('Courier applications', () => {
+  let s: Store;
+  beforeEach(() => { s = new Store(); });
+  const app = (id: string) => s.state.applications.find(a => a.id === id)!;
+  const apply = { name: 'Driss Amrani', phone: '0655 12 34 56', city: 'Marrakech', vehicle: 'Motorcycle' as const, plate: '12345-أ-40', documents: ['cin', 'lic', 'veh', 'rib'] as never };
+
+  test('a sign-up creates a pending application with the documents to review', () => {
+    const a = s.applyAsCourier(apply);
+    assert.equal(a.id, 'a5');
+    assert.equal(s.state.applications[0].id, 'a5');
+    assert.deepEqual(a.docs, { cin: null, lic: null, veh: null, rib: null });
+    assert.equal(s.applicationStatus('+212655123456').status, 'pending');
+    const bike = s.applyAsCourier({ ...apply, phone: '0655 99 99 99', vehicle: 'Bicycle', plate: undefined, documents: ['cin', 'rib'] as never });
+    assert.deepEqual([bike.docs, bike.plate], [{ cin: null, rib: null }, undefined]);
+  });
+
+  test('sign-ups with missing documents or plate, duplicates and existing couriers are refused', () => {
+    assert.throws(() => s.applyAsCourier({ ...apply, documents: ['cin'] as never }), /Missing documents: lic, veh, rib/);
+    assert.throws(() => s.applyAsCourier({ ...apply, plate: '' }), /plate is required/);
+    assert.throws(() => s.applyAsCourier({ ...apply, phone: '+212 661 23 45 78' }), /already belongs to a Yallo courier/);
+    assert.throws(() => s.applyAsCourier({ ...apply, phone: '+212 661 77 20 14' }), /already in review/); // a1
+  });
+
+  test('ops reviews documents, then approval creates a courier who can sign in', () => {
+    assert.throws(() => s.approveApplication('a2'), /Accept every document first: rib/);
+    s.reviewDocument('a2', 'rib', 'bad', 'Account holder name does not match');
+    assert.equal(app('a2').docNotes!.rib, 'Account holder name does not match');
+    s.reviewDocument('a2', 'rib', 'ok');
+    assert.equal(app('a2').docNotes, undefined);
+    s.approveApplication('a2');
+    const c = s.state.couriers.at(-1)!;
+    assert.deepEqual([app('a2').status, app('a2').courierId, c.id, c.name, c.vehicle, c.status], ['approved', 'c13', 'c13', 'Ghita Benjelloun', 'Bicycle', 'off']);
+    s.requestOtp('+212 670 31 64 88', 'courier');
+    assert.equal(s.verifyOtp('0670316488', DEV_OTP_CODE).user.courierId, 'c13');
+    assert.throws(() => s.approveApplication('a2'), /already approved/);
+  });
+
+  test('rejection needs a reason and is visible to the applicant', () => {
+    assert.throws(() => s.rejectApplication('a3', ' '), /reason is required/);
+    s.rejectApplication('a3', 'Expired documents');
+    assert.deepEqual([s.applicationStatus('0668059233').status, s.applicationStatus('0668059233').rejectReason], ['rejected', 'Expired documents']);
+    assert.throws(() => s.reviewDocument('a3', 'rib', 'ok'), /already rejected/);
+  });
+});
+
+describe('Payouts and earnings', () => {
+  let s: Store;
+  beforeEach(() => { s = new Store(); });
+  const line = (id: string) => s.state.payouts.lines.find(l => l.id === id)!;
+
+  test('the seeded run puts couriers holding more cash than they earned on hold', () => {
+    assert.equal(s.state.payouts.week, 'W40');
+    assert.deepEqual([line('c-c4').net, line('c-c4').status], [1880 + 35 - 1940, 'on_hold']);
+    assert.deepEqual([line('m-m1').net, line('m-m1').status], [48620 - 7293, 'pending']);
+  });
+
+  test('ops approves pending lines; on-hold or already approved lines are refused', () => {
+    s.approvePayouts(['c-c6', 'm-m1']);
+    assert.deepEqual([line('c-c6').status, line('m-m1').status], ['approved', 'approved']);
+    assert.throws(() => s.approvePayouts(['c-c6']), /payout is approved/);
+    assert.throws(() => s.approvePayouts(['c-c4']), /payout is on hold/);
+    assert.throws(() => s.approvePayouts(['x']), /No payout line x/);
+    assert.equal(line('c-c2').status, 'pending', 'a refused batch changes nothing');
+  });
+
+  test('earnings come from the courier\'s delivered and compensated jobs', () => {
+    const before = s.courierEarnings('c2'); // Hamza delivered #48190 (card) in the seed
+    assert.deepEqual([before.jobs, before.cashHeld, before.history[0].orderId], [1, 0, '#48190']);
+    s.attachApp('c3');
+    s.offerOrder('#48219', 'c3');
+    s.acceptOffer('#48219', 'c3');
+    const o = order(s, '#48219');
+    s.setOrderStatus('#48219', 'ready'); // the seed's orders aren't moved by the stand-in merchant
+    assert.equal(o.status, 'picking');
+    s.setOrderStatus('#48219', 'delivering');
+    s.setOrderStatus('#48219', 'delivered');
+    const e = s.courierEarnings('c3');
+    assert.deepEqual([e.jobs, e.pay, e.cashHeld, e.history[0].km], [1, o.courierPay, o.total, o.courierKm]);
+    s.unassignCourier('#48213');
+    s.assignCourier('#48213', 'c2');
+    s.cancelOrder('#48213', 'Merchant closed', true);
+    const h = s.courierEarnings('c2');
+    assert.deepEqual([h.jobs, h.compensation, h.history[0].outcome], [1, 10, 'cancelled']);
+  });
+});
+
 describe('Persistence', () => {
   const tmpFile = () => join(mkdtempSync(join(tmpdir(), 'yallo-')), 'state.json');
 

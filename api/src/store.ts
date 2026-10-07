@@ -3,9 +3,9 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { dirname } from 'node:path';
 // In-memory state for the mock API: the shared demo seed plus the rules every app's actions go through.
 import {
-  ACTIVE_STATUSES, COURIERS, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, MERCHANTS, clockAt, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
+  ACTIVE_STATUSES, APPLICATIONS, PAYOUTS, COURIERS, courierEarnings, normalizePhone as normPhone, requiredDocs, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, MERCHANTS, clockAt, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
   type ApiCourier, type ApiOrder, type LiveState, type OpenTicketBody, type OrderStatus, type PlaceOrderBody, type Ticket, type TicketPriority,
-  type TicketSource, type ZoneName, type AuthRole, type AuthSession, type AuthUser, DEV_OTP_CODE, normalizePhone, type OrderItem, type OrderLineInput, type Quote, PricingError, quoteOrder, storeAvailability,
+  type TicketSource, type ZoneName, type ApplyBody, type ApplicationStatus, type CourierApplication, type DocKey, type Vehicle, type AuthRole, type AuthSession, type AuthUser, DEV_OTP_CODE, normalizePhone, type OrderItem, type OrderLineInput, type Quote, PricingError, quoteOrder, storeAvailability,
 } from '@yallo/shared';
 
 /** A rejected action. The server turns it into a 4xx with this message. */
@@ -116,11 +116,13 @@ function seed(): LiveState {
     couriers: COURIERS.map(c => ({ ...clone(c), suspended: false, app: false })),
     orders: ORDERS.map(o => ({ ...clone(o), elapsedSec: DEMO_ELAPSED_SEC[o.id] ?? 0, statusAt: { ...DEMO_STATUS_AT[o.id] } })),
     tickets: clone(TICKETS),
+    applications: clone(APPLICATIONS),
+    payouts: clone(PAYOUTS),
   };
 }
 
 /** Bump when the saved state's shape changes; an older file is set aside and the demo reseeds. */
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 /** Accounts and sessions: saved with the state but never broadcast. */
 type AuthData = { users: AuthUser[]; sessions: { token: string; userId: string; createdAt: string }[]; nextCustomer: number };
 type SavedState = { version: number; savedAt: string; state: LiveState; auto: string[]; auth: AuthData };
@@ -658,5 +660,117 @@ export class Store {
   signOut(token: string | undefined) {
     this.auth.sessions = this.auth.sessions.filter(x => x.token !== token);
     this.scheduleSave();
+  }
+
+  // ---------- courier applications ----------
+
+  private application(id: string) {
+    const a = this.s.applications.find(a => a.id === id);
+    if (!a) throw new ActionError('No application ' + id, 404);
+    return a;
+  }
+
+  private pendingApplication(id: string) {
+    const a = this.application(id);
+    if (a.status !== 'pending') throw new ActionError(`${a.name}'s application is already ${a.status}`, 409);
+    return a;
+  }
+
+  /** A courier sign-up from the courier app. */
+  applyAsCourier(body: ApplyBody): CourierApplication {
+    const name = optText(body?.name, 'name', 80);
+    if (!name) throw new ActionError('name is required');
+    const phone = normPhone(body.phone);
+    if (!phone) throw new ActionError('Enter a valid phone number');
+    const city = optText(body.city, 'city', 60);
+    if (!city) throw new ActionError('city is required');
+    const vehicles: Vehicle[] = ['Motorcycle', 'Bicycle', 'Car'];
+    if (!vehicles.includes(body.vehicle)) throw new ActionError('vehicle must be Motorcycle, Bicycle or Car');
+    const plate = optText(body.plate, 'plate', 20);
+    if (body.vehicle !== 'Bicycle' && !plate) throw new ActionError('plate is required for a ' + body.vehicle.toLowerCase());
+    const email = optText(body.email, 'email', 120);
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new ActionError('email looks wrong');
+    const docs = requiredDocs(body.vehicle);
+    const sent = Array.isArray(body.documents) ? body.documents : [];
+    const missing = docs.filter(d => !sent.includes(d));
+    if (missing.length) throw new ActionError('Missing documents: ' + missing.join(', '));
+    if (this.courierByPhone(phone)) throw new ActionError('This number already belongs to a Yallo courier. Sign in instead', 409);
+    if (this.s.applications.some(a => a.status === 'pending' && normPhone(a.phone) === phone)) {
+      throw new ActionError('An application for this number is already in review', 409);
+    }
+    const n = Math.max(0, ...this.s.applications.map(a => Number(a.id.slice(1)))) + 1;
+    const app: CourierApplication = {
+      id: 'a' + n, name, phone: String(body.phone).trim(), ...(email ? { email } : {}), city, vehicle: body.vehicle, ...(plate && body.vehicle !== 'Bicycle' ? { plate } : {}),
+      submittedAt: this.s.t, docs: Object.fromEntries(docs.map(d => [d, null])), status: 'pending',
+    };
+    this.s.applications.unshift(app);
+    this.changed();
+    return app;
+  }
+
+  /** The latest application for a phone number, as the applicant may see it. */
+  applicationStatus(rawPhone: string): ApplicationStatus {
+    const phone = normPhone(rawPhone);
+    if (!phone) throw new ActionError('Enter a valid phone number');
+    const a = this.s.applications.find(a => normPhone(a.phone) === phone);
+    if (!a) throw new ActionError('No application for this number', 404);
+    return { id: a.id, status: a.status, docs: a.docs, ...(a.docNotes ? { docNotes: a.docNotes } : {}), ...(a.rejectReason ? { rejectReason: a.rejectReason } : {}), ...(a.courierId ? { courierId: a.courierId } : {}) };
+  }
+
+  reviewDocument(id: string, doc: DocKey, verdict: 'ok' | 'bad', note?: string) {
+    const a = this.pendingApplication(id);
+    if (!(doc in a.docs)) throw new ActionError(`${a.name}'s application has no ${doc} document`);
+    if (verdict !== 'ok' && verdict !== 'bad') throw new ActionError("verdict must be 'ok' or 'bad'");
+    a.docs[doc] = verdict;
+    const why = optText(note, 'note', 200);
+    a.docNotes ??= {};
+    if (verdict === 'bad' && why) a.docNotes[doc] = why;
+    else delete a.docNotes[doc];
+    if (!Object.keys(a.docNotes).length) delete a.docNotes;
+    this.changed();
+  }
+
+  /** Creates the courier (offline, in Guéliz) once every document is accepted. */
+  approveApplication(id: string) {
+    const a = this.pendingApplication(id);
+    const open = Object.entries(a.docs).filter(([, v]) => v !== 'ok').map(([k]) => k);
+    if (open.length) throw new ActionError('Accept every document first: ' + open.join(', '), 409);
+    const phone = normPhone(a.phone)!;
+    if (this.courierByPhone(phone)) throw new ActionError('This number already belongs to a Yallo courier', 409);
+    const n = Math.max(...this.s.couriers.map(c => Number(c.id.slice(1)))) + 1;
+    const centre = ZONES['Guéliz'];
+    this.s.couriers.push({ id: 'c' + n, name: a.name, phone: a.phone, vehicle: a.vehicle, zone: 'Guéliz', status: 'off',
+      pos: { x: centre.x + (n % 5) - 2, y: centre.y + (n % 3) - 1 }, rating: 5, suspended: false, app: false });
+    a.status = 'approved';
+    a.courierId = 'c' + n;
+    this.changed();
+  }
+
+  rejectApplication(id: string, reason: string) {
+    const a = this.pendingApplication(id);
+    const why = optText(reason, 'reason', 200);
+    if (!why) throw new ActionError('A rejection reason is required');
+    a.status = 'rejected';
+    a.rejectReason = why;
+    this.changed();
+  }
+
+  // ---------- payouts and earnings ----------
+
+  approvePayouts(lineIds: string[]) {
+    if (!Array.isArray(lineIds) || !lineIds.length) throw new ActionError('Pick at least one payout line');
+    const lines = lineIds.map(id => {
+      const l = this.s.payouts.lines.find(l => l.id === id);
+      if (!l) throw new ActionError('No payout line ' + id, 404);
+      if (l.status !== 'pending') throw new ActionError(`${l.name}'s payout is ${l.status.replace('_', ' ')}`, 409);
+      return l;
+    });
+    lines.forEach(l => { l.status = 'approved'; });
+    this.changed();
+  }
+
+  courierEarnings(courierId: string) {
+    this.courier(courierId);
+    return courierEarnings(this.s.orders, courierId);
   }
 }

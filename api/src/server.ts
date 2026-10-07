@@ -7,7 +7,7 @@ import { ActionError, Store } from './store';
 const MAX_BODY = 64 * 1024;
 
 /** Per-request context: the bearer token, if any. */
-type Ctx = { token?: string };
+type Ctx = { token?: string; query: URLSearchParams };
 type Handler = (store: Store, params: string[], body: any, ctx: Ctx) => unknown;
 
 /** [method, path pattern, handler]. Handlers return the response body; most return the new state. */
@@ -38,6 +38,13 @@ const ROUTES: [string, RegExp, Handler][] = [
   ['POST', /^\/api\/tickets\/(T-\d+)\/messages$/, (s, [id], b) => (s.addTicketMessage(id, b?.from, b?.author, b?.text), s.state)],
   ['POST', /^\/api\/tickets\/(T-\d+)\/resolve$/, (s, [id]) => (s.resolveTicket(id), s.state)],
   ['POST', /^\/api\/tickets\/(T-\d+)\/escalate$/, (s, [id]) => (s.escalateTicket(id), s.state)],
+  ['POST', /^\/api\/courier-applications$/, (s, _, b) => s.applyAsCourier(b)],
+  ['GET', /^\/api\/courier-applications\/status$/, (s, _, __, ctx) => s.applicationStatus(ctx.query.get('phone') ?? '')],
+  ['POST', /^\/api\/courier-applications\/(a\d+)\/documents\/(cin|lic|veh|rib)$/, (s, [id, doc], b) => (s.reviewDocument(id, doc as never, b?.verdict, b?.note), s.state)],
+  ['POST', /^\/api\/courier-applications\/(a\d+)\/approve$/, (s, [id]) => (s.approveApplication(id), s.state)],
+  ['POST', /^\/api\/courier-applications\/(a\d+)\/reject$/, (s, [id], b) => (s.rejectApplication(id, b?.reason), s.state)],
+  ['POST', /^\/api\/payouts\/approve$/, (s, _, b) => (s.approvePayouts(b?.lineIds), s.state)],
+  ['GET', /^\/api\/couriers\/([\w-]+)\/earnings$/, (s, [id]) => s.courierEarnings(id)],
   ['POST', /^\/api\/reset$/, s => (s.reset(), s.state)],
 ];
 
@@ -76,7 +83,8 @@ export function createApi({ tickMs = 1000, store = new Store() } = {}) {
     res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS');
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
-    const path = (req.url ?? '/').split('?')[0];
+    const url = new URL(req.url ?? '/', 'http://localhost');
+    const path = url.pathname;
     const route = ROUTES.find(([m, re]) => m === req.method && re.test(path));
     if (!route) return send(res, 404, { error: `No route for ${req.method} ${path}` });
     try {
@@ -84,7 +92,7 @@ export function createApi({ tickMs = 1000, store = new Store() } = {}) {
       const params = route[1].exec(path)!.slice(1).map(decodeURIComponent);
       const auth = req.headers.authorization;
       const token = auth?.startsWith('Bearer ') ? auth.slice(7).trim() : undefined;
-      send(res, 200, route[2](store, params, body, { token }));
+      send(res, 200, route[2](store, params, body, { token, query: url.searchParams }));
     } catch (e) {
       if (e instanceof ActionError) send(res, e.status, { error: e.message });
       else { console.error(e); send(res, 500, { error: 'Internal error' }); }

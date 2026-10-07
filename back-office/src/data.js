@@ -1,6 +1,6 @@
 // Demo data for the Marrakech back office (Tuesday 6 October 2026, ~18:34).
 
-import { ZONES as Z, MERCHANTS, COURIERS, ORDERS, TICKETS, DEMO_ELAPSED_SEC, DEMO_STATUS_AT } from '@yallo/shared';
+import { ZONES as Z, MERCHANTS, COURIERS, ORDERS, TICKETS, APPLICATIONS, PAYOUTS, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, courierEarnings } from '@yallo/shared';
 
 // The shared seed holds identities, positions and orders. The ops-only figures below (volumes,
 // acceptance, earnings, documents) belong to the back office and are joined on by id.
@@ -12,7 +12,8 @@ export const toBoMerchant = m => ({ id:m.id, name:m.name, cat:m.category, hours:
 export const MERCH = MERCHANTS.map(toBoMerchant);
 export const MBY = {}; MERCH.forEach(m => MBY[m.name] = m);
 
-// [deliveries today, earned DH, acceptance %, cash held DH, online, documents]
+// [deliveries today, earned DH, acceptance %, cash held DH, online, documents]. Deliveries, earnings and cash
+// held come from the orders (courierEarnings); the rest stay demo figures until the KPIs are derived.
 const C_STATS = {
   c1:[7,245,92,146,'6h 24m','Valid'], c2:[9,298,95,0,'7h 02m','Valid'], c3:[5,151,97,0,'4h 10m','Valid'],
   c4:[8,276,89,212,'6h 51m','Insurance expires in 9 days'], c5:[4,168,84,0,'3h 30m','Valid'], c6:[10,331,96,88,'8h 15m','Valid'],
@@ -20,9 +21,9 @@ const C_STATS = {
   c10:[0,0,91,0,'—','Valid'], c11:[7,239,93,54,'6h 00m','Valid'], c12:[0,0,88,0,'—','Valid']
 };
 const NO_STATS = [0, 0, 100, 0, '—', 'Valid'];
-export const toBoCourier = c => { const [dels, earn, acc, cash, online, docs] = C_STATS[c.id] ?? NO_STATS;
-  return { id:c.id, name:c.name, st:c.status, veh:c.vehicle, zone:c.zone, x:c.pos.x, y:c.pos.y, dels, earn, acc, rating:c.rating, cash, online, docs, phone:c.phone }; };
-export const COURIERS0 = COURIERS.map(toBoCourier);
+export const toBoCourier = (c, orders) => { const [, , acc, , online, docs] = C_STATS[c.id] ?? NO_STATS, e = courierEarnings(orders, c.id);
+  return { id:c.id, name:c.name, st:c.status, veh:c.vehicle, zone:c.zone, x:c.pos.x, y:c.pos.y, dels:e.jobs, earn:e.total, acc, rating:c.rating, cash:e.cashHeld, online, docs, phone:c.phone }; };
+export const COURIERS0 = COURIERS.map(c => toBoCourier(c, ORDERS));
 
 const MNAME = Object.fromEntries(MERCHANTS.map(m => [m.id, m.name]));
 /** Shared or API order → the back office's compact shape. `el` is seconds since placed; `t` is the demo clock. */
@@ -38,7 +39,9 @@ export const ORDERS0 = ORDERS.map(o => toBoOrder(o));
 export const fromLive = live => ({
   t:live.t,
   merchants:live.merchants.map(toBoMerchant),
-  couriers:live.couriers.map(toBoCourier),
+  couriers:live.couriers.map(c => toBoCourier(c, live.orders)),
+  apps:live.applications,
+  payouts:live.payouts,
   orders:live.orders.map(o => toBoOrder(o, live.t)),
   tickets:live.tickets.map(tk => toBoTicket(tk, live.t)),
   suspended:Object.fromEntries(live.couriers.filter(c => c.suspended).map(c => [c.id, true]))
@@ -54,12 +57,7 @@ export const STATUS = {
   cancelled:{ label:'Cancelled', bg:'var(--color-neutral-200)', fg:'var(--color-neutral-600)', dot:'var(--color-neutral-400)' }
 };
 export { ACTIVE_STATUSES as ACTIVE } from '@yallo/shared';
-export const APPS0 = [
-  { id:'a1', name:'Ayoub Mernissi', city:'Marrakech', veh:'Motorcycle', sub:'2h ago', plate:'45821-أ-40', phone:'+212 661 77 20 14', email:'ayoub.m@gmail.com', docs:{ cin:null, lic:null, veh:null, rib:null } },
-  { id:'a2', name:'Ghita Benjelloun', city:'Marrakech', veh:'Bicycle', sub:'5h ago', plate:'—', phone:'+212 670 31 64 88', email:'ghita.bj@outlook.com', docs:{ cin:'ok', rib:null } },
-  { id:'a3', name:'Soufiane Hajji', city:'Marrakech', veh:'Car', sub:'Yesterday', plate:'71204-ب-40', phone:'+212 668 05 92 33', email:'s.hajji@gmail.com', docs:{ cin:'ok', lic:'ok', veh:'bad', rib:null } },
-  { id:'a4', name:'Meryem Lazrak', city:'Marrakech', veh:'Motorcycle', sub:'Yesterday', plate:'38977-د-40', phone:'+212 677 48 10 56', email:'meryem.lz@gmail.com', docs:{ cin:null, lic:null, veh:null, rib:null } }
-];
+export { APPLICATIONS as APPS0, PAYOUTS as PAYOUTS0 };
 export const DOCDEF = { cin:['National ID (CIN)','cin_front_back.jpg','Expires 03/2031 · name matches'], lic:['Driving licence','permis_A.jpg','Category A · valid until 2029'], veh:['Registration & insurance','carte_grise_assurance.pdf','Insurance valid until 11/2026'], rib:['Bank details (RIB)','rib_cih.pdf','CIH Bank · holder name matches'] };
 const T_SOURCE = { customer:['Customer','user'], courier:['Courier','bike'], merchant:['Merchant','store'] };
 const T_PRIO = { urgent:'Urgent', high:'High', normal:'Normal', low:'Low' };
@@ -70,13 +68,3 @@ export const toBoTicket = (tk, t) => ({ id:tk.id, from:T_SOURCE[tk.source][0], i
   msgs:tk.messages.map(m => [m.from === 'ops' ? 'us' : 'them', m.text, m.at, m.author]) });
 export const TICKETS0 = TICKETS.map(tk => toBoTicket(tk, 0));
 
-export const PAY_C = [
-  ['Imane Chraibi',68,2386,95,0,'CIH •••• 2290'],['Hamza Rachidi',61,2104,40,0,'Attijari •••• 8812'],['Karim El Amrani',57,1952,120,-146,'CIH •••• 4417'],
-  ['Mehdi Tazi',54,1880,35,-1940,'BMCE •••• 0316'],['Rachid Alaoui',49,1702,0,-54,'CIH •••• 7741'],['Sara Idrissi',44,1390,60,0,'Barid •••• 5520'],
-  ['Omar Lahlou',41,1428,0,0,'CIH •••• 1093'],['Yassine Ouali',30,1104,0,0,'Attijari •••• 6630'],['Salma Bennani',28,896,25,0,'Barid •••• 3381'],['Nabil Fassi',19,612,0,0,'CIH •••• 9902']
-];
-export const PAY_M = [
-  ['Dar Zitoun',402,48620,-7293,'Attijari •••• 1180'],['Burger Atlas',377,39215,-5882,'CIH •••• 5023'],['Snack Chez Hamid',318,21460,-3219,'BMCE •••• 7710'],
-  ['Souk Frais Market',266,61240,-6124,'Attijari •••• 0045'],['Pizzeria Guéliz',231,28870,-4330,'CIH •••• 3349'],['Jus Jemaa',214,30180,-4527,'BMCE •••• 2286'],
-  ['Pâtisserie Al Warda',176,14590,-2189,'CIH •••• 6612'],['Pharmacie Ibn Sina',143,8420,-842,'Barid •••• 4470']
-];

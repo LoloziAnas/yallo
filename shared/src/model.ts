@@ -243,3 +243,63 @@ export type Ticket = {
   escalated: boolean;
   messages: TicketMessage[];
 };
+
+/** Documents a courier applicant uploads: national ID, driving licence, vehicle papers, bank details. */
+export type DocKey = 'cin' | 'lic' | 'veh' | 'rib';
+
+/** Bicycles need no licence or vehicle papers. */
+export function requiredDocs(vehicle: Vehicle): DocKey[] {
+  return vehicle === 'Bicycle' ? ['cin', 'rib'] : ['cin', 'lic', 'veh', 'rib'];
+}
+
+export type CourierApplication = {
+  /** "a1", "a2", … */
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  city: string;
+  vehicle: Vehicle;
+  /** Number plate; absent for bicycles. */
+  plate?: string;
+  /** Demo-clock second the application came in (negative = before the demo started). */
+  submittedAt: number;
+  /** Review per required document: null until ops looks at it. */
+  docs: Partial<Record<DocKey, 'ok' | 'bad' | null>>;
+  /** Why a document was rejected, shown to the applicant. */
+  docNotes?: Partial<Record<DocKey, string>>;
+  status: 'pending' | 'approved' | 'rejected';
+  rejectReason?: string;
+  /** The courier created when the application was approved. */
+  courierId?: string;
+};
+
+/** One recipient's line in a weekly payout run. */
+export type PayoutLine = {
+  id: string;
+  kind: 'courier' | 'merchant';
+  /** Courier or merchant id. */
+  partyId: string;
+  name: string;
+  /** Deliveries (couriers) or orders (merchants) in the period. */
+  count: number;
+  /** Courier pay + tips, or merchant sales, DH. */
+  gross: number;
+  /** Negative: cash a courier still holds, or the merchant's commission, DH. */
+  adjustment: number;
+  /** gross + adjustment. A negative net can't be paid out and stays on hold. */
+  net: number;
+  /** Masked bank account, e.g. "CIH •••• 2290". */
+  method: string;
+  status: 'pending' | 'approved' | 'on_hold';
+};
+
+export type PayoutRun = {
+  /** e.g. "W40". */
+  week: string;
+  /** e.g. "28 Sep – 4 Oct 2026". */
+  period: string;
+  /** e.g. "Mon 5 Oct". */
+  payDate: string;
+  lines: PayoutLine[];
+};
