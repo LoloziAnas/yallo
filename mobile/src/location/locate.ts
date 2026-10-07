@@ -82,10 +82,9 @@ export async function locate(): Promise<LocateResult> {
           .catch(() => null);
   const zone = nearestZone(latitude, longitude);
 
-  // Without a street name (web, or the geocoder had none), the coordinates still guide the rider.
+  // No street name (web, or the geocoder had none): left empty for the customer to type in.
   const street =
-    (place && ([place.streetNumber, place.street].filter(Boolean).join(' ') || place.name)) ||
-    `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+    (place && ([place.streetNumber, place.street].filter(Boolean).join(' ') || place.name)) || '';
   return {
     ok: true,
     address: {

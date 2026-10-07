@@ -25,10 +25,22 @@ const empty = {
 /** New address form. From onboarding ("Enter address manually") it continues to sign-in. */
 export function NewAddressSheet() {
   const t = useT();
-  // Set when "Use my location" couldn't locate the device, to explain why the form opened.
-  const { reason } = useLocalSearchParams<{ reason?: 'denied' | 'unavailable' }>();
+  // Set when "Use my location" opened this form: it couldn't locate the device, or found the
+  // place but no street (then the fields start from the GPS fix and the pin is kept).
+  const { reason } = useLocalSearchParams<{ reason?: 'denied' | 'unavailable' | 'needsStreet' }>();
   const saveAddress = useApp((s) => s.saveAddress);
-  const [na, setNa] = useState(empty);
+  const saveLocated = useApp((s) => s.saveLocated);
+  const draft = useApp((s) => (reason === 'needsStreet' ? s.locDraft : null));
+  const [na, setNa] = useState(() =>
+    draft
+      ? {
+          ...empty,
+          label: t.currentLoc,
+          city: cities.find((c) => c === draft.city) ?? 'Marrakech',
+          district: draft.district,
+        }
+      : empty,
+  );
   const field = (k: keyof typeof empty) => ({
     value: na[k],
     onChangeText: (v: string) => setNa((x) => ({ ...x, [k]: v })),
@@ -36,7 +48,8 @@ export function NewAddressSheet() {
   const invalid = !na.district.trim() || !na.street.trim();
 
   const save = () => {
-    saveAddress(na);
+    if (draft) saveLocated(na);
+    else saveAddress(na);
     router.back();
     if (!useApp.getState().signedIn) router.push('/sign-in');
   };
@@ -56,7 +69,11 @@ export function NewAddressSheet() {
           }}>
           <Icon name="nav" size={15} color={colors.accent700} />
           <Txt size={13} color={colors.accent800} style={{ flex: 1 }}>
-            {reason === 'denied' ? t.locDenied : t.locFailed}
+            {reason === 'needsStreet'
+              ? t.locNeedStreet.replace('%s', draft?.district || draft?.city || '…')
+              : reason === 'denied'
+                ? t.locDenied
+                : t.locFailed}
           </Txt>
         </View>
       )}

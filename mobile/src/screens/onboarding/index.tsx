@@ -118,6 +118,7 @@ export function Onboarding() {
               // Without a location, continue with the address form (it then goes on to sign-in).
               if (result === 'ok') router.push('/sign-in');
               else router.push({ pathname: '/new-address', params: { reason: result } });
+              // 'needsStreet' opens the same form, prefilled from the GPS fix.
             }}
             style={{ height: 54 }}
           />

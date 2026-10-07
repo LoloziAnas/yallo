@@ -106,6 +106,8 @@ type State = {
   live: LiveState | null;
   /** Live feed connection; null until the first attempt finishes. */
   connected: boolean | null;
+  /** A GPS fix waiting for the customer to add the street (web, or no street from the geocoder). */
+  locDraft: Omit<Address, 'id' | 'label'> | null;
   /** Drives the "can't reach Yallo" state on Home: set while the live feed is down. */
   networkError: boolean;
   notif: boolean;
@@ -148,7 +150,9 @@ type Actions = {
    * Locates the device and selects that as the delivery address ("Current location").
    * Otherwise resolves with why not, for the address form to explain.
    */
-  locateMe: () => Promise<'ok' | 'denied' | 'unavailable'>;
+  locateMe: () => Promise<'ok' | 'needsStreet' | 'denied' | 'unavailable'>;
+  /** Saves the located address once the customer has added the street (see `locDraft`). */
+  saveLocated: (fields: Pick<Address, 'label' | 'street' | 'building' | 'landmark'>) => void;
 };
 
 /**
@@ -267,6 +271,7 @@ export const useApp = create<State & Actions>()(
       live: null,
       connected: null,
       networkError: false,
+      locDraft: null,
       notif: true,
 
       setLang: (lang) => set({ lang }),
@@ -533,9 +538,30 @@ export const useApp = create<State & Actions>()(
         }));
       },
 
+      saveLocated: (fields) => {
+        const draft = get().locDraft;
+        if (!draft) return;
+        const here: Address = {
+          ...draft,
+          ...fields,
+          id: 'loc',
+          label: fields.label.trim() || t().currentLoc,
+        };
+        set((s) => ({
+          addresses: [...s.addresses.filter((a) => a.id !== 'loc'), here],
+          addrId: 'loc',
+          locDraft: null,
+        }));
+      },
+
       locateMe: async () => {
         const r = await locate();
         if (!r.ok) return r.reason;
+        // Never use raw coordinates as the street: ask for it, keeping the pin and zone.
+        if (!r.address.street) {
+          set({ locDraft: r.address });
+          return 'needsStreet';
+        }
         const here: Address = { ...r.address, id: 'loc', label: t().currentLoc };
         set((s) => ({
           addresses: [...s.addresses.filter((a) => a.id !== 'loc'), here],
