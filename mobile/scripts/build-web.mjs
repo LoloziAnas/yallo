@@ -1,11 +1,17 @@
 #!/usr/bin/env node
-// Static web build for any static host: `npm run web:build -- --api https://api.example.com`
+// Static web build for any static host.
 //
-// - The API URL is built in (EXPO_PUBLIC_API_URL); the live feed follows it (https → wss).
-// - Output web-dist/ (git-ignored) is a single-page app. Unknown paths must serve index.html: _redirects
-//   does that on Netlify and Cloudflare Pages, 404.html on GitHub Pages, serve.json for `npx serve`.
+//   npm run web:build -- --api http://localhost:5190          pinned API (dev, e2e, the :8090 integration build)
+//   npm run web:build -- --config https://…/yallo/api.json   public demo: the app reads the API's address from that
+//                                                              file at runtime (it changes when the tunnel restarts)
+//   YALLO_API_CONFIG_URL=… YALLO_BASE_PATH=/yallo/app npm run web:build    the same from env (GitHub Pages workflow)
+//
+// - --base / YALLO_BASE_PATH serves the app from a sub-path (experiments.baseUrl): every asset and route lives under it.
+// - Output web-dist/ (git-ignored) is a single-page app. Unknown paths must serve index.html: _redirects does that on
+//   Netlify and Cloudflare Pages, 404.html on GitHub Pages at the site root, serve.json for `npx serve`. On GitHub
+//   Pages under a sub-path, the site's root 404.html redirects to the app with ?p=<path>, which the app restores.
 // - version.txt names the commit.
-// Options: --api <url> (required), --out <dir>, --allow-dirty.
+// Options: --api <url> | --config <url>, --base <path>, --out <dir>, --allow-dirty.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { copyFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -38,8 +44,14 @@ const hostedSha = process.env.RENDER_GIT_COMMIT || process.env.COMMIT_REF || pro
 const ci = !!(process.env.CI || process.env.RENDER || hostedSha);
 
 const api = option('--api')?.replace(/\/$/, '');
-if (!api || !/^https?:\/\//.test(api))
-  fail('Pass the API: npm run web:build -- --api https://<api host>');
+const config = api ? undefined : option('--config') || process.env.YALLO_API_CONFIG_URL;
+const url = api ?? config;
+if (!url || !/^https?:\/\//.test(url))
+  fail(
+    'Say where the API is: --api http://localhost:5190, or --config https://…/api.json (YALLO_API_CONFIG_URL)',
+  );
+const base = (option('--base') ?? process.env.YALLO_BASE_PATH ?? '').replace(/\/$/, '');
+if (base && !base.startsWith('/')) fail('--base must start with "/", e.g. /yallo/app');
 const out = path.resolve(root, option('--out') ?? 'web-dist');
 const dirty = !!git('status', '--porcelain', '--', '.');
 if (dirty && !ci && !args.includes('--allow-dirty'))
@@ -58,19 +70,22 @@ const r = spawnSync('npx', ['expo', 'export', '--platform', 'web', '--output-dir
     ...process.env,
     NODE_ENV: 'production',
     YALLO_RELEASE_BUILD: 'web', // a fresh Metro cache (metro.config.js)
-    EXPO_PUBLIC_API_URL: api,
+    EXPO_PUBLIC_API_URL: api ?? '',
+    EXPO_PUBLIC_API_CONFIG_URL: config ?? '',
+    YALLO_BASE_PATH: base,
     EXPO_PUBLIC_BUILD_SHA: sha,
   },
 });
 if (r.status !== 0) fail('expo export failed');
 
-writeFileSync(path.join(out, '_redirects'), '/*  /index.html  200\n');
+writeFileSync(path.join(out, '_redirects'), `/*  ${base}/index.html  200\n`);
 copyFileSync(path.join(out, 'index.html'), path.join(out, '404.html'));
 writeFileSync(
   path.join(out, 'serve.json'),
-  JSON.stringify({ rewrites: [{ source: '**', destination: '/index.html' }] }, null, 2) + '\n',
+  JSON.stringify({ rewrites: [{ source: '**', destination: `${base}/index.html` }] }, null, 2) +
+    '\n',
 );
 writeFileSync(path.join(out, 'version.txt'), sha + '\n');
 console.log(
-  `\n✔ ${path.relative(process.cwd(), out)}/ (${sha}, API ${api})\n  Preview: npx serve ${path.relative(process.cwd(), out)}`,
+  `\n✔ ${path.relative(process.cwd(), out)}/ (${sha}, ${api ? 'API ' + api : 'API address from ' + config}${base ? ', served under ' + base : ''})`,
 );

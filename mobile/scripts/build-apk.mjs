@@ -1,13 +1,16 @@
 #!/usr/bin/env node
-// Local release APK, no EAS: `npm run apk -- --api https://api.example.com`
+// Local release APK, no EAS:
+//   npm run apk -- --config https://lolozianas.github.io/yallo/api.json   public demo: the app reads the API's
+//                                                         address from that file (one APK survives tunnel restarts)
+//   npm run apk -- --api https://api.example.com          the API pinned
 //
-// - The API URL is built into the app (EXPO_PUBLIC_API_URL), and the commit into the version shown in Profile.
+// - The API (EXPO_PUBLIC_API_URL or EXPO_PUBLIC_API_CONFIG_URL) and the commit (version in Profile) are built in.
 // - Signed with the release keystore OUTSIDE git, in ~/yallo-keys/ (override with YALLO_KEYS_DIR).
 //   `npm run apk -- --init-keystore` creates it once. Back that folder up: an APK signed with another key
 //   can't update one already installed.
 // - Output: apk/yallo-<version>-<sha>.apk (git-ignored).
 //
-// Options: --api <url> (required), --init-keystore, --allow-dirty (build with uncommitted changes).
+// Options: --api <url> | --config <url>, --init-keystore, --allow-dirty (build with uncommitted changes).
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
   copyFileSync,
@@ -104,11 +107,15 @@ if (flag('--init-keystore')) {
 }
 
 const api = option('--api')?.replace(/\/$/, '');
-if (!api || !/^https?:\/\//.test(api))
-  fail('Pass the API: npm run apk -- --api https://<api host>');
-if (!api.startsWith('https://'))
+const config = api ? undefined : option('--config');
+const target = api ?? config;
+if (!target || !/^https?:\/\//.test(target))
+  fail(
+    'Say where the API is: --config https://…/api.json (public demo), or --api https://<api host>',
+  );
+if (!target.startsWith('https://'))
   console.warn(
-    `⚠ ${api} isn't HTTPS: this APK allows plain HTTP. Fine for testing, not for sharing.`,
+    `⚠ ${target} isn't HTTPS: this APK allows plain HTTP. Fine for testing, not for sharing.`,
   );
 if (!existsSync(propsFile))
   fail(`No release keystore in ${keysDir}. Create it once with: npm run apk -- --init-keystore`);
@@ -127,7 +134,8 @@ const env = {
   NODE_ENV: 'production',
   YALLO_RELEASE_BUILD: 'apk', // a fresh Metro cache (metro.config.js)
   CI: '1', // no interactive prompts from expo prebuild
-  EXPO_PUBLIC_API_URL: api,
+  EXPO_PUBLIC_API_URL: api ?? '',
+  EXPO_PUBLIC_API_CONFIG_URL: config ?? '',
   EXPO_PUBLIC_BUILD_SHA: sha,
   YALLO_VERSION_CODE: versionCode,
   YALLO_KEYSTORE_PROPS: propsFile,
@@ -141,7 +149,9 @@ const run = (cmd, a, cwd = root) => {
 
 // Metro's cache doesn't notice a different EXPO_PUBLIC_API_URL: start this kind of build from an empty one.
 rmSync(path.join(root, '.expo', 'metro-cache-release', 'apk'), { recursive: true, force: true });
-console.log(`Building Yallo ${version} (${sha}), versionCode ${versionCode}, API ${api}`);
+console.log(
+  `Building Yallo ${version} (${sha}), versionCode ${versionCode}, ${api ? 'API ' + api : 'API address from ' + config}`,
+);
 // A clean prebuild so app.json / plugin changes always reach android/ (generated, git-ignored).
 run('npx', ['expo', 'prebuild', '--platform', 'android', '--clean', '--no-install']);
 run(

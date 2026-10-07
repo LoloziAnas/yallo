@@ -19,6 +19,8 @@ jest.mock('expo-router', () => ({
   },
 }));
 jest.mock('@/api/client', () => ({
+  getApiUrl: () => 'http://api.test',
+  onApiUrlChange: () => () => {},
   api: {
     setToken: jest.fn(),
     signOut: jest.fn(() => Promise.resolve()),

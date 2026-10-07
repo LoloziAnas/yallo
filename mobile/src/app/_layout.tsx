@@ -12,7 +12,7 @@ import {
 } from '@expo-google-fonts/ibm-plex-sans-arabic';
 import { Outfit_500Medium, Outfit_600SemiBold, Outfit_700Bold } from '@expo-google-fonts/outfit';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { type Href, router, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
 import { StatusBar } from 'expo-status-bar';
@@ -21,8 +21,10 @@ import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Toast } from '@/components/toast';
+import { restoreApiUrl } from '@/api/client';
 import { useApp, useHydrated } from '@/store/app-store';
 import { colors } from '@/theme';
+import { takeDeepLink } from '@/utils/restore-deep-link';
 
 SplashScreen.preventAutoHideAsync();
 // Window colour behind the edge-to-edge status and navigation bars.
@@ -61,9 +63,21 @@ export default function RootLayout() {
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();
   }, [ready]);
+  // Web on GitHub Pages: open the deep link the 404 redirect carried in ?p= (once the navigator is up).
+  useEffect(() => {
+    if (!ready) return;
+    const link = takeDeepLink();
+    if (link) router.replace(link as Href);
+  }, [ready]);
 
   // Live state from the shared mock API (orders, couriers, merchants), pushed every second.
-  useEffect(() => connectLive(), [connectLive, token]);
+  // Also when the API moves (a demo build found or restored its address).
+  const apiUrl = useApp((s) => s.apiUrl);
+  useEffect(() => connectLive(), [connectLive, token, apiUrl]);
+  // Demo builds: start from the last good API address if the address file can't be read.
+  useEffect(() => {
+    restoreApiUrl();
+  }, []);
   const notif = useApp((s) => s.notif);
   const setUpPush = useApp((s) => s.setUpPush);
   useEffect(() => {

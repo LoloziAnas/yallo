@@ -16,7 +16,7 @@ import { useSyncExternalStore } from 'react';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { api } from '@/api/client';
+import { api, getApiUrl, onApiUrlChange } from '@/api/client';
 import { zoneForDistrict } from '@/location/zones';
 import { type HelpTopic, helpTopics } from '@/data/help';
 import { locate } from '@/location/locate';
@@ -185,6 +185,8 @@ type State = {
   live: LiveState | null;
   /** Live feed connection; null until the first attempt finishes. */
   connected: boolean | null;
+  /** Where the API is now ('' until a demo build has found it; see api/client.ts). */
+  apiUrl: string;
   /** A GPS fix waiting for the customer to add the street (web, or no street from the geocoder). */
   locDraft: Omit<Address, 'id' | 'label'> | null;
   /** Drives the "can't reach Yallo" state on Home: set while the live feed is down. */
@@ -382,6 +384,7 @@ export const useApp = create<State & Actions>()(
       homeLoading: false,
       live: null,
       connected: null,
+      apiUrl: getApiUrl(),
       networkError: false,
       locDraft: null,
       notif: true,
@@ -855,3 +858,6 @@ export function useHydrated() {
 /** Current language's strings. */
 export const useT = () => strings[useApp((s) => s.lang)];
 export const useRtl = () => useApp((s) => s.lang === 'ar');
+
+// Track the API's address (the demo's moves when its tunnel restarts); app/_layout resubscribes on a change.
+onApiUrlChange((apiUrl) => useApp.setState({ apiUrl }));
