@@ -365,11 +365,10 @@ try {
     await cancel.first().click();
     await seen(p, 'Order cancelled');
     await waitForOrder(second, o => o.status === 'cancelled' && o.cancelledBy === 'customer', 'cancelled by the customer', 5000);
-    // Cancelled orders leave the live queue: find it on the Orders page (the ops session survives the reload).
+    // Cancelled orders leave the live queue: open the Orders page from the sidebar, as ops would.
     const ops = pages.ops;
-    await ops.goto(BACK_OFFICE + '/?page=orders');
-    await seen(ops, /^LIVE/);
-    await ops.locator('button.tr', { hasText: second }).click();
+    await ops.locator('.nav-btn', { hasText: 'Orders' }).click();
+    await ops.locator('button.tr', { hasText: second }).click({ timeout: 10_000 });
     await seen(ops.locator('.drawer'), 'Cancelled · Cancelled by customer');
   });
 } catch {
