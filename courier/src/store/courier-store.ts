@@ -309,7 +309,7 @@ export const useCourier = create<CourierState>()((set, get) => {
             area: o.custAddrShort.split(', ').pop() ?? 'Guéliz',
             earn: o.earn,
             time: clock ?? '18:42',
-            pickT: clock ?? '18:31',
+            pickT: o.pickedAt ?? clock ?? '18:31',
             date: 'Wed 30 Sep 2026',
             km: o.km,
             dur: o.min,

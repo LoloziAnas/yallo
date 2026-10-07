@@ -1,11 +1,5 @@
 // Follows the live feed: this courier's availability, offers, assigned job and position.
-import {
-  ACTIVE_STATUSES,
-  DEMO_START_MIN,
-  OFFER_SEC,
-  type LiveState,
-  type MapPoint,
-} from '@yallo/shared';
+import { ACTIVE_STATUSES, clockAt, OFFER_SEC, type LiveState, type MapPoint } from '@yallo/shared';
 import { useEffect } from 'react';
 
 import { COURIER_ID, api } from '@/api/client';
@@ -23,10 +17,6 @@ import {
 const ARRIVED_PCT = 0.4;
 
 const dist = (a: MapPoint, b: MapPoint) => Math.hypot(a.x - b.x, a.y - b.y);
-const clockAt = (t: number) => {
-  const min = DEMO_START_MIN + Math.floor(t / 60);
-  return `${String(Math.floor(min / 60) % 24).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
-};
 /**
  * 1 = heading to / at the store, 2 = carrying the order. A courier assigned early rides to the
  * store while the food is still being prepared, so every status before pickup is the store leg.

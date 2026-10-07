@@ -82,6 +82,11 @@ export function RequestOverlay() {
           <Txt size={15} color={muted} style={{ marginTop: 8 }}>
             {t('Order')} {order.id} · {t(order.storeKind)}
           </Txt>
+          {order.scheduledFor && (
+            <Txt size={15} weight={700} color={colors.accent300} style={{ marginTop: 2 }}>
+              {t(`Scheduled for ${order.scheduledFor}`)}
+            </Txt>
+          )}
         </View>
         <View
           style={{ width: 72, height: 72 }}

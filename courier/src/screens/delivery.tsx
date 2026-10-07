@@ -22,6 +22,7 @@ import {
   well,
 } from '@/components/ui';
 import { CHALLENGE_GOAL, DEMO_PIN, ROUTES, along, fmt } from '@/data/demo';
+import { mapsUrl, openUrl, smsUrl, telUrl } from '@/data/contact';
 import { etaMin } from '@/data/order-view';
 import { totals, useCourier, useT, useOrder } from '@/store/courier-store';
 import { colors, radius, shadow } from '@/theme';
@@ -111,14 +112,23 @@ function MapView() {
     : {
         kicker: 'Deliver to',
         name: t(order.custFull),
-        addr: order.custAddr + ', Guéliz',
+        addr: order.dropAddr,
         thirdLabel: 'Collect',
         third: order.cash ? order.cash + ' DH' : t('Paid online'),
         note: order.note,
         callLabel: `Call ${order.cust}`,
         call: `Calling ${order.cust}…`,
       };
-  const openExternal = () => showToast('Opening route in your navigation app');
+  // Real directions in the courier's navigation app, to the store or to the customer's GPS fix.
+  const openExternal = (app: 'google' | 'waze') => () => {
+    showToast('Opening route in your navigation app');
+    openUrl(mapsUrl(isPick ? order.navTo.store : order.navTo.customer, app));
+  };
+  // Calls really dial when the customer app sent a number; the store and demo orders stay simulated.
+  const callSheet = () => {
+    showToast(sheet.call);
+    if (!isPick && order.phone) openUrl(telUrl(order.phone));
+  };
 
   return (
     <Screen edgeToEdge bg={colors.neutral200}>
@@ -316,7 +326,7 @@ function MapView() {
                 fontSize={14}
                 height={52}
                 style={{ flex: 1 }}
-                onPress={() => showToast(sheet.call)}
+                onPress={callSheet}
               />
               <Btn
                 variant="secondary"
@@ -327,7 +337,7 @@ function MapView() {
                 fontSize={14}
                 height={52}
                 style={{ flex: 1 }}
-                onPress={openExternal}
+                onPress={openExternal('google')}
               />
               <Btn
                 variant="secondary"
@@ -372,7 +382,7 @@ function MapView() {
                 fontSize={16}
                 height={56}
                 style={{ flex: 1 }}
-                onPress={openExternal}
+                onPress={openExternal('waze')}
               />
               <Btn
                 variant="secondary"
@@ -639,7 +649,10 @@ function AtCustomer() {
             fontSize={16}
             height={64}
             style={{ flex: 1 }}
-            onPress={() => showToast(`Calling ${order.cust}…`)}
+            onPress={() => {
+              showToast(`Calling ${order.cust}…`);
+              if (order.phone) openUrl(telUrl(order.phone));
+            }}
           />
           <Btn
             variant="secondary"
@@ -649,7 +662,10 @@ function AtCustomer() {
             fontSize={16}
             height={64}
             style={{ flex: 1 }}
-            onPress={() => showToast("Message sent: “I'm outside”")}
+            onPress={() => {
+              showToast("Message sent: “I'm outside”");
+              if (order.phone) openUrl(smsUrl(order.phone, "I'm outside"));
+            }}
           />
         </View>
         <Btn

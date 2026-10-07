@@ -12,6 +12,7 @@ const PHR: [string, string, string][] = [
   ['+ {0} DH tip', '+ {0} DH de pourboire', '+ {0} درهم بقشيش'],
   ['Minimum fare', 'Tarif minimum', 'الحد الأدنى للأجرة'],
   ['Pharmacy', 'Pharmacie', 'صيدلية'],
+  ['Scheduled for {0}', 'Prévue pour {0}', 'مجدولة لـ {0}'],
   ['Groceries', 'Courses', 'بقالة'],
   // Added for the live API: arriving before the food is ready.
   [
