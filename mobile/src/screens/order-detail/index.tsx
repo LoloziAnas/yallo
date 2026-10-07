@@ -25,7 +25,7 @@ export function OrderDetail({ id }: { id: string }) {
   const reorder = useApp((s) => s.reorder);
   const order = orders.find((o) => o.id === id) ?? orders[0];
   if (!order) return <Screen>{null}</Screen>;
-  const addr = addresses.find((a) => a.id === order.addrId) ?? addresses[0];
+  const addr = addresses.find((a) => a.id === order.addrId) ?? addresses[0] ?? null;
 
   return (
     <Screen>
@@ -84,7 +84,7 @@ export function OrderDetail({ id }: { id: string }) {
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <Icon name="pin" size={15} color={colors.accent} />
           <Txt size={14} style={{ flex: 1 }}>
-            {order.place ?? `${addr.label} · ${addr.street}, ${addr.district}`}
+            {order.place ?? (addr ? `${addr.label} · ${addr.street}, ${addr.district}` : '')}
           </Txt>
         </View>
         <Txt label style={{ marginTop: 20, marginBottom: 8 }}>

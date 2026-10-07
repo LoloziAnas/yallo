@@ -10,7 +10,7 @@ import { Icon, type IconName } from '@/components/icon';
 import { Screen } from '@/components/screen';
 import { Txt } from '@/components/txt';
 import { categories } from '@/data/catalog';
-import { useApp, useT } from '@/store/app-store';
+import { useApp, useT, selectAddress } from '@/store/app-store';
 import { categoryIcon, fastStores, popularStores, recommendedStores, totals } from '@/store/derive';
 import { colors, radius, shadow } from '@/theme';
 
@@ -33,7 +33,7 @@ export function Home() {
 
 function Header() {
   const t = useT();
-  const addr = useApp((s) => s.addresses.find((a) => a.id === s.addrId) ?? s.addresses[0]);
+  const addr = useApp(selectAddress);
   const count = useApp((s) => totals(s.cart, s.promo).count);
   return (
     <View
@@ -49,7 +49,7 @@ function Header() {
         <Pressable
           onPress={() => router.push('/address')}
           accessibilityRole="button"
-          accessibilityLabel={`${t.deliverTo} ${addr.label}`}
+          accessibilityLabel={addr ? `${t.deliverTo} ${addr.label}` : t.setAddress}
           style={{
             flex: 1,
             minWidth: 0,
@@ -65,7 +65,7 @@ function Header() {
             </Txt>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Txt heading size={19} lh={1.25} numberOfLines={1} style={{ flexShrink: 1 }}>
-                {`${addr.label} · ${addr.street}`}
+                {addr ? `${addr.label} · ${addr.street}` : t.setAddress}
               </Txt>
               <Icon name="down" size={15} />
             </View>

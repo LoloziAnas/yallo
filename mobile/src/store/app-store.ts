@@ -31,6 +31,7 @@ import {
   type Order,
   type PayMethod,
   productById,
+  DEMO_DATA,
   seedAddresses,
   seedOrders,
   type Selection,
@@ -248,6 +249,10 @@ export function isOurOrder(o: ApiOrder, a: ActiveOrder) {
   return o.id === a.id && o.merchantId === a.storeId && o.total === a.total;
 }
 
+/** The chosen delivery address (or the first saved one); null before any is saved. */
+export const selectAddress = (s: Pick<State, 'addresses' | 'addrId'>): Address | null =>
+  s.addresses.find((a) => a.id === s.addrId) ?? s.addresses[0] ?? null;
+
 /** Max lengths the API accepts. */
 const MAX_LINES = 50;
 const MAX_FIELD = 120;
@@ -293,19 +298,19 @@ const userDefaults = () => ({
   phone: null as string | null,
   token: null as string | null,
   userName: null as string | null,
-  addresses: seedAddresses,
-  addrId: 'a1',
+  addresses: DEMO_DATA ? seedAddresses : [],
+  addrId: DEMO_DATA ? 'a1' : '',
   cart: { storeId: null, lines: [] },
-  favStores: ['m1', 'm6', 'm3'],
-  favProducts: ['p4-1', 'p1-2', 'p7-2'],
-  recent: ['Tajine', 'Paracetamol', 'Msemen'],
+  favStores: DEMO_DATA ? ['m1', 'm6', 'm3'] : [],
+  favProducts: DEMO_DATA ? ['p4-1', 'p1-2', 'p7-2'] : [],
+  recent: DEMO_DATA ? ['Tajine', 'Paracetamol', 'Msemen'] : [],
   promoInput: '',
   promo: null,
   promoMsg: '' as const,
   pay: 'cash' as const,
   active: null,
   rating: 0,
-  orders: seedOrders,
+  orders: DEMO_DATA ? seedOrders : [],
   tickets: [] as string[],
   epoch: null as string | null,
 });
@@ -505,7 +510,12 @@ export const useApp = create<State & Actions>()(
           return;
         }
         const store = storeById[s.cart.storeId];
-        const addr = s.addresses.find((a) => a.id === s.addrId) ?? s.addresses[0];
+        const addr = selectAddress(s);
+        if (!addr) {
+          s.showToast(t().setAddress);
+          router.push('/address');
+          return;
+        }
         const body: PlaceOrderBody = {
           merchantId: store.id,
           customerName: customerName(s),

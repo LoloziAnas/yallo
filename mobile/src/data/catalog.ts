@@ -160,6 +160,12 @@ export const legacyStoreIds: Record<string, string> = {
   s10: 'm5',
 };
 
+/**
+ * Sample addresses, favourites and receipts that make a fresh install look lived-in. Only in development
+ * or a build made with EXPO_PUBLIC_DEMO=1; release builds start empty.
+ */
+export const DEMO_DATA = __DEV__ || process.env.EXPO_PUBLIC_DEMO === '1';
+
 export const seedAddresses: Address[] = [
   {
     id: 'a1',

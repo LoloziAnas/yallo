@@ -9,7 +9,12 @@ npm install
 npx expo start          # then press a (Android) or i (iOS), or scan the QR code with Expo Go
 ```
 
-Everything runs in Expo Go. The catalogue, addresses and past orders are demo data in `src/data/catalog.ts`.
+Everything runs in Expo Go, except push notifications, which need a development or store build.
+`npm test` runs the unit tests (jest-expo).
+
+The catalogue (stores m1–m10, products, options) comes from `@yallo/shared`. In development (or a build
+with `EXPO_PUBLIC_DEMO=1`), a fresh install also gets sample addresses, favourites and three receipts
+(`src/data/catalog.ts`); release builds start empty.
 
 ## Shared mock API
 
@@ -19,17 +24,26 @@ Orders go to the shared Yallo mock API (`../api`, contract in `@yallo/shared`). 
 cd ../api && npm start        # port 5190
 ```
 
-- **Placing an order** sends it to `POST /api/orders`, so it shows up in the back office straight away. It
-  carries the delivery fee, the service fee, the promo discount and the promo code, and the API's total
-  matches the app's.
+- **Sign-in** is by phone and SMS code (`/api/auth/otp`, then `/api/auth/verify`; the dev server's code is
+  `123456`). Guests can browse, but placing an order, Help and history need an account, so "Place order"
+  goes to sign-in first, then on to checkout. The session token is saved; when the API refuses it (expired),
+  the app goes back to guest and asks again.
+- **Placing an order** sends catalogue lines (`productId`, options) and the promo code to `POST /api/orders`;
+  the API prices them, and its receipt is what the app shows.
+- **Tracking** shows the delivery PIN the rider asks for at the door, lets the customer cancel until the store
+  accepts, chats with the rider on the order's thread, and sends the rating (stars and a comment) once delivered.
+- **History:** after sign-in, delivered orders and support tickets come from `/api/me/history`, so they survive
+  a reinstall.
+- **Notifications:** signed-in customers with notifications on register an Expo push token (needs an EAS
+  project id; Expo Go has none). Without one, the app shows a local notification when the order moves to a
+  new step while it's in the background. In Expo Go on Android, expo-notifications can't load, so there are none.
 - **Tracking** follows the live feed (`/api/live`): real status, the assigned courier and their position.
   The shared lifecycle is grouped into the design's five steps (`customerStep()` in `src/store/derive.ts`).
   A stand-in merchant accepts after 20 s and has the order ready at 60 s. After that, ops (back office) or the
   courier app assigns a rider and moves the order on.
 - **Connection:** Home shows the design's "Can't reach Yallo" state while the live feed is down, and
   recovers by itself once it's back.
-- **Stores:** until one restaurant list is chosen, each store in this app sends its orders to a shared
-  merchant (m1–m9). The mapping is in `src/data/api-merchants.ts`.
+- **Stores** show as closed outside their hours and when ops pause them in the back office.
 
 The app finds the API on the machine serving the JS bundle (`src/api/client.ts`):
 
@@ -37,11 +51,17 @@ The app finds the API on the machine serving the JS bundle (`src/api/client.ts`)
 - **Android emulator with `--localhost`:** run `adb reverse tcp:5190 tcp:5190`.
 - **Anywhere else:** set `EXPO_PUBLIC_API_URL=http://<host>:5190`.
 
+## Builds
+
+`eas.json` has `development` (dev client), `preview` (internal APK) and `production` profiles. Each reads
+`EXPO_PUBLIC_API_URL` from its EAS environment; `app.config.ts` refuses a preview or production build without it,
+and allows plain HTTP only when that URL isn't HTTPS. App ids: `ma.yallo.app` (iOS and Android).
+
 ## What's in it
 
-Onboarding, phone/OTP sign-in (any 4 digits work), Home, Search with filters and sort, store menus,
+Onboarding, phone/SMS-code sign-in, Home, Search with filters and sort, store menus,
 product options, cart with promo codes (`MARHABA` −30% up to 40 DH, `LIVRAISON` free delivery),
-checkout, live order tracking with rider chat, orders and order details, favorites, and profile.
+checkout, live order tracking with the delivery PIN, cancel, rider chat and rating, orders and order details, favorites, and profile.
 The app is in English, French and Arabic, and Arabic switches the layout to right-to-left instantly.
 
 ## Layout
@@ -53,7 +73,8 @@ The app is in English, French and Arabic, and Arabic switches the layout to righ
 | `src/components/` | Shared UI: `Txt`, `Button`, `Sheet`, `Segmented`, `RadioRow`, `TextField`, `Photo`, `CartBar`, `TabBar`… |
 | `src/store/app-store.ts` | App state and actions (zustand), ported from the design's logic. |
 | `src/store/derive.ts` | Pure helpers: prices, totals, search, tracking timeline. |
-| `src/data/` | Demo catalogue and UI strings (en/fr/ar). |
+| `src/data/` | Catalogue adapter over `@yallo/shared`, demo data and UI strings (en/fr/ar). |
+| `src/notifications/` | Push registration and local order alerts. |
 | `src/theme.ts` | Zanqa design tokens: colours, radii, shadows, fonts. |
 
 ## Notes

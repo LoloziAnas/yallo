@@ -13,7 +13,7 @@ import { SumRows } from '@/components/sum-rows';
 import { TextField } from '@/components/text-field';
 import { Txt } from '@/components/txt';
 import { type PayMethod, productById } from '@/data/catalog';
-import { useApp, useT } from '@/store/app-store';
+import { useApp, useT, selectAddress } from '@/store/app-store';
 import { clock, demoClock, fmt, SCHEDULE_SLOTS, sumRows, totals } from '@/store/derive';
 import { colors, radius, shadow } from '@/theme';
 
@@ -27,13 +27,13 @@ export function CheckoutScreen() {
   const [openedAt] = useState(() => Date.now());
   const tt = totals(s.cart, s.promo);
   const cs = tt.store;
-  const addr = s.addresses.find((a) => a.id === s.addrId) ?? s.addresses[0];
+  const addr = selectAddress(s);
 
   const etaBig = cs ? (s.when === 'now' ? `${cs.tMin}–${cs.tMax} min` : slots[s.slot]) : '';
   const arriveText = cs
     ? s.when === 'now'
       ? `${t.arriveAround} ${s.live ? demoClock(s.live.t + cs.tMax * 60) : clock(openedAt + cs.tMax * 60000)}`
-      : `${t.schedule} · ${addr.district}`
+      : `${t.schedule}${addr ? ' · ' + addr.district : ''}`
     : '';
   const instrOptions = [t.q2, t.q1, 'Leave with the gardien', t.q3];
   // Cash on delivery only for now; card payments come later.
@@ -117,22 +117,22 @@ export function CheckoutScreen() {
             }}>
             <Icon name="pin" color={colors.accent} />
             <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-              <Txt w={600}>{addr.label}</Txt>
-              <Txt size={14}>{`${addr.street}, ${addr.district}, ${addr.city}`}</Txt>
-              {!!addr.building && (
+              <Txt w={600}>{addr ? addr.label : t.setAddress}</Txt>
+              {addr && <Txt size={14}>{`${addr.street}, ${addr.district}, ${addr.city}`}</Txt>}
+              {!!addr?.building && (
                 <Txt size={13} color={colors.neutral700}>
                   {addr.building}
                 </Txt>
               )}
-              {!!addr.landmark && (
+              {!!addr?.landmark && (
                 <Txt size={13} color={colors.neutral700}>
-                  {`${t.landmark}: ${addr.landmark}`}
+                  {`${t.landmark}: ${addr!.landmark}`}
                 </Txt>
               )}
             </View>
             <Button
               variant="ghost"
-              label={t.change}
+              label={addr ? t.change : t.addNew}
               fontSize={14}
               onPress={() => router.push('/address')}
               style={{ alignSelf: 'flex-start' }}
@@ -209,7 +209,7 @@ export function CheckoutScreen() {
             borderTopColor: colors.divider,
           }}>
           <Button
-            disabled={s.placing || !cs}
+            disabled={s.placing || !cs || !addr}
             label={s.placing ? t.placing : `${t.confirm} · ${fmt(tt.total)}`}
             fontSize={18}
             onPress={s.placeOrder}
