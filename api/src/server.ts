@@ -40,6 +40,13 @@ const orderCustomer: Rule = (c, [n], _, s) => {
   const o = s.state.orders.find(o => o.id === '#' + n);
   return (c.user?.role === 'customer' && (!o || o.customerId === c.user.id)) || 'Only the customer who placed the order can do this';
 };
+/** The order's customer, its assigned courier, or ops. */
+const orderParty: Rule = (c, [n], _, s) => {
+  if (isOps(c)) return true;
+  const o = s.state.orders.find(o => o.id === '#' + n);
+  if (!o) return true;
+  return isCourier(c, o.courierId) || (c.user?.role === 'customer' && o.customerId === c.user.id) || "Only this order's customer or courier can write here";
+};
 /** The courier in the path, acting on themself. */
 const selfCourier: Rule = (c, [id]) => isOps(c) || isCourier(c, id) || 'Couriers can only do this for themselves';
 /** Ops, or the ticket's requester writing as the requester. */
@@ -73,6 +80,7 @@ const ROUTES: [string, RegExp, Rule, Handler][] = [
   ['POST', /^\/api\/orders\/(\d+)\/cancel$/, ops, (s, [id], b) => (s.cancelOrder(id, b?.reason, !!b?.compensateCourier), s.state)],
   ['POST', /^\/api\/orders\/(\d+)\/cancel-by-customer$/, orderCustomer, (s, [id], _, ctx) => (s.cancelOrderAsCustomer(id, ctx.user), s.state)],
   ['POST', /^\/api\/orders\/(\d+)\/rating$/, orderCustomer, (s, [id], b, ctx) => (s.rateOrder(id, b?.stars, b?.comment, ctx.user), s.state)],
+  ['POST', /^\/api\/orders\/(\d+)\/messages$/, orderParty, (s, [id], b, ctx) => (s.sendOrderMessage(id, b?.text, ctx.user, ctx.enforce ? undefined : b?.from), s.state)],
   ['GET', /^\/api\/me\/history$/, signedIn, (s, _, __, ctx) => s.customerHistory(ctx.user)],
   ['POST', /^\/api\/orders\/(\d+)\/refund$/, ops, (s, [id], b) => (s.refundOrder(id, b?.amount, b?.reason), s.state)],
   ['POST', /^\/api\/merchants\/([\w-]+)\/open$/, ops, (s, [id], b) => (s.setMerchantOpen(id, b?.open), s.state)],
@@ -219,6 +227,13 @@ export function notifications(store: Store, e: StoreEvent): PushMessage[] {
   const shop = store.state.merchants.find(m => m.id === o.merchantId)?.name ?? 'the store';
   const rider = store.state.couriers.find(c => c.id === o.courierId)?.name.split(' ')[0] ?? 'Your rider';
   const to = (tokens: string[], title: string, body: string) => tokens.map(t => ({ to: t, title, body, data: { orderId: o.id, type: e.type } }));
+  if (e.type === 'chat') {
+    const m = e.message, title = 'Message from ' + m.author;
+    return [
+      ...(m.from !== 'courier' && o.courierId ? to(store.pushTokensFor('courier', o.courierId), title, m.text) : []),
+      ...(m.from !== 'customer' && o.customerId ? to(store.pushTokensFor('customer', o.customerId), title, m.text) : []),
+    ];
+  }
   if (e.type === 'offer') {
     const pay = o.courierPay !== undefined ? ` · ${o.courierPay} DH` : '';
     return to(store.pushTokensFor('courier', e.courierId), 'New delivery', `${o.id} · ${shop}${pay}. Accept within 15 s`);

@@ -109,6 +109,18 @@ function OrderDetail({ v }) {
           </div>
         </div>
 
+        {od.chat.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <h6 className="label">Customer ↔ courier chat</h6>
+            {od.chat.map((m, i) => (
+              <div key={i} style={{ alignSelf: m.from === 'customer' ? 'flex-start' : 'flex-end', maxWidth: '85%', padding: '6px 10px', borderRadius: 12, fontSize: 13,
+                background: m.from === 'customer' ? 'var(--color-surface)' : m.from === 'courier' ? 'var(--color-accent-2-100)' : 'var(--color-accent-100)' }}>
+                <div>{m.text}</div>
+                <div className="faint" style={{ fontSize: 11 }}>{m.author} · {m.at}</div>
+              </div>
+            ))}
+          </div>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <h6 className="label">Items</h6>
           {od.items.map(it => (

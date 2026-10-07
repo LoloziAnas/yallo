@@ -145,6 +145,14 @@ export type Courier = {
   onlineSince?: number;
 };
 
+export type OrderMessage = {
+  from: 'customer' | 'courier' | 'ops';
+  author: string;
+  text: string;
+  /** Demo clock, "HH:MM". */
+  at: string;
+};
+
 export type OrderItem = {
   qty: number;
   /** Product name with the chosen options, e.g. "Chicken tajine, preserved lemon & olives (For 1)". */
@@ -211,6 +219,8 @@ export type Order = {
   customerPhone?: string;
   /** The signed-in customer who placed the order (absent for guest orders). */
   customerId?: string;
+  /** Messages between the customer and the courier about this delivery (ops can read and write too). */
+  chat?: OrderMessage[];
   /** The customer's rating after delivery: it feeds the store's and the courier's ratings. */
   rating?: { stars: number; comment?: string; at: number };
   /** Local time the order was placed, "HH:MM". */

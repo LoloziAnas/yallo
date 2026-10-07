@@ -278,6 +278,12 @@ export function createYalloClient(baseUrl: string, opts: { token?: string } = {}
     cancelOrderAsCustomer: (orderId: string) => post(`/orders/${orderPath(orderId)}/cancel-by-customer`),
     /** The customer rates a delivered order once (1–5 stars, optional comment); it feeds the store's and courier's ratings. */
     rateOrder: (orderId: string, stars: number, comment?: string) => post(`/orders/${orderPath(orderId)}/rating`, { stars, ...(comment ? { comment } : {}) }),
+    /**
+     * Sends a chat message on an active order: from the signed-in customer, assigned courier or ops. Without a sign-in
+     * (warn mode only) say who you are with `from`.
+     */
+    sendOrderMessage: (orderId: string, text: string, from?: 'customer' | 'courier') =>
+      post(`/orders/${orderPath(orderId)}/messages`, { text, ...(from ? { from } : {}) }),
     /** The signed-in customer's orders (newest first) and tickets: their history, kept with the account. */
     myHistory: () => call<CustomerHistory>('GET', '/me/history'),
     refundOrder: (orderId: string, amount: number, reason: string) => post(`/orders/${orderPath(orderId)}/refund`, { amount, reason }),

@@ -117,6 +117,8 @@ back office deploy with `deploy/prepare.sh` (builds the commit into `.deploy/<sh
     and `GET /api/me/history` → `{ orders, tickets }` for the signed-in customer (survives a reinstall).
   - Ratings: `/api/orders/:n/rating {stars 1–5, comment?}` by the order's customer, once, after delivery. It folds into
     the store's (`rating`/`reviewCount`) and courier's (`rating`/`ratingCount`) averages; the order keeps `rating`.
+  - Order chat: `/api/orders/:n/messages {text}` from the order's customer, assigned courier or ops, while the order is
+    active. Messages are on `order.chat` ({ from, author, text, at }) and push to the other side.
   - `/api/merchants/:id/open {open}`, `/api/couriers/:id/suspend {suspended}`,
     `/api/couriers/:id/availability {status: 'idle'|'off'}`, `/api/reset`.
 - Use `createYalloClient(url)` rather than calling these by hand. The back office uses `''`, because Vite

@@ -5,7 +5,7 @@ import { dirname } from 'node:path';
 import {
   ACTIVE_STATUSES, DEMO_START_MIN, APPLICATIONS, OPS_STAFF, DEV_TOKENS, GPS_STALE_SEC, geoToMap, PAYOUTS, COURIERS, courierEarnings, normalizePhone as normPhone, requiredDocs, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, MERCHANTS, clockAt, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
   type ApiCourier, type ApiOrder, type LiveState, type OpenTicketBody, type OrderStatus, type PlaceOrderBody, type Ticket, type TicketPriority,
-  type TicketSource, type ZoneName, type ApplyBody, type ApplicationStatus, type CourierApplication, type DocKey, type Vehicle, type AuthRole, type AuthSession, type AuthUser, DEV_OTP_CODE, normalizePhone, type OrderItem, type OrderLineInput, type Quote, PricingError, quoteOrder, storeAvailability,
+  type TicketSource, type ZoneName, type OrderMessage, type ApplyBody, type ApplicationStatus, type CourierApplication, type DocKey, type Vehicle, type AuthRole, type AuthSession, type AuthUser, DEV_OTP_CODE, normalizePhone, type OrderItem, type OrderLineInput, type Quote, PricingError, quoteOrder, storeAvailability,
 } from '@yallo/shared';
 
 /** A rejected action. The server turns it into a 4xx with this message. */
@@ -101,6 +101,7 @@ export const STATE_VERSION = 6;
 /** Things worth telling someone about, e.g. with a push notification. */
 export type StoreEvent =
   | { type: 'offer'; order: ApiOrder; courierId: string }
+  | { type: 'chat'; order: ApiOrder; message: OrderMessage }
   | { type: 'status'; order: ApiOrder; status: OrderStatus };
 /** Accounts and sessions: saved with the state but never broadcast. */
 type AuthData = {
@@ -949,6 +950,30 @@ export class Store {
       c.rating = fold(c.rating, c.ratingCount ?? 0);
       c.ratingCount = (c.ratingCount ?? 0) + 1;
     }
+    this.changed();
+  }
+
+  /**
+   * A chat message on an active order. `from` is the sender's side: the signed-in user's role decides it; without
+   * a sign-in (warn mode) the caller says.
+   */
+  sendOrderMessage(orderId: string, text: string, by?: AuthUser, claimedFrom?: 'customer' | 'courier') {
+    const o = this.order(orderId);
+    if (!isActive(o.status)) throw new ActionError(`${o.id} is ${o.status}: the chat is closed`, 409);
+    const body = cleanText(text, 'text');
+    if (body.length > 500) throw new ActionError('text is too long (max 500 characters)');
+    let from: OrderMessage['from'], author: string;
+    if (by?.role === 'ops') { from = 'ops'; author = (by.name ?? 'Yallo').split(' ')[0] + ' (Yallo)'; }
+    else if (by?.role === 'courier' || (!by && claimedFrom === 'courier')) {
+      const c = o.courierId ? this.s.couriers.find(c => c.id === o.courierId) : undefined;
+      if (!c) throw new ActionError(o.id + ' has no courier yet', 409);
+      from = 'courier'; author = c.name.split(' ')[0];
+    } else if (by?.role === 'customer' || (!by && claimedFrom === 'customer')) {
+      from = 'customer'; author = (by?.name || o.customerName).split(' ')[0];
+    } else throw new ActionError("Say who is writing: from 'customer' or 'courier'");
+    const message: OrderMessage = { from, author, text: body, at: clockAt(this.s.t) };
+    (o.chat ??= []).push(message);
+    this.emit({ type: 'chat', order: o, message });
     this.changed();
   }
 }

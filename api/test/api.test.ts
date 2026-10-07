@@ -822,6 +822,16 @@ describe('Authorization (enforce mode)', () => {
     assert.equal((await raw('GET', '/me/history')).status, 401);
   });
 
+  test('only the order\'s customer, its courier or ops write in its chat', async () => {
+    const o = await as(DEV_TOKENS.customer).placeOrder(tajine);
+    await as(DEV_TOKENS.ops).assignCourier(o.id, 'c3');
+    const path = `/orders/${o.id.slice(1)}/messages`;
+    assert.equal((await raw('POST', path, DEV_TOKENS.courier('c2'), { text: 'Hi' })).status, 403);
+    assert.equal((await raw('POST', path, DEV_TOKENS.courier('c3'), { text: 'On my way' })).status, 200);
+    assert.equal((await raw('POST', path, DEV_TOKENS.customer, { text: 'Thanks' })).status, 200);
+    assert.equal((await as(DEV_TOKENS.customer).getState()).orders[0].chat!.length, 2);
+  });
+
   test('only the courier themself (or ops) posts their location', async () => {
     assert.equal((await raw('POST', '/couriers/c1/location', DEV_TOKENS.courier('c2'), { lat: 31.63, lon: -8.0 })).status, 403);
     assert.equal((await raw('POST', '/couriers/c1/location', DEV_TOKENS.courier('c1'), { lat: 31.63, lon: -8.0 })).status, 200);
@@ -1090,5 +1100,49 @@ describe('Ratings', () => {
     assert.throws(() => s.rateOrder(o.id, 5, undefined, { ...amal, id: 'u8' }), /not your order/);
     s.rateOrder(o.id, 5, undefined, amal);
     assert.throws(() => s.rateOrder(o.id, 5, undefined, amal), /already rated/);
+  });
+});
+
+describe('Order chat', () => {
+  const amal = { id: 'u7', role: 'customer' as const, phone: '+212600000007', name: 'Amal Idrissi' };
+  const salma = { id: 'c3', role: 'courier' as const, phone: '+212670442109', name: 'Salma Bennani', courierId: 'c3' };
+  const leila = { id: 'o1', role: 'ops' as const, phone: '+212661001001', name: 'Leila Amrani', title: 'Ops lead' };
+  const setup = () => {
+    const s = new Store();
+    const o = s.placeOrder({ merchantId: 'm1', customerName: 'Amal Idrissi', zone: 'Guéliz', pay: 'cash', items: [{ productId: 'p1-6', qty: 1 }] }, amal);
+    s.assignCourier(o.id, 'c3');
+    return { s, o: order(s, o.id) };
+  };
+
+  test('customer, courier and ops write on the order, signed by first name', () => {
+    const { s, o } = setup();
+    s.sendOrderMessage(o.id, 'Blue door, 2nd floor', amal);
+    s.sendOrderMessage(o.id, "I'm outside", salma);
+    s.sendOrderMessage(o.id, 'Your rider is 2 min away', leila);
+    assert.deepEqual(o.chat!.map(m => [m.from, m.author, m.text]), [
+      ['customer', 'Amal', 'Blue door, 2nd floor'], ['courier', 'Salma', "I'm outside"], ['ops', 'Leila (Yallo)', 'Your rider is 2 min away']]);
+    assert.equal(o.chat![0].at, '18:34');
+  });
+
+  test('the chat closes with the order, and refuses empty or overlong text', () => {
+    const { s, o } = setup();
+    assert.throws(() => s.sendOrderMessage(o.id, '  ', amal), /text is required/);
+    assert.throws(() => s.sendOrderMessage(o.id, 'x'.repeat(501), amal), /too long/);
+    s.cancelOrder(o.id, 'Customer request', false);
+    assert.throws(() => s.sendOrderMessage(o.id, 'Hello?', amal), /cancelled: the chat is closed/);
+  });
+
+  test('each message pushes to the other side', () => {
+    const { s, o } = setup();
+    const sent: PushMessage[] = [];
+    s.onEvent(e => { if (e.type === 'chat') sent.push(...notifications(s, e)); });
+    s.registerPushToken('courier', 'c3', 'ExponentPushToken[rider]');
+    s.registerPushToken('customer', 'u7', 'ExponentPushToken[cust]');
+    s.sendOrderMessage(o.id, 'Blue door', amal);
+    s.sendOrderMessage(o.id, "I'm outside", salma);
+    assert.deepEqual(sent.map(m => [m.to, m.title, m.body]), [
+      ['ExponentPushToken[rider]', 'Message from Amal', 'Blue door'],
+      ['ExponentPushToken[cust]', 'Message from Salma', "I'm outside"],
+    ]);
   });
 });
