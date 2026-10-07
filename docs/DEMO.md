@@ -19,11 +19,11 @@ SMS, no real stores.
 
 ## Signing in
 
-There's no SMS on the demo: **every code is 123456**.
+There's no SMS on the demo: **every code is 123456**, and the apps say so on the code screen.
 
 | Who | Phone number | Notes |
 |---|---|---|
-| Customer | any mobile number, e.g. 0612 34 56 78 | an account is created on first sign-in |
+| Customer | any mobile number, e.g. 6 12 34 56 78 (the app adds +212; 06 12 34 56 78 works too) | browse as a guest; placing an order asks you to sign in, then goes straight on to checkout. An account is created on first sign-in |
 | Courier tester 1 | 0600 00 00 01 | Adam Benjelloun, motorcycle |
 | Courier tester 2 | 0600 00 00 02 | Nora El Fassi, motorcycle |
 | Courier tester 3 | 0600 00 00 03 | Rayan Ouazzani, bicycle |
@@ -37,11 +37,12 @@ Give each courier tester their own number: two people on one courier would take 
 
 ## What to try
 
-**As a customer.** Pick a store, add a dish, place the order (cash on delivery). Then watch it move along: the store
-accepts within about 20 seconds and has it ready about a minute after ordering. A courier is offered the job, rides
-to the store, picks it up and comes to you on the map. Show the courier your 4-digit delivery PIN. You can chat with
-the courier, and rate the order once it's delivered. You can also cancel while the store hasn't accepted yet, and open
-a support ticket.
+**As a customer.** On first run the app asks for your location to fill in the address (on iPhone, Safari asks for
+permission); if you refuse, type the address. Pick a store, add a dish, place the order (cash on delivery). Then watch
+it move along: the store accepts within about 20 seconds and has it ready about a minute after ordering. A courier is
+offered the job, rides to the store, picks it up and comes to you on the map. Show the courier your 4-digit delivery
+PIN. Once a courier is assigned, a Chat button appears on the rider card. Rate the order once it's delivered. To try
+cancelling, do it within the first 20 seconds or so, before the store accepts. You can also open a support ticket.
 
 **As a courier.** Sign in with your tester number and go online. You're in Guéliz, close to most stores. When a
 customer orders nearby you get a job offer: you have 15 seconds to accept. Then ride to the store, confirm pickup,
@@ -80,7 +81,11 @@ number and code 123456.
   a reset clears everyone's orders.
 - **No real SMS, payments or bank transfers.** Codes are always 123456. Payment is cash on delivery and only recorded,
   and payout approval is recorded but sends no money.
-- **No push notifications** on the demo (they are logged only).
+- **No push notifications** on the demo (they are logged only). The Android customer app still shows its own status
+  notifications ("Preparing · Dar Zitoun", "On the way"…) while in the background; the web and iPhone versions show
+  none.
+- **Installing an APK:** Android must allow "Install unknown apps" for the browser or Files app. The build is shown at
+  the bottom of Profile ("YALLO 1.0.0 (sha)"), so you can tell which version someone has.
 - **Not for real data.** It's a public demo server: anyone with the links can sign in, including as ops.
 
 ---
@@ -111,7 +116,9 @@ number and code 123456.
    `https://<api>/api/health` every 10 minutes. Render's free plan gives 750 hours a month, enough for one service
    awake around the clock.
 5. **Android APKs.** These are built locally with the API's URL. Customer: `cd mobile && npm run apk -- --api
-   https://<api>`. Courier: see `courier/README.md`.
+   https://<api>`. It is signed with `~/yallo-keys/yallo-customer.jks`, which is outside git: back it up, because
+   updates must be signed with the same key. Its fingerprint is in `~/yallo-keys/yallo-customer.README.txt`.
+   Courier: see `courier/README.md`.
 
 ### Day to day
 
