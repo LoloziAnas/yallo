@@ -12,8 +12,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     throw new Error(`EXPO_PUBLIC_API_URL must be set in the EAS "${profile}" environment`);
   }
   const cleartext = !api.startsWith('https://');
+  // Local APKs (scripts/build-apk.mjs) number their builds by commit count, so a newer APK installs over an older one.
+  const versionCode = Number(process.env.YALLO_VERSION_CODE) || undefined;
   return {
     ...(config as ExpoConfig),
+    android: { ...config.android, ...(versionCode ? { versionCode } : {}) },
     ios: {
       ...config.ios,
       infoPlist: {
@@ -24,6 +27,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     plugins: [
       ...(config.plugins ?? []),
       ['expo-build-properties', { android: { usesCleartextTraffic: cleartext } }],
+      './plugins/release-signing',
     ],
   };
 };

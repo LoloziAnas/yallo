@@ -5,6 +5,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { useIsStoreOpen } from '@/hooks/use-store-status';
 import { Button, IconButton } from '@/components/button';
 import { CartBar } from '@/components/cart-bar';
+import { ConnectingBanner } from '@/components/connecting-banner';
 import { EmptyState } from '@/components/empty-state';
 import { Icon, type IconName } from '@/components/icon';
 import { Screen } from '@/components/screen';
@@ -24,7 +25,16 @@ export function Home() {
     <Screen>
       <Header />
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-        {loading ? <Skeleton /> : networkError ? <Offline /> : <Feed />}
+        {loading ? (
+          <Skeleton />
+        ) : networkError ? (
+          <Offline />
+        ) : (
+          <>
+            <ConnectingBanner />
+            <Feed />
+          </>
+        )}
       </ScrollView>
       <CartBar />
     </Screen>

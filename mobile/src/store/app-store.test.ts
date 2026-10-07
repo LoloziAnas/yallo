@@ -221,3 +221,37 @@ describe('active order', () => {
     expect(mocked.rateOrder).not.toHaveBeenCalled();
   });
 });
+
+describe('cold start', () => {
+  const connect = () => {
+    s().connectLive();
+    const onStatus = mocked.subscribe.mock.calls.at(-1)![1] as (up: boolean) => void;
+    return onStatus;
+  };
+
+  it('stays "connecting" while a sleeping API wakes up, then shows the error', () => {
+    const onStatus = connect();
+    onStatus(false);
+    jest.advanceTimersByTime(60_000);
+    expect(s().networkError).toBe(false);
+    jest.advanceTimersByTime(31_000);
+    expect(s().networkError).toBe(true);
+    onStatus(true);
+    expect(s().networkError).toBe(false);
+  });
+
+  it('lets an action wait for the API instead of failing', async () => {
+    const onStatus = connect();
+    const up = s().awaitApi();
+    jest.advanceTimersByTime(50_000);
+    onStatus(true);
+    await expect(up).resolves.toBe(true);
+  });
+
+  it('gives up after the wake window', async () => {
+    connect();
+    const up = s().awaitApi();
+    jest.advanceTimersByTime(91_000);
+    await expect(up).resolves.toBe(false);
+  });
+});

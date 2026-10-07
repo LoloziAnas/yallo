@@ -25,6 +25,9 @@ export function SignIn({ mode = 'onboarding' }: { mode?: 'onboarding' | 'login' 
   const enterApp = useApp((s) => s.enterApp);
   const signIn = useApp((s) => s.signIn);
   const showToast = useApp((s) => s.showToast);
+  const awaitApi = useApp((s) => s.awaitApi);
+  // Waiting for a sleeping API host to wake up before sending the code.
+  const [waking, setWaking] = useState(false);
   const bottom = useBottomPad(34);
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phone, setPhone] = useState('');
@@ -42,6 +45,16 @@ export function SignIn({ mode = 'onboarding' }: { mode?: 'onboarding' | 'login' 
   const requestCode = async () => {
     setBusy(true);
     setError('');
+    if (!useApp.getState().connected) {
+      setWaking(true);
+      const up = await awaitApi();
+      setWaking(false);
+      if (!up) {
+        setError(t.errB);
+        setBusy(false);
+        return;
+      }
+    }
     try {
       const r = await api.requestOtp(digits, 'customer');
       setSentTo(r.phone);
@@ -157,9 +170,14 @@ export function SignIn({ mode = 'onboarding' }: { mode?: 'onboarding' | 'login' 
                   accessibilityLabel={t.nameLabel}
                 />
               </View>
+              {waking && (
+                <Txt size={13} color={colors.neutral700} style={{ marginTop: 10 }}>
+                  {t.waking}
+                </Txt>
+              )}
               {errorLine}
               <Button
-                label={busy ? t.sending : t.continue}
+                label={waking ? t.connecting : busy ? t.sending : t.continue}
                 fontSize={18}
                 disabled={!valid || busy}
                 onPress={requestCode}

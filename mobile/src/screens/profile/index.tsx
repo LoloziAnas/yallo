@@ -9,6 +9,7 @@ import { Segmented } from '@/components/segmented';
 import { Txt } from '@/components/txt';
 import type { Lang } from '@/data/strings';
 import { useApp, useRtl, useT } from '@/store/app-store';
+import { appVersion } from '@/utils/version';
 import { colors, radius, shadow } from '@/theme';
 
 /** Profile tab: account rows, notifications, language, help/settings and log out. */
@@ -178,8 +179,14 @@ export function Profile() {
             {t.logout}
           </Txt>
         </Pressable>
-        <Txt mono size={11} color={colors.neutral600} style={{ padding: 16 }}>
-          YALLO 1.0 · MARRAKECH · CASABLANCA · RABAT
+        <Txt
+          mono
+          size={11}
+          color={colors.neutral600}
+          selectable
+          accessibilityLabel={`Version ${appVersion}`}
+          style={{ padding: 16 }}>
+          {`YALLO ${appVersion} · MARRAKECH · CASABLANCA · RABAT`}
         </Txt>
       </ScrollView>
     </Screen>

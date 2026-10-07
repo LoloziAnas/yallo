@@ -115,6 +115,14 @@ function alertStatus(s: State, o: ApiOrder) {
   );
 }
 
+function startWakeTimer() {
+  clearTimeout(wakeTimer);
+  wakeTimer = setTimeout(() => {
+    wakeTimer = undefined;
+    if (!useApp.getState().connected) useApp.setState({ networkError: true });
+  }, WAKE_MS);
+}
+
 /** The API's 401s say "Sign in first" / "Sign in as a customer" (the client doesn't expose the status). */
 const isSignedOutError = (e: unknown) => e instanceof Error && /^sign in\b/i.test(e.message);
 
@@ -203,6 +211,11 @@ type Actions = {
   signIn: (session: AuthSession) => void;
   logout: () => void;
   retryHome: () => void;
+  /**
+   * Resolves true once the API is reachable (now, or after it wakes up), false if it still isn't after
+   * WAKE_MS. Free hosts sleep and take about a minute to answer the first request.
+   */
+  awaitApi: () => Promise<boolean>;
 
   /** Returns true when the item was added; false when blocked (closed store / other store's cart). */
   addLine: (pid: string, sel: Selection, qty: number, fromProduct?: boolean) => boolean;
@@ -291,6 +304,10 @@ function deliveryDetails(s: State, addr: Address) {
 const t = () => strings[useApp.getState().lang];
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
+let wakeTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** How long the API may stay unreachable before Home shows "Can't reach Yallo" (a sleeping free host takes ~60 s). */
+export const WAKE_MS = 90_000;
 
 /** The signed-in person's data: the demo starting point, and what logging out returns to. */
 const userDefaults = () => ({
@@ -433,13 +450,27 @@ export const useApp = create<State & Actions>()(
       },
 
       retryHome: () => {
-        // The live feed reconnects by itself; show the loading state, then whatever the connection says.
-        set({ homeLoading: true });
-        setTimeout(
-          () => set((s) => ({ homeLoading: false, networkError: s.connected === false })),
-          900,
-        );
+        // The live feed keeps reconnecting by itself; go back to "Connecting…" and give it another WAKE_MS.
+        set({ networkError: false });
+        startWakeTimer();
       },
+
+      awaitApi: () =>
+        new Promise<boolean>((resolve) => {
+          const { connected, networkError } = get();
+          if (connected) return resolve(true);
+          if (networkError) {
+            // Asked again after giving up: wait another round.
+            set({ networkError: false });
+            startWakeTimer();
+          }
+          const stop = useApp.subscribe((st) => {
+            if (st.connected || st.networkError) {
+              stop();
+              resolve(!!st.connected);
+            }
+          });
+        }),
 
       addLine: (pid, sel, qty, fromProduct = false) => {
         const p = productById[pid];
@@ -527,6 +558,12 @@ export const useApp = create<State & Actions>()(
           ...deliveryDetails(s, addr),
         };
         set({ placing: true });
+        // A sleeping API host wakes on the first request; wait for it rather than failing.
+        if (!(await get().awaitApi())) {
+          set({ placing: false });
+          get().showToast(t().orderFailed);
+          return;
+        }
         let placed: ApiOrder;
         try {
           placed = await api.placeOrder(body);
@@ -667,8 +704,9 @@ export const useApp = create<State & Actions>()(
         }
       },
 
-      connectLive: () =>
-        api.subscribe(
+      connectLive: () => {
+        if (!get().connected) startWakeTimer();
+        return api.subscribe(
           (live) => {
             // A new epoch means the API reseeded: order and ticket numbers start over, so ones
             // remembered from before may now name someone else's. Forget them.
@@ -693,8 +731,19 @@ export const useApp = create<State & Actions>()(
             const lost = active.lost || (!o && Date.now() - active.placedAt > PLACE_GRACE_MS);
             set({ live, ...(lost !== !!active.lost ? { active: { ...active, lost } } : {}) });
           },
-          (connected) => set({ connected, networkError: !connected }),
-        ),
+          (connected) => {
+            if (connected) {
+              clearTimeout(wakeTimer);
+              wakeTimer = undefined;
+              set({ connected: true, networkError: false });
+            } else {
+              // Still "Connecting…" until WAKE_MS without a connection; only then an error.
+              set({ connected: false });
+              if (!wakeTimer && !get().networkError) startWakeTimer();
+            }
+          },
+        );
+      },
 
       kickSearch: () => {
         clearTimeout(searchTimer);
