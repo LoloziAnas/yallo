@@ -6,8 +6,10 @@ import { Store } from './store';
 const port = Number(process.env.PORT) || API_PORT;
 // Listen on all interfaces so phones on the same network can reach the API.
 const host = process.env.HOST || '0.0.0.0';
+// One state file per port, so a private copy (PORT=5198) never shares a file with the integration API on 5190.
 // STATE_FILE=off keeps everything in memory (a fresh demo every start).
-const file = process.env.STATE_FILE === 'off' ? undefined : process.env.STATE_FILE || fileURLToPath(new URL('../data/state.json', import.meta.url));
+const file = process.env.STATE_FILE === 'off' ? undefined
+  : process.env.STATE_FILE || fileURLToPath(new URL(`../data/state-${port}.json`, import.meta.url));
 
 const store = new Store({ file });
 const { http } = createApi({ store });

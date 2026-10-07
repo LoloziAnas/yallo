@@ -58,7 +58,7 @@ Typecheck the package with `cd shared && npm run typecheck`.
 
 One server holds the orders, couriers, merchants and tickets every app shares. Start it with
 `cd api && npm start` (port 5190, listening on all interfaces), and test with `npm test`. It saves its state to
-`api/data/state.json` (git-ignored) and resumes from it after a restart; `POST /api/reset` restores the demo seed.
+`api/data/state-<port>.json` (git-ignored) and resumes from it after a restart; `POST /api/reset` restores the demo seed.
 `STATE_FILE=off` keeps it in memory, and `PORT`/`STATE_FILE` run a private copy for testing (e.g. 5198).
 `LiveState.epoch` changes whenever the data is reseeded.
 
