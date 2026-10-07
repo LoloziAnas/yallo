@@ -1,4 +1,5 @@
 // Contract for the Yallo mock API (../api) and a small client usable from the web and React Native.
+import type { OrderLineInput } from './pricing';
 import type { Courier, DeliveryAddress, GeoPoint, Merchant, Order, OrderItem, OrderStatus, PayMethod, Ticket, TicketPriority, TicketSource, ZoneName } from './model';
 
 export type ApiOrder = Order & {
@@ -44,17 +45,19 @@ export type PlaceOrderBody = {
   merchantId: string;
   customerName: string;
   zone: ZoneName;
-  items: OrderItem[];
-  pay: PayMethod;
-  /** Delivery fee in DH. Defaults to 15. */
-  fee?: number;
-  /** Service fee in DH. Defaults to 0. */
-  serviceFee?: number;
   /**
-   * Discount in DH, already worked out by the app (the API doesn't check promo rules). Defaults to 0.
-   * It can't exceed items + fee + serviceFee.
+   * Catalogue lines; the API prices them (items, delivery, service fee, promo) and ignores client amounts.
+   * Deprecated: { qty, name, price } items with client-sent fee/serviceFee/discount, accepted for a transition.
    */
+  items: OrderLineInput[] | OrderItem[];
+  pay: PayMethod;
+  /** Legacy items only: delivery fee in DH, default 15. Ignored for catalogue lines. */
+  fee?: number;
+  /** Legacy items only: service fee in DH, default 0. */
+  serviceFee?: number;
+  /** Legacy items only: discount in DH worked out by the app. */
   discount?: number;
+  /** MARHABA or LIVRAISON. With catalogue lines the API applies it (unknown codes are refused). */
   promoCode?: string;
   /** Delivery details. Strings are trimmed and empty ones dropped; see Order for the meaning of each. */
   address?: DeliveryAddress;

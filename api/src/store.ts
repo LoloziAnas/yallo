@@ -2,7 +2,7 @@
 import {
   ACTIVE_STATUSES, COURIERS, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, MERCHANTS, clockAt, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
   type ApiCourier, type ApiOrder, type LiveState, type OpenTicketBody, type OrderStatus, type PlaceOrderBody, type Ticket, type TicketPriority,
-  type TicketSource, type ZoneName,
+  type TicketSource, type ZoneName, type OrderItem, type OrderLineInput, type Quote, PricingError, quoteOrder, storeAvailability,
 } from '@yallo/shared';
 
 /** A rejected action. The server turns it into a 4xx with this message. */
@@ -70,6 +70,33 @@ function deliveryDetails(body: PlaceOrderBody) {
     out.customerPhone = customerPhone;
   }
   return out;
+}
+
+/**
+ * Deprecated: items sent as { qty, name, price } with client-computed fees. Kept only until the customer app
+ * sends catalogue lines ({ productId, qty, options }); remove after that.
+ */
+function legacyQuote(body: PlaceOrderBody): Quote {
+  const items = body.items as OrderItem[];
+  for (const i of items) {
+    if (!i?.name || !Number.isInteger(i.qty) || i.qty < 1 || typeof i.price !== 'number' || i.price < 0) {
+      throw new ActionError('Each item needs a productId (or, legacy, a name, a whole qty ≥ 1 and a price ≥ 0)');
+    }
+  }
+  const money = (v: unknown, name: string, fallback: number) => {
+    if (v === undefined || v === null) return fallback;
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) throw new ActionError(name + ' must be a number ≥ 0');
+    return v;
+  };
+  const fee = money(body.fee, 'fee', DEFAULT_FEE);
+  const serviceFee = money(body.serviceFee, 'serviceFee', 0);
+  const discount = money(body.discount, 'discount', 0);
+  const subtotal = items.reduce((sum, i) => sum + i.qty * i.price, 0);
+  const gross = subtotal + fee + serviceFee;
+  if (discount > gross) throw new ActionError(`discount (${discount}) can't exceed the order (${gross} DH)`);
+  const promoCode = typeof body.promoCode === 'string' && body.promoCode.trim() ? body.promoCode.trim().slice(0, 32) : undefined;
+  return { items: items.map(i => ({ qty: i.qty, name: i.name, price: i.price })), subtotal, fee, serviceFee, discount, total: gross - discount,
+    ...(promoCode ? { promoCode: promoCode as Quote['promoCode'] } : {}) };
 }
 
 function cleanText(text: unknown, what: string) {
@@ -184,28 +211,18 @@ export class Store {
 
   placeOrder(body: PlaceOrderBody): ApiOrder {
     const m = this.merchant(String(body?.merchantId));
-    if (!m.open) throw new ActionError(m.name + ' is paused and not taking orders', 409);
+    const availability = storeAvailability(m, this.s.t);
+    if (!availability.accepting) throw new ActionError(availability.reason!, 409);
     if (!body.customerName?.trim()) throw new ActionError('customerName is required');
     if (!(body.zone in ZONES)) throw new ActionError('Unknown zone ' + body.zone);
     if (body.pay !== 'cash' && body.pay !== 'card') throw new ActionError("pay must be 'cash' or 'card'");
+    // MVP: cash on delivery only.
+    if (body.pay === 'card') throw new ActionError("Card payment isn't available yet. Pay cash on delivery", 409);
     if (!Array.isArray(body.items) || !body.items.length) throw new ActionError('items must not be empty');
-    for (const i of body.items) {
-      if (!i?.name || !Number.isInteger(i.qty) || i.qty < 1 || typeof i.price !== 'number' || i.price < 0) {
-        throw new ActionError('Each item needs a name, a whole qty ≥ 1 and a price ≥ 0');
-      }
-    }
-    const money = (v: unknown, name: string, fallback: number) => {
-      if (v === undefined || v === null) return fallback;
-      if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) throw new ActionError(name + ' must be a number ≥ 0');
-      return v;
-    };
-    const fee = money(body.fee, 'fee', DEFAULT_FEE);
-    const serviceFee = money(body.serviceFee, 'serviceFee', 0);
-    const discount = money(body.discount, 'discount', 0);
-    const gross = body.items.reduce((sum, i) => sum + i.qty * i.price, 0) + fee + serviceFee;
-    if (discount > gross) throw new ActionError(`discount (${discount}) can't exceed the order (${gross} DH)`);
+    const priced = body.items.every(i => typeof (i as OrderLineInput)?.productId === 'string')
+      ? this.quote(m.id, body.items as OrderLineInput[], body.promoCode)
+      : legacyQuote(body);
     const details = deliveryDetails(body);
-    const promoCode = typeof body.promoCode === 'string' && body.promoCode.trim() ? body.promoCode.trim().slice(0, 32) : undefined;
     const nextNum = Math.max(...this.s.orders.map(o => Number(o.id.slice(1)))) + 1;
     const centre = ZONES[body.zone as ZoneName];
     // Spread drop-offs around the zone centre so new pins don't stack.
@@ -219,13 +236,14 @@ export class Store {
       status: 'pending',
       statusAt: { pending: this.s.t },
       courierId: null,
-      items: body.items.map(i => ({ qty: i.qty, name: i.name, price: i.price })),
-      fee,
-      ...(serviceFee ? { serviceFee } : {}),
-      ...(discount ? { discount } : {}),
-      ...(promoCode ? { promoCode } : {}),
+      items: priced.items,
+      subtotal: priced.subtotal,
+      fee: priced.fee,
+      ...(priced.serviceFee ? { serviceFee: priced.serviceFee } : {}),
+      ...(priced.discount ? { discount: priced.discount } : {}),
+      ...(priced.promoCode ? { promoCode: priced.promoCode } : {}),
       ...details,
-      total: gross - discount,
+      total: priced.total,
       pay: body.pay,
       placedAt: clockAt(this.s.t),
       elapsedSec: 0,
@@ -235,6 +253,17 @@ export class Store {
     this.changed();
     return order;
   }
+
+  /** Prices catalogue lines with the shared rules. Client-sent amounts are ignored. */
+  private quote(merchantId: string, lines: OrderLineInput[], promoCode?: string): Quote {
+    try {
+      return quoteOrder(merchantId, lines, promoCode);
+    } catch (e) {
+      if (e instanceof PricingError) throw new ActionError(e.message, e.rule ? 409 : 400);
+      throw e;
+    }
+  }
+
 
   /** Marks a courier app as attached (a live-feed socket subscribed as that courier). Returns a detach function. */
   attachApp(courierId: string) {

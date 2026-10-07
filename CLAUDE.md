@@ -29,7 +29,12 @@ Delivery platform for Marrakech. Several Claude sessions work here in parallel, 
 - `STATUS_LABEL[status][audience]`: wording for `ops`, `customer` and `courier`.
 - `Order`, `Merchant`, `Courier`, `OrderItem`, `ZoneName`, `PayMethod`: entity types.
 - `colors`, `space`, `radius`, `shadow`, `fonts`: Zanqa tokens (web apps also have `zanqa.css`).
-- `ZONES`, `MERCHANTS`, `COURIERS`, `ORDERS`: the Marrakech demo seed (Tue 6 Oct 2026, ~18:34).
+- `MERCHANTS` (10 stores, m1–m10, with hours, fees, minimum order, phone), `PRODUCTS`, `OPTION_GROUPS`, `merchantById`,
+  `productById`: the canonical catalogue (from the customer app design). `storeAvailability(merchant, t)` says whether a
+  store takes orders now (paused by ops, or outside its hours on the demo clock).
+- `quoteOrder(merchantId, lines, promoCode)`, `priceLine`, `PROMOS` (MARHABA, LIVRAISON), `SERVICE_FEE`: order pricing.
+  The API prices orders with it; the customer app shows the same numbers.
+- `ZONES`, `COURIERS`, `ORDERS`, `TICKETS`: the Marrakech demo seed (Tue 6 Oct 2026, ~18:34). `clockAt`, `DEMO_START_MIN`.
 - `Ticket`, `TicketMessage`, `TicketSource`, `TicketPriority`, and the `TICKETS` seed: support tickets.
 - `KM_PER_MAP_PCT` (0.2, so the map is 20 km across), `COURIER_PAY`, `courierPayFor`, `tripKm`, `pickupKm`, `DISPATCH_RADIUS_KM` (5):
   courier pay is max(15, 12 + 3 × trip km) DH, and jobs only go to couriers within 5 km of the store.
@@ -59,7 +64,9 @@ or calling `POST /api/reset`, restores the demo seed.
   every change and every second (the demo clock: timers and courier movement run on the server).
 - `GET /api/state` returns the current snapshot. Actions are `POST`s that return the new state, or
   `{ error }` with a 4xx when refused:
-  - `/api/orders` places an order (body `PlaceOrderBody`) and returns the new order. Optional delivery details:
+  - `/api/orders` places an order and returns it. Send catalogue lines `{ productId, qty, options }` and an optional
+    `promoCode`; the API prices everything and refuses closed or paused stores, baskets under the minimum and card payment
+    (cash only for MVP) with 409. Legacy `{ qty, name, price }` items with client fees still work for now (deprecated). Optional delivery details:
     `address`, `location` {lat, lon}, `instructions` (≤ 500), `scheduledFor` "HH:MM" (informational for now), `customerPhone`. A stand-in
     merchant accepts it after 20 s and has it ready at 60 s.
   - Job offers: `/api/orders/:n/offer {courierId}` (ops), `/offer/accept {courierId}` and `/offer/decline {courierId}`
@@ -80,7 +87,7 @@ or calling `POST /api/reset`, restores the demo seed.
 ## Joint end-to-end run
 
 `cd e2e && npm install && npm test` drives the customer app (:8090), back office (:5191) and courier
-app (:8091) together against the API (:5190). A customer orders from Dar Zitoun (Café Marrakech, near Karim), ops offers it to
+app (:8091) together against the API (:5190). A customer orders from Dar Zitoun (0.7 km from Karim), ops offers it to
 Karim, Karim accepts, picks it up and delivers, and the customer's tracking follows. Every step is
 checked from each side, with screenshots in `e2e/out/`. It takes about 2 minutes, mostly simulated
 driving. It resets the API first. `CUSTOMER=api` skips the customer app; `HEADED=1` shows the browsers.

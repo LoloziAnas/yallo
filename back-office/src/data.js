@@ -7,8 +7,8 @@ import { ZONES as Z, MERCHANTS, COURIERS, ORDERS, TICKETS, DEMO_ELAPSED_SEC, DEM
 
 export const ZONES = Object.fromEntries(Object.entries(Z).map(([k, p]) => [k, [p.x, p.y]]));
 
-const M_STATS = { m1:[64,98], m2:[58,97], m3:[22,100], m4:[41,94], m5:[49,88], m6:[27,99], m7:[33,96], m8:[36,91], m9:[19,93] };
-export const toBoMerchant = m => ({ id:m.id, name:m.name, cat:m.category, zone:m.zone, x:m.pos.x, y:m.pos.y, orders:M_STATS[m.id]?.[0] ?? 0, prep:m.prepMin, acc:M_STATS[m.id]?.[1] ?? 100, rating:m.rating, open:m.open, addr:m.address });
+const M_STATS = { m1:[64,98], m2:[58,97], m3:[22,100], m4:[41,94], m5:[49,88], m6:[27,99], m7:[33,96], m8:[36,91], m9:[19,93], m10:[14,95] };
+export const toBoMerchant = m => ({ id:m.id, name:m.name, cat:m.category, hours:m.hours, phone:m.phone, zone:m.zone, x:m.pos.x, y:m.pos.y, orders:M_STATS[m.id]?.[0] ?? 0, prep:m.prepMin, acc:M_STATS[m.id]?.[1] ?? 100, rating:m.rating, open:m.open, addr:m.address });
 export const MERCH = MERCHANTS.map(toBoMerchant);
 export const MBY = {}; MERCH.forEach(m => MBY[m.name] = m);
 
@@ -76,7 +76,7 @@ export const PAY_C = [
   ['Omar Lahlou',41,1428,0,0,'CIH •••• 1093'],['Yassine Ouali',30,1104,0,0,'Attijari •••• 6630'],['Salma Bennani',28,896,25,0,'Barid •••• 3381'],['Nabil Fassi',19,612,0,0,'CIH •••• 9902']
 ];
 export const PAY_M = [
-  ['Café Marrakech',402,48620,-7293,'Attijari •••• 1180'],['Burger House',377,39215,-5882,'CIH •••• 5023'],['Snack Amine',318,21460,-3219,'BMCE •••• 7710'],
-  ['Carrefour Market Guéliz',266,61240,-6124,'Attijari •••• 0045'],['Pizza Napoli',231,28870,-4330,'CIH •••• 3349'],['Le Grand Café de la Poste',214,30180,-4527,'BMCE •••• 2286'],
-  ['Pâtisserie Al Jawda',176,14590,-2189,'CIH •••• 6612'],['Pharmacie Atlas',143,8420,-842,'Barid •••• 4470']
+  ['Dar Zitoun',402,48620,-7293,'Attijari •••• 1180'],['Burger Atlas',377,39215,-5882,'CIH •••• 5023'],['Snack Chez Hamid',318,21460,-3219,'BMCE •••• 7710'],
+  ['Souk Frais Market',266,61240,-6124,'Attijari •••• 0045'],['Pizzeria Guéliz',231,28870,-4330,'CIH •••• 3349'],['Jus Jemaa',214,30180,-4527,'BMCE •••• 2286'],
+  ['Pâtisserie Al Warda',176,14590,-2189,'CIH •••• 6612'],['Pharmacie Ibn Sina',143,8420,-842,'Barid •••• 4470']
 ];

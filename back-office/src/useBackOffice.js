@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { DISPATCH_RADIUS_KM, clockAt, createYalloClient, pickupKm } from '@yallo/shared';
+import { DISPATCH_RADIUS_KM, clockAt, createYalloClient, pickupKm, storeAvailability } from '@yallo/shared';
 import { IC } from './icons.jsx';
 import { ZONES, MERCH, MBY, COURIERS0, ORDERS0, STATUS, ACTIVE, APPS0, DOCDEF, TICKETS0, PAY_C, PAY_M, fromLive } from './data.js';
 
@@ -57,6 +57,8 @@ export function useBackOffice({ startPage } = {}) {
 
   const set = o => () => setState(o), W = s.w || 1440;
   const CBY = {}; s.couriers.forEach(c => CBY[c.id] = c);
+  // Paused by ops, or outside its opening hours on the demo clock.
+  const takingOrders = m => storeAvailability(m, s.t).accepting;
   const courierLabel = (o, none) => CBY[o.courier] ? CBY[o.courier].name : o.offer ? 'Offered · ' + CBY[o.offer.courier].name + ' · ' + mmss(o.offer.left) : none;
   const courierFg = o => o.courier ? 'var(--color-text)' : o.offer ? 'var(--color-neutral-800)' : 'var(--color-accent-700)';
   const offeredTo = new Set(s.orders.filter(o => o.offer).map(o => o.offer.courier));
@@ -90,7 +92,7 @@ export function useBackOffice({ startPage } = {}) {
   const hours = HR.map(([h, v, last]) => { const max = 200; const cur = h === 18; return { label:h + 'h', v:v || '', vOp:v ? 1 : 0, hLast:Math.round(Math.max(last, v) / max * 100) + '%', hRel:v ? Math.round(v / Math.max(last, v) * 100) + '%' : '0%', bg:cur ? 'var(--color-accent-500)' : 'var(--color-accent)' }; });
   const alerts = [
     { icon:IC.clock, title:needs.length + ' orders need action', body:'Ready without courier or over SLA · Guéliz, Hivernage', cta:'Open queue', tone:'hot', onClick:() => setState({ page:'live', qTab:'action' }) },
-    { icon:IC.headset, title:'Urgent: restaurant closed on arrival', body:'Karim E. at Café Marrakech · #48213', cta:'Reply', tone:'hot', onClick:() => setState({ page:'support', tSel:'T-9011', drawer:null }) },
+    { icon:IC.headset, title:'Urgent: restaurant closed on arrival', body:'Karim E. at Dar Zitoun · #48213', cta:'Reply', tone:'hot', onClick:() => setState({ page:'support', tSel:'T-9011', drawer:null }) },
     { icon:IC.bike, title:'Low supply in Médina', body:'3.4 orders per courier · consider a +8 DH surge', cta:'View map', tone:'warm', onClick:go('live') },
     { icon:IC.file, title:pendingApps + ' courier applications waiting', body:'Oldest submitted yesterday', cta:'Review', tone:'calm', onClick:() => setState({ page:'couriers', cTab:'apps', drawer:null }) },
     { icon:IC.wallet, title:'Week 40 payouts ready', body:'214,980 DH to 1,082 recipients · due Mon 5 Oct', cta:'Approve', tone:'calm', onClick:go('payouts') }
@@ -115,7 +117,7 @@ export function useBackOffice({ startPage } = {}) {
   const selCourierId = s.drawer && s.drawer.type === 'courier' ? s.drawer.id : selOrder && selOrder.courier;
   const busyMerch = {}; active.forEach(o => busyMerch[o.m] = true);
   const mapMerchants = s.merchants.map(m => { const sel = selOrder && selOrder.m === m.name; return { name:m.name, x:m.x + '%', y:m.y + '%', onClick:() => { const o = active.find(o => o.m === m.name); if (o) openOrder(o.id)(); else toast(m.name + ' · no active orders'); },
-    bg:sel ? 'var(--color-accent)' : !m.open ? 'var(--color-neutral-300)' : 'var(--color-card)', fg:sel ? '#fff' : !m.open ? 'var(--color-neutral-600)' : 'var(--color-accent)', sh:sel ? '0 0 0 4px var(--color-accent-200),var(--shadow-md)' : 'var(--shadow-md)' }; });
+    bg:sel ? 'var(--color-accent)' : !takingOrders(m) ? 'var(--color-neutral-300)' : 'var(--color-card)', fg:sel ? '#fff' : !takingOrders(m) ? 'var(--color-neutral-600)' : 'var(--color-accent)', sh:sel ? '0 0 0 4px var(--color-accent-200),var(--shadow-md)' : 'var(--shadow-md)' }; });
   const CC = { idle:'var(--color-accent-2-500)', busy:'var(--color-accent)', off:'var(--color-neutral-400)' };
   const mapCouriers = s.couriers.map(c => { const sel = c.id === selCourierId; return { name:c.name, x:c.x.toFixed(2) + '%', y:c.y.toFixed(2) + '%', onClick:openCourier(c.id), size:sel ? '20px' : '14px', bg:CC[c.st], sh:sel ? '0 0 0 3px #fff,0 0 0 6px ' + CC[c.st] : '0 0 0 2.5px #fff,var(--shadow-sm)' }; });
   const hasRoute = !!(selOrder && p.live && ACTIVE.includes(selOrder.st));
@@ -146,7 +148,7 @@ export function useBackOffice({ startPage } = {}) {
   const removeApp = msg => { const rest = s.apps.filter(a => a.id !== appCur.id); setState({ apps:rest, appSel:rest[0] ? rest[0].id : null, modal:null }); toast(msg); };
 
   // merchants
-  const merchantRows = s.merchants.map(m => ({ ...m, prepFg:m.prep > 20 ? 'var(--color-accent-700)' : 'var(--color-text)', stLabel:m.open ? 'Open' : 'Paused', stBg:m.open ? 'var(--color-accent-2-100)' : 'var(--color-neutral-200)', stFg:m.open ? 'var(--color-accent-2-700)' : 'var(--color-neutral-700)', trk:m.open ? 'var(--color-accent-2-500)' : 'var(--color-neutral-400)', knob:m.open ? '18px' : '2px',
+  const merchantRows = s.merchants.map(m => ({ ...m, prepFg:m.prep > 20 ? 'var(--color-accent-700)' : 'var(--color-text)', hoursLabel:m.hours.open + '–' + m.hours.close, stLabel:!m.open ? 'Paused' : takingOrders(m) ? 'Open' : 'Closed · opens ' + m.hours.open, stBg:takingOrders(m) ? 'var(--color-accent-2-100)' : 'var(--color-neutral-200)', stFg:takingOrders(m) ? 'var(--color-accent-2-700)' : 'var(--color-neutral-700)', trk:m.open ? 'var(--color-accent-2-500)' : 'var(--color-neutral-400)', knob:m.open ? '18px' : '2px',
     toggle:() => act(api.setMerchantOpen(m.id, !m.open), m.name + (m.open ? ' paused' : ' reopened')) }));
 
   // support

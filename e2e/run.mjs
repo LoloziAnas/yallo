@@ -22,11 +22,11 @@ const OUT = new URL('./out/', import.meta.url).pathname;
 
 const COURIER = { id: 'c1', name: 'Karim El Amrani' };
 // Karim is in Guéliz and jobs only go to couriers within the dispatch radius (5 km), so the order comes from
-// Café Marrakech (m1), 0.7 km from him. In the customer app that store is Dar Zitoun until the store list is unified.
+// Dar Zitoun (m1), 0.7 km from him.
 const STORE = {
-  id: 'm1', name: 'Café Marrakech', customerName: 'Dar Zitoun',
+  id: 'm1', name: 'Dar Zitoun', customerName: 'Dar Zitoun',
   // The customer app sends the chosen options in the item name; the defaults are "For 1", no extras.
-  item: { name: 'Chicken tajine, preserved lemon & olives (For 1)', price: 85 },
+  item: { name: 'Chicken tajine, preserved lemon & olives (For 1)', price: 85, productId: 'p1-1', options: { size: [0] } },
   fee: 9, serviceFee: 3,
   /** Customer-app steps from Home to the item in the cart. */
   async ui(p, click) {
@@ -93,7 +93,7 @@ async function customerPlacesOrder() {
   if (CUSTOMER_MODE === 'api') {
     const order = await post('/orders', {
       merchantId: STORE.id, customerName: CUSTOMER.name, zone: CUSTOMER.zone, pay: 'cash',
-      fee: STORE.fee, serviceFee: STORE.serviceFee, items: [{ qty: 1, name: STORE.item.name, price: STORE.item.price }],
+      items: [{ productId: STORE.item.productId, qty: 1, options: STORE.item.options }],
     });
     return order.id;
   }

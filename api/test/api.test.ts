@@ -21,31 +21,31 @@ describe('Store', () => {
   });
 
   test('assigning a ready order sends the courier to the store', () => {
-    s.assignCourier('48214', 'c5');
+    s.assignCourier('48214', 'c2');
     assert.equal(order(s, '#48214').status, 'picking');
-    assert.equal(order(s, '#48214').courierId, 'c5');
-    assert.equal(courier(s, 'c5').status, 'busy');
+    assert.equal(order(s, '#48214').courierId, 'c2');
+    assert.equal(courier(s, 'c2').status, 'busy');
   });
 
   test('reassigning frees the previous courier', () => {
-    s.assignCourier('#48214', 'c5');
-    s.assignCourier('#48214', 'c11');
-    assert.equal(courier(s, 'c5').status, 'idle');
-    assert.equal(courier(s, 'c11').status, 'busy');
+    s.assignCourier('#48214', 'c2');
+    s.assignCourier('#48214', 'c3');
+    assert.equal(courier(s, 'c2').status, 'idle');
+    assert.equal(courier(s, 'c3').status, 'busy');
   });
 
   test('refuses busy, offline and suspended couriers', () => {
     assert.throws(() => s.assignCourier('#48214', 'c1'), /not available/); // busy
     assert.throws(() => s.assignCourier('#48214', 'c10'), /not available/); // off
-    s.setCourierSuspended('c5', true);
-    assert.throws(() => s.assignCourier('#48214', 'c5'), /suspended/);
+    s.setCourierSuspended('c2', true);
+    assert.throws(() => s.assignCourier('#48214', 'c2'), /suspended/);
   });
 
   test('a delivery runs through the lifecycle and frees the courier', () => {
-    s.assignCourier('#48214', 'c5');
+    s.assignCourier('#48214', 'c2');
     s.setOrderStatus('#48214', 'delivering');
     s.setOrderStatus('#48214', 'delivered');
-    assert.equal(courier(s, 'c5').status, 'idle');
+    assert.equal(courier(s, 'c2').status, 'idle');
     assert.throws(() => s.setOrderStatus('#48214', 'delivering'), /cannot go from delivered/);
   });
 
@@ -72,7 +72,7 @@ describe('Store', () => {
   });
 
   test('refund must be within the order total', () => {
-    assert.throws(() => s.refundOrder('#48190', 999, 'Cold'), /at most 176/);
+    assert.throws(() => s.refundOrder('#48190', 999, 'Cold'), /at most 157/);
     assert.throws(() => s.refundOrder('#48190', 50, ' '), /reason/);
     s.refundOrder('#48190', 50, 'Order arrived cold');
     assert.equal(order(s, '#48190').refund, 50);
@@ -88,7 +88,7 @@ describe('Store', () => {
   });
 
   test('a placed order gets the next id and is accepted, then readied, by the stand-in merchant', () => {
-    const o = s.placeOrder({ merchantId: 'm2', customerName: 'Amal', zone: 'Hivernage', pay: 'card', items: [{ qty: 2, name: 'Classic burger', price: 42 }] });
+    const o = s.placeOrder({ merchantId: 'm2', customerName: 'Amal', zone: 'Hivernage', pay: 'cash', items: [{ qty: 2, name: 'Classic burger', price: 42 }] });
     assert.equal(o.id, '#48220');
     assert.equal(o.total, 2 * 42 + 15);
     assert.equal(o.placedAt, '18:34');
@@ -99,7 +99,7 @@ describe('Store', () => {
   });
 
   test('service fee, discount and promo code feed the total', () => {
-    const o = s.placeOrder({ merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz', pay: 'card', fee: 9, serviceFee: 3, discount: 30, promoCode: ' MARHABA ',
+    const o = s.placeOrder({ merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz', pay: 'cash', fee: 9, serviceFee: 3, discount: 30, promoCode: ' MARHABA ',
       items: [{ qty: 2, name: 'Chicken tajine (For 2 to share · Mint tea pot)', price: 50 }] });
     assert.deepEqual([o.fee, o.serviceFee, o.discount, o.promoCode, o.total], [9, 3, 30, 'MARHABA', 100 + 9 + 3 - 30]);
     const plain = s.placeOrder({ merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz', pay: 'cash', fee: 0, items: [{ qty: 1, name: 'Tea', price: 9 }] });
@@ -111,12 +111,12 @@ describe('Store', () => {
   });
 
   test('a courier assigned early heads to the store, and ready food goes straight to picking', () => {
-    const o = s.placeOrder({ merchantId: 'm2', customerName: 'Amal', zone: 'Hivernage', pay: 'card', items: [{ qty: 1, name: 'Fries', price: 19 }] });
+    const o = s.placeOrder({ merchantId: 'm2', customerName: 'Amal', zone: 'Hivernage', pay: 'cash', items: [{ qty: 1, name: 'Fries', price: 19 }] });
     tick(s, AUTO_ACCEPT_SEC);
-    s.assignCourier(o.id, 'c5');
-    const start = { ...courier(s, 'c5').pos };
+    s.assignCourier(o.id, 'c2');
+    const start = { ...courier(s, 'c2').pos };
     tick(s, 2);
-    assert.notDeepEqual(courier(s, 'c5').pos, start, 'moves while the food is prepared');
+    assert.notDeepEqual(courier(s, 'c2').pos, start, 'moves while the food is prepared');
     tick(s, AUTO_READY_SEC - AUTO_ACCEPT_SEC);
     assert.equal(order(s, o.id).status, 'picking');
     s.setOrderStatus('#48216', 'ready');
@@ -145,10 +145,50 @@ describe('Store', () => {
     assert.throws(() => s.placeOrder({ ...base, customerPhone: 'call me' }), /customerPhone/);
   });
 
+  test('catalogue lines are priced by the server, whatever the client sends', () => {
+    const o = s.placeOrder({ merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz', pay: 'cash', fee: 0, discount: 999,
+      items: [{ productId: 'p1-1', qty: 2, options: { size: [1], side: [2, 0] } }, { productId: 'p1-8', qty: 1 }] } as never);
+    // (85 + 70 + 5 + 20) × 2 + 20 = 380, delivery 9, service 3
+    assert.deepEqual(o.items.map(i => [i.qty, i.name, i.price]), [
+      [2, 'Chicken tajine, preserved lemon & olives (For 2 to share · Extra khobz · Mint tea pot)', 180],
+      [1, 'Mint tea · pot for two', 20],
+    ]);
+    assert.deepEqual([o.subtotal, o.fee, o.serviceFee, o.discount, o.total], [380, 9, 3, undefined, 392]);
+  });
+
+  test('promo codes and free grocery delivery follow the shared rules', () => {
+    const tajine = [{ productId: 'p1-1', qty: 1, options: { size: [0] } }];
+    const m = s.placeOrder({ merchantId: 'm1', customerName: 'A', zone: 'Guéliz', pay: 'cash', items: tajine, promoCode: 'marhaba' });
+    assert.deepEqual([m.discount, m.promoCode, m.total], [26, 'MARHABA', 85 + 9 + 3 - 26]);
+    const l = s.placeOrder({ merchantId: 'm1', customerName: 'A', zone: 'Guéliz', pay: 'cash', items: tajine, promoCode: 'LIVRAISON' });
+    assert.deepEqual([l.fee, l.total], [0, 88]);
+    const g = s.placeOrder({ merchantId: 'm4', customerName: 'A', zone: 'Hivernage', pay: 'cash', items: [{ productId: 'p5-7', qty: 2 }] });
+    assert.deepEqual([g.subtotal, g.fee], [240, 0]);
+    assert.throws(() => s.placeOrder({ merchantId: 'm1', customerName: 'A', zone: 'Guéliz', pay: 'cash', items: tajine, promoCode: 'FREE' }), /Unknown promo code FREE/);
+  });
+
+  test('store rules refuse with 409; malformed carts with 400', () => {
+    const base = { customerName: 'A', zone: 'Guéliz' as const, pay: 'cash' as const };
+    const err = (f: () => unknown) => { try { f(); } catch (e) { return [(e as { status: number }).status, (e as Error).message]; } return null; };
+    assert.deepEqual(err(() => s.placeOrder({ ...base, merchantId: 'm1', items: [{ productId: 'p1-7', qty: 1 }] })), [409, 'Dar Zitoun has a 60 DH minimum order']);
+    assert.deepEqual(err(() => s.placeOrder({ ...base, merchantId: 'm1', pay: 'card', items: [{ productId: 'p1-6', qty: 1 }] })), [409, "Card payment isn't available yet. Pay cash on delivery"]);
+    assert.deepEqual(err(() => s.placeOrder({ ...base, merchantId: 'm1', items: [{ productId: 'p2-1', qty: 1 }] })), [400, "Atlas smash burger isn't sold by Dar Zitoun"]);
+    assert.deepEqual(err(() => s.placeOrder({ ...base, merchantId: 'm1', items: [{ productId: 'p1-1', qty: 1 }] })), [400, 'Choose one Portion for Chicken tajine, preserved lemon & olives']);
+    s.setMerchantOpen('m2', false);
+    assert.deepEqual(err(() => s.placeOrder({ ...base, merchantId: 'm2', items: [{ productId: 'p2-4', qty: 2 }] })), [409, 'Burger Atlas is paused and not taking orders']);
+  });
+
+  test('a store closed by its hours opens on the demo clock', () => {
+    const sushi = { merchantId: 'm9', customerName: 'A', zone: 'Guéliz' as const, pay: 'cash' as const, items: [{ productId: 'p9-1', qty: 2 }] };
+    assert.throws(() => s.placeOrder(sushi), /closed · opens at 19:00/);
+    tick(s, 26 * 60); // 18:34 → 19:00
+    assert.equal(s.placeOrder(sushi).total, 150 + 15 + 3);
+  });
+
   test('rejects bad orders', () => {
-    const ok = { merchantId: 'm2', customerName: 'Amal', zone: 'Hivernage' as const, pay: 'card' as const, items: [{ qty: 1, name: 'Fries', price: 19 }] };
+    const ok = { merchantId: 'm2', customerName: 'Amal', zone: 'Hivernage' as const, pay: 'cash' as const, items: [{ qty: 1, name: 'Fries', price: 19 }] };
     assert.throws(() => s.placeOrder({ ...ok, merchantId: 'nope' }), /No merchant/);
-    assert.throws(() => s.placeOrder({ ...ok, merchantId: 'm7' }), /paused/);
+    assert.throws(() => s.placeOrder({ ...ok, merchantId: 'm9' }), /Sushi Majorelle is closed · opens at 19:00/);
     assert.throws(() => s.placeOrder({ ...ok, items: [] }), /empty/);
     assert.throws(() => s.placeOrder({ ...ok, items: [{ qty: 0, name: 'Fries', price: 19 }] }), /qty/);
     assert.throws(() => s.placeOrder({ ...ok, zone: 'Paris' as never }), /Unknown zone/);
@@ -201,41 +241,41 @@ describe('Job offers', () => {
   beforeEach(() => { s = new Store(); });
 
   test('an offer holds the order without assigning it', () => {
-    s.offerOrder('#48214', 'c5');
+    s.offerOrder('#48214', 'c2');
     const o = order(s, '#48214');
-    assert.deepEqual(o.offer, { courierId: 'c5', offeredAt: 0, expiresAt: OFFER_SEC });
+    assert.deepEqual(o.offer, { courierId: 'c2', offeredAt: 0, expiresAt: OFFER_SEC });
     assert.equal(o.courierId, null);
     assert.equal(o.status, 'ready');
-    assert.equal(courier(s, 'c5').status, 'idle');
+    assert.equal(courier(s, 'c2').status, 'idle');
   });
 
   test('a stand-in courier (no app attached) accepts after a few seconds', () => {
-    s.offerOrder('#48214', 'c5');
+    s.offerOrder('#48214', 'c2');
     tick(s, STAND_IN_ACCEPT_SEC - 1);
     assert.equal(order(s, '#48214').courierId, null);
     tick(s, 1);
     const o = order(s, '#48214');
-    assert.deepEqual([o.courierId, o.status, o.offer], ['c5', 'picking', undefined]);
-    assert.equal(courier(s, 'c5').status, 'busy');
+    assert.deepEqual([o.courierId, o.status, o.offer], ['c2', 'picking', undefined]);
+    assert.equal(courier(s, 'c2').status, 'busy');
   });
 
   test('a courier with an app answers for itself, and an unanswered offer expires', () => {
-    const detach = s.attachApp('c5');
-    assert.equal(courier(s, 'c5').app, true);
-    s.offerOrder('#48214', 'c5');
+    const detach = s.attachApp('c2');
+    assert.equal(courier(s, 'c2').app, true);
+    s.offerOrder('#48214', 'c2');
     tick(s, OFFER_SEC - 1);
     assert.ok(order(s, '#48214').offer, 'no stand-in accept while the app is attached');
     tick(s, 1);
-    assert.deepEqual(order(s, '#48214').lastOffer, { courierId: 'c5', outcome: 'expired', at: OFFER_SEC });
+    assert.deepEqual(order(s, '#48214').lastOffer, { courierId: 'c2', outcome: 'expired', at: OFFER_SEC });
     detach();
-    assert.equal(courier(s, 'c5').app, false);
+    assert.equal(courier(s, 'c2').app, false);
   });
 
   test('accept turns the offer into the assignment; decline returns the order to the queue', () => {
-    s.attachApp('c5'); s.attachApp('c11');
-    s.offerOrder('#48214', 'c5');
-    s.acceptOffer('#48214', 'c5');
-    assert.equal(order(s, '#48214').courierId, 'c5');
+    s.attachApp('c2'); s.attachApp('c3');
+    s.offerOrder('#48214', 'c2');
+    s.acceptOffer('#48214', 'c2');
+    assert.equal(order(s, '#48214').courierId, 'c2');
     s.offerOrder('#48215', 'c11');
     s.declineOffer('#48215', 'c11');
     assert.equal(order(s, '#48215').offer, undefined);
@@ -244,30 +284,30 @@ describe('Job offers', () => {
   });
 
   test('a courier holds one offer at a time, and busy or picked-up cases are refused', () => {
-    s.attachApp('c5');
-    s.offerOrder('#48214', 'c5');
-    assert.throws(() => s.offerOrder('#48215', 'c5'), /considering an offer for #48214/);
-    assert.throws(() => s.assignCourier('#48215', 'c5'), /considering an offer/);
+    s.attachApp('c2');
+    s.offerOrder('#48214', 'c2');
+    assert.throws(() => s.offerOrder('#48215', 'c2'), /considering an offer for #48214/);
+    assert.throws(() => s.assignCourier('#48215', 'c2'), /considering an offer/);
     assert.throws(() => s.offerOrder('#48215', 'c1'), /not available/);
-    assert.throws(() => s.offerOrder('#48211', 'c11'), /already picked up/);
+    assert.throws(() => s.offerOrder('#48211', 'c3'), /already picked up/);
   });
 
   test('re-offering, withdrawing, cancelling, suspending or going offline ends the pending offer', () => {
-    s.attachApp('c5'); s.attachApp('c11');
-    s.offerOrder('#48214', 'c5');
-    s.offerOrder('#48214', 'c11');
-    assert.equal(order(s, '#48214').offer!.courierId, 'c11');
-    assert.deepEqual(order(s, '#48214').lastOffer, { courierId: 'c5', outcome: 'withdrawn', at: 0 });
+    s.attachApp('c2'); s.attachApp('c3');
+    s.offerOrder('#48214', 'c2');
+    s.offerOrder('#48214', 'c3');
+    assert.equal(order(s, '#48214').offer!.courierId, 'c3');
+    assert.deepEqual(order(s, '#48214').lastOffer, { courierId: 'c2', outcome: 'withdrawn', at: 0 });
     s.withdrawOffer('#48214');
     assert.equal(order(s, '#48214').offer, undefined);
     s.offerOrder('#48215', 'c5');
     s.cancelOrder('#48215', 'Customer request', false);
     assert.equal(order(s, '#48215').offer, undefined);
-    s.offerOrder('#48218', 'c5');
-    s.setCourierSuspended('c5', true);
+    s.offerOrder('#48218', 'c2');
+    s.setCourierSuspended('c2', true);
     assert.equal(order(s, '#48218').offer, undefined);
-    s.offerOrder('#48218', 'c11');
-    s.setCourierAvailability('c11', 'off');
+    s.offerOrder('#48218', 'c3');
+    s.setCourierAvailability('c3', 'off');
     assert.equal(order(s, '#48218').lastOffer!.outcome, 'declined');
   });
 });
@@ -277,10 +317,10 @@ describe('Dispatch radius', () => {
   beforeEach(() => { s = new Store(); });
 
   test('offers and direct assignments go only to couriers near the store', () => {
-    // Hamza (c2) is in Guéliz; Burger House is in Hivernage.
-    assert.throws(() => s.offerOrder('#48214', 'c2'), /Hamza Rachidi is 5\.6 km from Burger House \(dispatch radius 5 km\)/);
-    assert.throws(() => s.assignCourier('#48214', 'c2'), /dispatch radius/);
-    s.offerOrder('#48219', 'c2'); // Café Marrakech, 1.5 km away
+    // Hamza (c2) is in Guéliz; Snack Chez Hamid is in the Médina.
+    assert.throws(() => s.offerOrder('#48215', 'c2'), /Hamza Rachidi is 5\.2 km from Snack Chez Hamid \(dispatch radius 5 km\)/);
+    assert.throws(() => s.assignCourier('#48215', 'c2'), /dispatch radius/);
+    s.offerOrder('#48219', 'c2'); // Dar Zitoun, 1.5 km away
     assert.equal(order(s, '#48219').offer!.courierId, 'c2');
   });
 
@@ -308,17 +348,17 @@ describe('Courier pay', () => {
   });
 
   test('an offer prices the job for that courier; re-offering reprices; accepting keeps it', () => {
-    s.attachApp('c5'); s.attachApp('c11');
+    s.attachApp('c2'); s.attachApp('c3');
     const o = order(s, '#48214');
-    s.offerOrder('#48214', 'c5');
-    const kmA = tripKm(courier(s, 'c5').pos, merchantPos('m2'), o.dropoff);
+    s.offerOrder('#48214', 'c2');
+    const kmA = tripKm(courier(s, 'c2').pos, merchantPos('m2'), o.dropoff);
     assert.deepEqual([o.courierKm, o.courierPay], [kmA, courierPayFor(kmA)]);
-    s.offerOrder('#48214', 'c11');
-    const kmB = tripKm(courier(s, 'c11').pos, merchantPos('m2'), o.dropoff);
+    s.offerOrder('#48214', 'c3');
+    const kmB = tripKm(courier(s, 'c3').pos, merchantPos('m2'), o.dropoff);
     assert.notEqual(kmB, kmA);
     assert.deepEqual([o.courierKm, o.courierPay], [kmB, courierPayFor(kmB)]);
     tick(s, 5); // c3 doesn't move while idle, but the price is frozen anyway
-    s.acceptOffer('#48214', 'c11');
+    s.acceptOffer('#48214', 'c3');
     assert.deepEqual([o.courierKm, o.courierPay], [kmB, courierPayFor(kmB)]);
   });
 
@@ -403,7 +443,7 @@ describe('HTTP and live feed', () => {
 
   test('serves the state and applies actions', async () => {
     assert.equal((await client.getState()).orders.length, 16);
-    const s = await client.assignCourier('#48214', 'c5');
+    const s = await client.assignCourier('#48214', 'c2');
     assert.equal(s.orders.find(o => o.id === '#48214')!.status, 'picking');
   });
 

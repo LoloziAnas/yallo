@@ -53,18 +53,75 @@ export type PayMethod = 'cash' | 'card';
 
 export type Vehicle = 'Motorcycle' | 'Bicycle' | 'Car';
 
+/** Store type, used for browsing and for rules like free grocery delivery. */
+export type StoreKind = 'restaurants' | 'groceries' | 'pharmacy' | 'shops' | 'bakery' | 'drinks';
+
+/** A store on Yallo. The customer app's catalogue is the source; ops and couriers use the same records. */
 export type Merchant = {
   id: string;
   name: string;
+  /** Short label for ops, e.g. "Moroccan". */
   category: string;
+  /** Customer-facing tagline, e.g. "Moroccan · Tajine · Couscous". */
+  cuisine: string;
+  kind: StoreKind;
+  /** Delivery zone, for dispatch and ops. */
   zone: ZoneName;
+  /** Neighbourhood shown to customers, e.g. "Jemaa el-Fna". */
+  area: string;
   address: string;
+  phone: string;
   pos: MapPoint;
+  /** False when ops has paused the store. Closed-by-hours is separate: see `hours` and `storeAvailability`. */
   open: boolean;
+  /** Daily opening hours on the demo clock, "HH:MM". `close` earlier than `open` means past midnight. */
+  hours: { open: string; close: string };
   /** Average prep time in minutes. */
   prepMin: number;
   rating: number;
+  reviewCount: number;
+  /** Delivery time range shown to customers, minutes. */
+  deliveryMin: [number, number];
+  /** Delivery fee charged to the customer, DH. */
+  fee: number;
+  /** Minimum basket (items only), DH. */
+  minOrder: number;
+  /** 1–3. */
+  priceLevel: number;
+  initials: string;
+  /** Photo placeholder caption. */
+  cover: string;
 };
+
+export type OptionKey = 'tajine' | 'burger' | 'pizza' | 'drink';
+
+export type OptionGroup = {
+  id: string;
+  name: string;
+  /** Exactly one choice must be picked. */
+  required: boolean;
+  /** Several choices may be picked. */
+  multi: boolean;
+  /** [label, extra DH]. */
+  choices: [string, number][];
+};
+
+export type Product = {
+  id: string;
+  merchantId: string;
+  /** Menu section. */
+  section: string;
+  name: string;
+  description: string;
+  /** Base price, DH. */
+  price: number;
+  image: string;
+  options: OptionKey | null;
+  popular: boolean;
+};
+
+/** Chosen option indexes per option group id, e.g. { size: [1], side: [0, 2] }. */
+export type OptionSelection = Record<string, number[]>;
 
 /** idle = online and free, busy = on a delivery, off = offline. */
 export type CourierStatus = 'idle' | 'busy' | 'off';
@@ -82,9 +139,13 @@ export type Courier = {
 
 export type OrderItem = {
   qty: number;
+  /** Product name with the chosen options, e.g. "Chicken tajine, preserved lemon & olives (For 1)". */
   name: string;
-  /** Unit price in DH. */
+  /** Unit price in DH, options included. */
   price: number;
+  /** Catalogue product, when the item was priced from the catalogue. */
+  productId?: string;
+  options?: OptionSelection;
 };
 
 export type DeliveryAddress = {
@@ -115,6 +176,8 @@ export type Order = {
   fee: number;
   /** Service fee in DH. */
   serviceFee?: number;
+  /** Items total in DH. */
+  subtotal?: number;
   /** Discount in DH, e.g. from a promo code. */
   discount?: number;
   /** Promo code the customer applied, for ops' reference. */

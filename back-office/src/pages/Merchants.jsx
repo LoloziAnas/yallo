@@ -1,6 +1,6 @@
 import { Stars } from '../components/ui.jsx';
 
-const COLS = { minWidth: 900, gridTemplateColumns: 'minmax(170px,1.5fr) 110px 100px 80px 90px 90px 80px 130px' };
+const COLS = { minWidth: 960, gridTemplateColumns: 'minmax(170px,1.5fr) 110px 100px 80px 90px 90px 80px 190px' };
 
 export default function Merchants({ v }) {
   return (
@@ -12,7 +12,8 @@ export default function Merchants({ v }) {
         {v.merchantRows.map(m => (
           <div key={m.id} className="tr" style={{ ...COLS, height: 50 }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-              <span className="store-ico">{v.ic.store}</span><strong className="ellip">{m.name}</strong>
+              <span className="store-ico">{v.ic.store}</span>
+              <span style={{ minWidth: 0 }}><strong className="ellip" style={{ display: 'block' }}>{m.name}</strong><span className="faint" style={{ fontSize: 11 }}>{m.hoursLabel}</span></span>
             </span>
             <span className="muted">{m.cat}</span><span className="muted">{m.zone}</span><span>{m.orders}</span>
             <span style={{ fontWeight: 600, color: m.prepFg }}>{m.prep} min</span><span>{m.acc}%</span>
