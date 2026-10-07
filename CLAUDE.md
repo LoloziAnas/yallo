@@ -75,7 +75,7 @@ back office deploy with `deploy/prepare.sh` (builds the commit into `.deploy/<sh
   `{ error }` with a 4xx when refused:
   - `/api/orders` places an order and returns it. Send catalogue lines `{ productId, qty, options }` and an optional
     `promoCode`; the API prices everything and refuses closed or paused stores, baskets under the minimum and card payment
-    (cash only for MVP) with 409. Legacy `{ qty, name, price }` items with client fees still work for now (deprecated). Optional delivery details:
+    (cash only for MVP) with 409. Optional delivery details:
     `address`, `location` {lat, lon}, `instructions` (≤ 500), `scheduledFor` "HH:MM" (informational for now), `customerPhone`. A stand-in
     merchant accepts it after 20 s and has it ready at 60 s.
   - Job offers: `/api/orders/:n/offer {courierId}` (ops), `/offer/accept {courierId}` and `/offer/decline {courierId}`

@@ -98,9 +98,9 @@ describe('Store', () => {
   });
 
   test('a placed order gets the next id and is accepted, then readied, by the stand-in merchant', () => {
-    const o = s.placeOrder({ merchantId: 'm2', customerName: 'Amal', zone: 'Hivernage', pay: 'cash', items: [{ qty: 2, name: 'Classic burger', price: 42 }] });
+    const o = s.placeOrder({ merchantId: 'm2', customerName: 'Amal', zone: 'Hivernage', pay: 'cash', items: [{ productId: 'p2-4', qty: 2 }] });
     assert.equal(o.id, '#48220');
-    assert.equal(o.total, 2 * 42 + 15);
+    assert.equal(o.total, 2 * 30 + 0 + 3); // Burger Atlas delivers free
     assert.equal(o.placedAt, '18:34');
     tick(s, AUTO_ACCEPT_SEC);
     assert.equal(order(s, '#48220').status, 'preparing');
@@ -108,20 +108,13 @@ describe('Store', () => {
     assert.equal(order(s, '#48220').status, 'ready');
   });
 
-  test('service fee, discount and promo code feed the total', () => {
-    const o = s.placeOrder({ merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz', pay: 'cash', fee: 9, serviceFee: 3, discount: 30, promoCode: ' MARHABA ',
-      items: [{ qty: 2, name: 'Chicken tajine (For 2 to share · Mint tea pot)', price: 50 }] });
-    assert.deepEqual([o.fee, o.serviceFee, o.discount, o.promoCode, o.total], [9, 3, 30, 'MARHABA', 100 + 9 + 3 - 30]);
-    const plain = s.placeOrder({ merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz', pay: 'cash', fee: 0, items: [{ qty: 1, name: 'Tea', price: 9 }] });
-    assert.deepEqual([plain.serviceFee, plain.discount, plain.promoCode, plain.total], [undefined, undefined, undefined, 9]);
-    const base = { merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz' as const, pay: 'cash' as const, items: [{ qty: 1, name: 'Tea', price: 9 }] };
-    assert.throws(() => s.placeOrder({ ...base, discount: 100 }), /can't exceed/);
-    assert.throws(() => s.placeOrder({ ...base, serviceFee: -3 }), /serviceFee must be/);
-    assert.throws(() => s.placeOrder({ ...base, fee: 'free' as never }), /fee must be/);
+  test('items must be catalogue lines', () => {
+    assert.throws(() => s.placeOrder({ merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz', pay: 'cash', items: [{ qty: 1, name: 'Tea', price: 9 }] as never }),
+      /Each item needs a productId/);
   });
 
   test('a courier assigned early heads to the store, and ready food goes straight to picking', () => {
-    const o = s.placeOrder({ merchantId: 'm2', customerName: 'Amal', zone: 'Hivernage', pay: 'cash', items: [{ qty: 1, name: 'Fries', price: 19 }] });
+    const o = s.placeOrder({ merchantId: 'm2', customerName: 'Amal', zone: 'Hivernage', pay: 'cash', items: [{ productId: 'p2-4', qty: 2 }] });
     tick(s, AUTO_ACCEPT_SEC);
     s.assignCourier(o.id, 'c2');
     const start = { ...courier(s, 'c2').pos };
@@ -134,18 +127,18 @@ describe('Store', () => {
   });
 
   test('delivery details are cleaned and kept on the order', () => {
-    const o = s.placeOrder({ merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz', pay: 'cash', items: [{ qty: 1, name: 'Tea', price: 9 }],
+    const o = s.placeOrder({ merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz', pay: 'cash', items: [{ productId: 'p1-6', qty: 1 }],
       address: { label: ' Home ', street: '12 Rue de la Liberté', district: 'Guéliz', city: 'Marrakech', building: 'Imm. Nour, 3rd floor, Apt 7', landmark: '  ' },
       location: { lat: 31.634, lon: -8.0105 }, instructions: ' Please call when you arrive · Blue door ', scheduledFor: '21:30', customerPhone: '+212 661234567' });
     assert.deepEqual(o.address, { label: 'Home', street: '12 Rue de la Liberté', district: 'Guéliz', city: 'Marrakech', building: 'Imm. Nour, 3rd floor, Apt 7' });
     assert.deepEqual([o.location, o.instructions, o.scheduledFor, o.customerPhone],
       [{ lat: 31.634, lon: -8.0105 }, 'Please call when you arrive · Blue door', '21:30', '+212 661234567']);
-    const guest = s.placeOrder({ merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz', pay: 'cash', items: [{ qty: 1, name: 'Tea', price: 9 }], instructions: '   ' });
+    const guest = s.placeOrder({ merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz', pay: 'cash', items: [{ productId: 'p1-6', qty: 1 }], instructions: '   ' });
     assert.deepEqual([guest.address, guest.instructions, guest.customerPhone], [undefined, undefined, undefined]);
   });
 
   test('rejects malformed delivery details', () => {
-    const base = { merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz' as const, pay: 'cash' as const, items: [{ qty: 1, name: 'Tea', price: 9 }] };
+    const base = { merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz' as const, pay: 'cash' as const, items: [{ productId: 'p1-6', qty: 1 }] };
     const addr = { label: 'Home', street: '12 Rue', district: 'Guéliz', city: 'Marrakech' };
     assert.throws(() => s.placeOrder({ ...base, address: 'Guéliz' as never }), /address must be an object/);
     assert.throws(() => s.placeOrder({ ...base, address: { ...addr, street: ' ' } }), /needs a label, street/);
@@ -196,11 +189,11 @@ describe('Store', () => {
   });
 
   test('rejects bad orders', () => {
-    const ok = { merchantId: 'm2', customerName: 'Amal', zone: 'Hivernage' as const, pay: 'cash' as const, items: [{ qty: 1, name: 'Fries', price: 19 }] };
+    const ok = { merchantId: 'm2', customerName: 'Amal', zone: 'Hivernage' as const, pay: 'cash' as const, items: [{ productId: 'p2-4', qty: 2 }] };
     assert.throws(() => s.placeOrder({ ...ok, merchantId: 'nope' }), /No merchant/);
     assert.throws(() => s.placeOrder({ ...ok, merchantId: 'm9' }), /Sushi Majorelle is closed · opens at 19:00/);
     assert.throws(() => s.placeOrder({ ...ok, items: [] }), /empty/);
-    assert.throws(() => s.placeOrder({ ...ok, items: [{ qty: 0, name: 'Fries', price: 19 }] }), /qty/);
+    assert.throws(() => s.placeOrder({ ...ok, items: [{ productId: 'p2-4', qty: 0 }] }), /Quantity for Loaded fries must be 1–99/);
     assert.throws(() => s.placeOrder({ ...ok, zone: 'Paris' as never }), /Unknown zone/);
   });
 
@@ -217,7 +210,7 @@ describe('Step times', () => {
 
   test('a new order records each step when it happens', () => {
     tick(s, 30);
-    const o = s.placeOrder({ merchantId: 'm1', customerName: 'Amal', zone: 'Guéliz', pay: 'cash', items: [{ qty: 1, name: 'Tea', price: 9 }] });
+    const o = s.placeOrder({ merchantId: 'm1', customerName: 'Amal', zone: 'Guéliz', pay: 'cash', items: [{ productId: 'p1-6', qty: 1 }] });
     tick(s, AUTO_ACCEPT_SEC);
     s.assignCourier(o.id, 'c3');
     tick(s, AUTO_READY_SEC - AUTO_ACCEPT_SEC);
@@ -696,7 +689,7 @@ describe('HTTP and live feed', () => {
     const stop = client.subscribe(s => seen.push(s), up => up && connected());
     await isConnected;
     await new Promise(r => setTimeout(r, 50)); // initial snapshot
-    await client.placeOrder({ merchantId: 'm1', customerName: 'Rania', zone: 'Guéliz', pay: 'cash', items: [{ qty: 1, name: 'Pastilla', price: 58 }] });
+    await client.placeOrder({ merchantId: 'm1', customerName: 'Rania', zone: 'Guéliz', pay: 'cash', items: [{ productId: 'p1-6', qty: 1 }] });
     await new Promise(r => setTimeout(r, 50));
     stop();
     assert.ok(seen.length >= 2, 'got the initial snapshot and an update');

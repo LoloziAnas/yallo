@@ -21,7 +21,6 @@ export const STAND_IN_ACCEPT_SEC = 3;
 /** How far a moving courier travels per tick, in map percent. */
 const COURIER_STEP = 0.35;
 const COMPENSATION_DH = 10;
-const DEFAULT_FEE = 15;
 
 const isActive = (s: OrderStatus) => ACTIVE_STATUSES.includes(s);
 /** Food that's ready goes to `picking` when a courier is already assigned, otherwise waits at `ready`. */
@@ -73,33 +72,6 @@ function deliveryDetails(body: PlaceOrderBody) {
     out.customerPhone = customerPhone;
   }
   return out;
-}
-
-/**
- * Deprecated: items sent as { qty, name, price } with client-computed fees. Kept only until the customer app
- * sends catalogue lines ({ productId, qty, options }); remove after that.
- */
-function legacyQuote(body: PlaceOrderBody): Quote {
-  const items = body.items as OrderItem[];
-  for (const i of items) {
-    if (!i?.name || !Number.isInteger(i.qty) || i.qty < 1 || typeof i.price !== 'number' || i.price < 0) {
-      throw new ActionError('Each item needs a productId (or, legacy, a name, a whole qty ≥ 1 and a price ≥ 0)');
-    }
-  }
-  const money = (v: unknown, name: string, fallback: number) => {
-    if (v === undefined || v === null) return fallback;
-    if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) throw new ActionError(name + ' must be a number ≥ 0');
-    return v;
-  };
-  const fee = money(body.fee, 'fee', DEFAULT_FEE);
-  const serviceFee = money(body.serviceFee, 'serviceFee', 0);
-  const discount = money(body.discount, 'discount', 0);
-  const subtotal = items.reduce((sum, i) => sum + i.qty * i.price, 0);
-  const gross = subtotal + fee + serviceFee;
-  if (discount > gross) throw new ActionError(`discount (${discount}) can't exceed the order (${gross} DH)`);
-  const promoCode = typeof body.promoCode === 'string' && body.promoCode.trim() ? body.promoCode.trim().slice(0, 32) : undefined;
-  return { items: items.map(i => ({ qty: i.qty, name: i.name, price: i.price })), subtotal, fee, serviceFee, discount, total: gross - discount,
-    ...(promoCode ? { promoCode: promoCode as Quote['promoCode'] } : {}) };
 }
 
 function cleanText(text: unknown, what: string) {
@@ -303,9 +275,8 @@ export class Store {
     // MVP: cash on delivery only.
     if (body.pay === 'card') throw new ActionError("Card payment isn't available yet. Pay cash on delivery", 409);
     if (!Array.isArray(body.items) || !body.items.length) throw new ActionError('items must not be empty');
-    const priced = body.items.every(i => typeof (i as OrderLineInput)?.productId === 'string')
-      ? this.quote(m.id, body.items as OrderLineInput[], body.promoCode)
-      : legacyQuote(body);
+    if (!body.items.every(i => typeof i?.productId === 'string')) throw new ActionError('Each item needs a productId: send catalogue lines { productId, qty, options }');
+    const priced = this.quote(m.id, body.items, body.promoCode);
     const details = deliveryDetails(body);
     const nextNum = Math.max(...this.s.orders.map(o => Number(o.id.slice(1)))) + 1;
     const centre = ZONES[body.zone as ZoneName];
