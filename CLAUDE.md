@@ -63,7 +63,11 @@ One server holds the orders, couriers, merchants and tickets every app shares. S
 `LiveState.epoch` changes whenever the data is reseeded.
 
 Ports 5190 (API), 5191 (back office), 8090 (customer web) and 8091 (courier web) are the shared integration
-environment: test changes on private ports, and restart a shared server only to deploy a commit.
+environment: test changes on private ports, and restart a shared server only to deploy a commit. Never serve them
+from a dev server watching the working tree: an edit in progress reloads the page under a running e2e. The API and
+back office deploy with `deploy/prepare.sh` (builds the commit into `.deploy/<sha>`, git-ignored), then run from
+`.deploy/current`: the API with `STATE_FILE=<repo>/api/data/state-5190.json npm start`, the back office with
+`npx vite preview --port 5191`.
 
 - The live feed is `ws://HOST:5190/api/live`. Each message is `{ type: 'state', state: LiveState }`, pushed on
   every change and every second (the demo clock: timers and courier movement run on the server).
