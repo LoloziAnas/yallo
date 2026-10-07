@@ -38,7 +38,9 @@ const STORE = {
   },
 };
 const TOTAL = STORE.item.price + STORE.fee + STORE.serviceFee;
-const CUSTOMER = { name: 'Salma El Amrani', first: 'Salma', zone: 'Guéliz' };
+const CUSTOMER = { name: 'Salma El Amrani', first: 'Salma', zone: 'Guéliz', street: '10 Rue Sourya' };
+/** Set when the customer app asked for the street (web builds without reverse geocoding). */
+let typedStreet = false;
 
 // ---------- helpers ----------
 
@@ -105,6 +107,15 @@ async function customerPlacesOrder() {
   const click = name => p.getByRole('button', { name, exact: typeof name === 'string' }).first().click();
   await click('Skip');
   await click('Use my location');
+  // On web there's no reverse geocoding: newer builds ask for the street in the "Add new address" form.
+  const street = p.getByPlaceholder('12 Rue de la Liberté');
+  const guest = p.getByRole('button', { name: 'Continue as guest', exact: true });
+  await Promise.race([street.waitFor({ timeout: 15_000 }), guest.first().waitFor({ timeout: 15_000 })]).catch(() => {});
+  if (await street.isVisible()) {
+    await street.fill(CUSTOMER.street);
+    await click('Save address');
+    typedStreet = true;
+  }
   await click('Continue as guest');
   await STORE.ui(p, click);
   await click('View cart, 1');
@@ -180,12 +191,15 @@ try {
     if (o.merchantId !== STORE.id || o.total !== TOTAL || o.pay !== 'cash') throw new Error(`Unexpected order: ${o.merchantId}, ${o.total} DH, ${o.pay}`);
     await seen(pages.ops, orderId);
     if (pages.customer) await seen(pages.customer, 'A rider will be assigned when your order is ready');
+    if (typedStreet && o.address?.street !== CUSTOMER.street) throw new Error(`Order address is "${o.address?.street}", expected "${CUSTOMER.street}"`);
   });
 
   await step(`Ops opens ${'the order'} and offers it to Karim`, async () => {
     const p = pages.ops;
     await p.locator('.bo-scroll button', { hasText: orderId }).click();
     const drawer = p.locator('.drawer');
+    // The drawer shows the street the customer typed, not raw coordinates.
+    if (typedStreet) await seen(drawer, new RegExp(CUSTOMER.street));
     await drawer.getByRole('button', { name: 'Assign courier' }).click();
     await drawer.getByRole('button', { name: new RegExp(COURIER.name) }).click();
     await seen(drawer, `Offered to ${COURIER.name}`);
