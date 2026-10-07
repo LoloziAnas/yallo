@@ -2,7 +2,7 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import { createYalloClient, type LiveState, type YalloClient } from '@yallo/shared';
-import { DISPATCH_RADIUS_KM, OFFER_SEC, courierPayFor, pickupKm, tripKm } from '@yallo/shared';
+import { DEV_OTP_CODE, DISPATCH_RADIUS_KM, OFFER_SEC, courierPayFor, normalizePhone, pickupKm, tripKm } from '@yallo/shared';
 import { AUTO_ACCEPT_SEC, AUTO_READY_SEC, STAND_IN_ACCEPT_SEC, STATE_VERSION, Store } from '../src/store';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -439,6 +439,71 @@ describe('Support tickets', () => {
   });
 });
 
+describe('Sign-in (mock OTP)', () => {
+  let s: Store;
+  beforeEach(() => { s = new Store(); });
+  const status = (f: () => unknown) => { try { f(); } catch (e) { return (e as { status: number }).status; } return 200; };
+
+  test('phone numbers are normalised', () => {
+    for (const raw of ['0661 23 45 78', '+212 661-23-45-78', '00212661234578', '661234578', '(+212) 661.23.45.78']) {
+      assert.equal(normalizePhone(raw), '+212661234578', raw);
+    }
+    assert.equal(normalizePhone('call me'), null);
+    assert.equal(normalizePhone('12'), null);
+  });
+
+  test('a customer signs in with the dev code; the account is created once and reused', () => {
+    s.requestOtp('0612 34 56 78', 'customer');
+    const first = s.verifyOtp('+212612345678', DEV_OTP_CODE, ' Salma El Amrani ');
+    assert.deepEqual(first.user, { id: 'u1', role: 'customer', phone: '+212612345678', name: 'Salma El Amrani' });
+    assert.match(first.token, /^[0-9a-f]{48}$/);
+    assert.deepEqual(s.userForToken(first.token), first.user);
+    // Same number later: same account, new session.
+    (s as unknown as { otps: Map<string, unknown> }).otps.clear();
+    s.requestOtp('0612345678', 'customer');
+    const again = s.verifyOtp('0612345678', DEV_OTP_CODE);
+    assert.equal(again.user.id, 'u1');
+    assert.notEqual(again.token, first.token);
+    s.signOut(first.token);
+    assert.equal(s.userForToken(first.token), undefined);
+    assert.equal(s.userForToken(again.token)!.id, 'u1');
+  });
+
+  test('a courier signs in only with a known, active courier number', () => {
+    assert.equal(status(() => s.requestOtp('0600000000', 'courier')), 404);
+    s.requestOtp('+212 661 23 45 78', 'courier'); // Karim El Amrani's seeded number
+    const k = s.verifyOtp('0661234578', DEV_OTP_CODE);
+    assert.deepEqual(k.user, { id: 'c1', role: 'courier', phone: '+212661234578', name: 'Karim El Amrani', courierId: 'c1' });
+    s.setCourierSuspended('c2', true);
+    assert.equal(status(() => s.requestOtp('+212 662 11 08 41', 'courier')), 403);
+  });
+
+  test('wrong codes, too many tries, resend cooldown and bad input are refused', () => {
+    assert.equal(status(() => s.requestOtp('not a phone', 'customer')), 400);
+    assert.equal(status(() => s.requestOtp('0612345678', 'ops' as never)), 400);
+    assert.equal(status(() => s.verifyOtp('0612345678', DEV_OTP_CODE)), 400, 'no code was requested');
+    s.requestOtp('0612345678', 'customer');
+    assert.equal(status(() => s.requestOtp('0612345678', 'customer')), 429, 'resend cooldown');
+    for (let i = 1; i < 5; i++) assert.equal(status(() => s.verifyOtp('0612345678', '000000')), 401);
+    assert.equal(status(() => s.verifyOtp('0612345678', '000000')), 429, 'fifth wrong code burns the code');
+    assert.equal(status(() => s.verifyOtp('0612345678', DEV_OTP_CODE)), 400, 'and the right code no longer works');
+  });
+
+  test('accounts survive a restart; reset clears them; the live state never carries them', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'yallo-')), 'state.json');
+    const a = new Store({ file });
+    a.requestOtp('0612345678', 'customer');
+    const { token } = a.verifyOtp('0612345678', DEV_OTP_CODE, 'Salma');
+    a.flush();
+    const b = new Store({ file });
+    assert.equal(b.userForToken(token)!.name, 'Salma');
+    const live = JSON.stringify(b.state);
+    assert.ok(!live.includes(token) && !live.includes('+212612345678'), 'no tokens or customer phones in LiveState');
+    b.reset();
+    assert.equal(b.userForToken(token), undefined);
+  });
+});
+
 describe('Persistence', () => {
   const tmpFile = () => join(mkdtempSync(join(tmpdir(), 'yallo-')), 'state.json');
 
@@ -523,6 +588,18 @@ describe('HTTP and live feed', () => {
     stop();
     await new Promise(r => setTimeout(r, 100));
     assert.equal(api.store.state.couriers.find(c => c.id === 'c1')!.app, false);
+  });
+
+  test('sign-in over HTTP: the client keeps the token and sends it', async () => {
+    const sent = await client.requestOtp('0661 23 45 78', 'courier');
+    assert.deepEqual(sent, { sent: true, phone: '+212661234578', expiresInSec: 300 });
+    const session = await client.verifyOtp('0661234578', DEV_OTP_CODE);
+    assert.equal(client.token, session.token);
+    assert.equal((await client.me()).courierId, 'c1');
+    await client.signOut();
+    assert.equal(client.token, undefined);
+    await assert.rejects(client.me(), /Sign in first/);
+    await assert.rejects(client.requestOtp('0600000000', 'courier'), /No courier account for this number/);
   });
 
   test('pushes the state to subscribers when it changes', async () => {

@@ -83,6 +83,11 @@ environment: test changes on private ports, and restart a shared server only to 
     `/refund {amount, reason}`. `:n` is the order number without "#".
   - `/api/tickets` opens a ticket (body `OpenTicketBody`) and returns it. `/api/tickets/:id/messages {from: 'requester'|'ops', author, text}`
     adds a message (a requester message reopens a resolved ticket). Also `/resolve` and `/escalate`.
+  - Sign-in (mock phone OTP): `/api/auth/otp {phone, role: 'customer'|'courier'}` then `/api/auth/verify {phone, code, name?}`
+    → `{ token, user }`. The code is always 123456 in dev (`DEV_OTP_CODE`, logged). Couriers sign in only with a known,
+    non-suspended courier number; customers get an account on first sign-in. `GET /api/auth/me` and
+    `/api/auth/logout` take `Authorization: Bearer <token>`; `createYalloClient` handles it (`verifyOtp` keeps the token,
+    `setToken` restores one). Accounts persist with the state but are never in LiveState.
   - `/api/merchants/:id/open {open}`, `/api/couriers/:id/suspend {suspended}`,
     `/api/couriers/:id/availability {status: 'idle'|'off'}`, `/api/reset`.
 - Use `createYalloClient(url)` rather than calling these by hand. The back office uses `''`, because Vite

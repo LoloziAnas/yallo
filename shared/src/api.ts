@@ -88,6 +88,41 @@ export type OpenTicketBody = {
   text: string;
 };
 
+/** Who can sign in. Ops sign-in comes with authorization (phase 2). */
+export type AuthRole = 'customer' | 'courier';
+
+export type AuthUser = {
+  /** "u1", "u2", … for customers; the courier id ("c1") for couriers. */
+  id: string;
+  role: AuthRole;
+  /** Normalised, e.g. "+212661234578". */
+  phone: string;
+  name?: string;
+  /** For couriers, the courier this account drives as. */
+  courierId?: string;
+};
+
+export type AuthSession = { token: string; user: AuthUser };
+
+/** In development every one-time code is this, and the API logs it. */
+export const DEV_OTP_CODE = '123456';
+
+/**
+ * Normalises a Moroccan or international number to "+<digits>": "0661 23 45 78" and "+212 661-23-45-78" both
+ * become "+212661234578". Returns null when it doesn't look like a phone number.
+ */
+export function normalizePhone(raw: string): string | null {
+  if (typeof raw !== 'string') return null;
+  const s = raw.trim();
+  let digits = s.replace(/[\s().-]/g, '');
+  if (!/^\+?\d+$/.test(digits)) return null;
+  if (digits.startsWith('+')) digits = digits.slice(1);
+  else if (digits.startsWith('00')) digits = digits.slice(2);
+  else if (digits.startsWith('0') && digits.length === 10) digits = '212' + digits.slice(1);
+  else if (digits.length === 9) digits = '212' + digits;
+  return digits.length >= 8 && digits.length <= 15 ? '+' + digits : null;
+}
+
 export type LiveMessage = { type: 'state'; state: LiveState };
 
 /** Error body returned with any 4xx. */
@@ -105,13 +140,18 @@ export type YalloClient = ReturnType<typeof createYalloClient>;
  * @param baseUrl e.g. "http://localhost:5190", or "" for same-origin behind a dev proxy.
  *   On a phone, use the dev machine's LAN address, not localhost.
  */
-export function createYalloClient(baseUrl: string) {
+export function createYalloClient(baseUrl: string, opts: { token?: string } = {}) {
+  /** Sent as `Authorization: Bearer …` on every request and as `?token=` on the live feed. */
+  let token = opts.token;
   const call = async <T = LiveState>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> => {
     let res: Response;
+    const headers: Record<string, string> = {};
+    if (body !== undefined) headers['content-type'] = 'application/json';
+    if (token) headers.authorization = 'Bearer ' + token;
     try {
       res = await fetch(baseUrl + '/api' + path, {
         method,
-        headers: body === undefined ? undefined : { 'content-type': 'application/json' },
+        headers,
         body: body === undefined ? undefined : JSON.stringify(body),
       });
     } catch {
@@ -127,6 +167,26 @@ export function createYalloClient(baseUrl: string) {
   const post = <T = LiveState>(path: string, body?: unknown) => call<T>('POST', path, body);
 
   return {
+    /** The current token, if signed in. */
+    get token() { return token; },
+    /** Use a token from a previous sign-in (e.g. restored from storage), or null to sign out locally. */
+    setToken(t: string | null) { token = t ?? undefined; },
+
+    /** Sends a one-time code to the phone (in dev it's always DEV_OTP_CODE). */
+    requestOtp: (phone: string, role: AuthRole) => post<{ sent: true; phone: string; expiresInSec: number }>('/auth/otp', { phone, role }),
+    /** Checks the code; on success the client keeps the token for later calls. `name` sets a new customer's name. */
+    verifyOtp: async (phone: string, code: string, name?: string) => {
+      const session = await post<AuthSession>('/auth/verify', { phone, code, ...(name ? { name } : {}) });
+      token = session.token;
+      return session;
+    },
+    /** The signed-in user (needs a token). */
+    me: () => call<AuthUser>('GET', '/auth/me'),
+    signOut: async () => {
+      if (token) await post<{ ok: true }>('/auth/logout').catch(() => undefined);
+      token = undefined;
+    },
+
     getState: () => call('GET', '/state'),
 
     /**
@@ -135,7 +195,8 @@ export function createYalloClient(baseUrl: string) {
      * `{ courierId }` so the server knows a real app is answering that courier's offers.
      */
     subscribe(onState: (s: LiveState) => void, onStatus?: (connected: boolean) => void, opts: { courierId?: string } = {}) {
-      const query = opts.courierId ? '?courier=' + encodeURIComponent(opts.courierId) : '';
+      const params = [opts.courierId && 'courier=' + encodeURIComponent(opts.courierId), token && 'token=' + encodeURIComponent(token)].filter(Boolean);
+      const query = params.length ? '?' + params.join('&') : '';
       const wsUrl = (baseUrl || (typeof location !== 'undefined' ? location.origin : '')).replace(/^http/, 'ws') + '/api/live' + query;
       let ws: WebSocket | null = null;
       let stopped = false;

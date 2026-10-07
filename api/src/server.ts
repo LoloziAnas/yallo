@@ -6,11 +6,21 @@ import { ActionError, Store } from './store';
 
 const MAX_BODY = 64 * 1024;
 
-type Handler = (store: Store, params: string[], body: any) => unknown;
+/** Per-request context: the bearer token, if any. */
+type Ctx = { token?: string };
+type Handler = (store: Store, params: string[], body: any, ctx: Ctx) => unknown;
 
 /** [method, path pattern, handler]. Handlers return the response body; most return the new state. */
 const ROUTES: [string, RegExp, Handler][] = [
   ['GET', /^\/api\/state$/, s => s.state],
+  ['POST', /^\/api\/auth\/otp$/, (s, _, b) => s.requestOtp(b?.phone, b?.role)],
+  ['POST', /^\/api\/auth\/verify$/, (s, _, b) => s.verifyOtp(b?.phone, b?.code, b?.name)],
+  ['GET', /^\/api\/auth\/me$/, (s, _, __, ctx) => {
+    const user = s.userForToken(ctx.token);
+    if (!user) throw new ActionError('Sign in first', 401);
+    return user;
+  }],
+  ['POST', /^\/api\/auth\/logout$/, (s, _, __, ctx) => (s.signOut(ctx.token), { ok: true })],
   ['POST', /^\/api\/orders$/, (s, _, b) => s.placeOrder(b)],
   ['POST', /^\/api\/orders\/(\d+)\/assign$/, (s, [id], b) => (s.assignCourier(id, String(b?.courierId)), s.state)],
   ['POST', /^\/api\/orders\/(\d+)\/offer$/, (s, [id], b) => (s.offerOrder(id, String(b?.courierId)), s.state)],
@@ -62,7 +72,7 @@ export function createApi({ tickMs = 1000, store = new Store() } = {}) {
   const http = createServer(async (req, res) => {
     // Any local app may call the API: Vite dev servers, Expo web, simulators.
     res.setHeader('access-control-allow-origin', '*');
-    res.setHeader('access-control-allow-headers', 'content-type');
+    res.setHeader('access-control-allow-headers', 'content-type, authorization');
     res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS');
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
@@ -72,7 +82,9 @@ export function createApi({ tickMs = 1000, store = new Store() } = {}) {
     try {
       const body = req.method === 'POST' ? await readJson(req) : undefined;
       const params = route[1].exec(path)!.slice(1).map(decodeURIComponent);
-      send(res, 200, route[2](store, params, body));
+      const auth = req.headers.authorization;
+      const token = auth?.startsWith('Bearer ') ? auth.slice(7).trim() : undefined;
+      send(res, 200, route[2](store, params, body, { token }));
     } catch (e) {
       if (e instanceof ActionError) send(res, e.status, { error: e.message });
       else { console.error(e); send(res, 500, { error: 'Internal error' }); }

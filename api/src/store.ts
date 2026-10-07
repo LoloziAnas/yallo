@@ -5,7 +5,7 @@ import { dirname } from 'node:path';
 import {
   ACTIVE_STATUSES, COURIERS, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, MERCHANTS, clockAt, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
   type ApiCourier, type ApiOrder, type LiveState, type OpenTicketBody, type OrderStatus, type PlaceOrderBody, type Ticket, type TicketPriority,
-  type TicketSource, type ZoneName, type OrderItem, type OrderLineInput, type Quote, PricingError, quoteOrder, storeAvailability,
+  type TicketSource, type ZoneName, type AuthRole, type AuthSession, type AuthUser, DEV_OTP_CODE, normalizePhone, type OrderItem, type OrderLineInput, type Quote, PricingError, quoteOrder, storeAvailability,
 } from '@yallo/shared';
 
 /** A rejected action. The server turns it into a 4xx with this message. */
@@ -120,8 +120,16 @@ function seed(): LiveState {
 }
 
 /** Bump when the saved state's shape changes; an older file is set aside and the demo reseeds. */
-export const STATE_VERSION = 1;
-type SavedState = { version: number; savedAt: string; state: LiveState; auto: string[] };
+export const STATE_VERSION = 2;
+/** Accounts and sessions: saved with the state but never broadcast. */
+type AuthData = { users: AuthUser[]; sessions: { token: string; userId: string; createdAt: string }[]; nextCustomer: number };
+type SavedState = { version: number; savedAt: string; state: LiveState; auto: string[]; auth: AuthData };
+const emptyAuth = (): AuthData => ({ users: [], sessions: [], nextCustomer: 1 });
+
+/** One-time codes expire after this long, allow this many tries, and can be re-sent after the cooldown. */
+export const OTP_TTL_MS = 5 * 60_000;
+export const OTP_MAX_ATTEMPTS = 5;
+export const OTP_RESEND_MS = 30_000;
 
 export type StoreOptions = {
   /** Keep the state in this JSON file and load it on start. Without it the state lives in memory only. */
@@ -140,6 +148,9 @@ export class Store {
   private listeners = new Set<(s: LiveState) => void>();
   /** Open courier-app connections per courier id. */
   private apps = new Map<string, number>();
+  private auth: AuthData = emptyAuth();
+  /** Pending one-time codes by phone. Kept in memory only. */
+  private otps = new Map<string, { role: AuthRole; code: string; sentAt: number; attempts: number }>();
 
   constructor(opts: StoreOptions = {}) {
     this.file = opts.file;
@@ -155,6 +166,7 @@ export class Store {
       const saved = JSON.parse(readFileSync(this.file, 'utf8')) as SavedState;
       if (saved.version !== STATE_VERSION || !saved.state?.epoch || !Array.isArray(saved.state.orders)) throw new Error('version ' + saved.version);
       saved.auto.forEach(id => this.auto.add(id));
+      this.auth = saved.auth ?? emptyAuth();
       // No courier app is connected yet; they re-attach when their sockets reconnect.
       saved.state.couriers.forEach(c => { c.app = false; });
       return saved.state;
@@ -172,7 +184,7 @@ export class Store {
     this.saveTimer = undefined;
     if (!this.file) return;
     mkdirSync(dirname(this.file), { recursive: true });
-    const saved: SavedState = { version: STATE_VERSION, savedAt: new Date().toISOString(), state: this.s, auto: [...this.auto] };
+    const saved: SavedState = { version: STATE_VERSION, savedAt: new Date().toISOString(), state: this.s, auto: [...this.auto], auth: this.auth };
     writeFileSync(this.file + '.tmp', JSON.stringify(saved));
     renameSync(this.file + '.tmp', this.file);
   }
@@ -236,6 +248,8 @@ export class Store {
   reset() {
     this.s = seed();
     this.auto.clear();
+    this.auth = emptyAuth();
+    this.otps.clear();
     for (const c of this.s.couriers) c.app = (this.apps.get(c.id) ?? 0) > 0;
     this.changed();
     this.flush();
@@ -572,5 +586,77 @@ export class Store {
     if (tk.resolved) throw new ActionError(tk.id + ' is resolved', 409);
     tk.escalated = true;
     this.changed();
+  }
+
+  // ---------- sign-in (mock OTP) ----------
+
+  private courierByPhone(phone: string) {
+    return this.s.couriers.find(c => normalizePhone(c.phone) === phone);
+  }
+
+  /** Starts a sign-in: checks the number and "sends" a code (in dev, always DEV_OTP_CODE, logged). */
+  requestOtp(rawPhone: string, role: AuthRole) {
+    const phone = normalizePhone(rawPhone);
+    if (!phone) throw new ActionError('Enter a valid phone number');
+    if (role !== 'customer' && role !== 'courier') throw new ActionError("role must be 'customer' or 'courier'");
+    if (role === 'courier') {
+      const c = this.courierByPhone(phone);
+      if (!c) throw new ActionError('No courier account for this number', 404);
+      if (c.suspended) throw new ActionError('This courier account is suspended. Contact Yallo support', 403);
+    }
+    const pending = this.otps.get(phone);
+    const wait = pending ? Math.ceil((pending.sentAt + OTP_RESEND_MS - Date.now()) / 1000) : 0;
+    if (wait > 0) throw new ActionError(`Wait ${wait} s before asking for a new code`, 429);
+    this.otps.set(phone, { role, code: DEV_OTP_CODE, sentAt: Date.now(), attempts: 0 });
+    console.log(`[otp] ${role} ${phone}: code ${DEV_OTP_CODE}`);
+    return { sent: true as const, phone, expiresInSec: OTP_TTL_MS / 1000 };
+  }
+
+  /** Completes a sign-in. Returns a session token and the user (created on a customer's first sign-in). */
+  verifyOtp(rawPhone: string, code: string, name?: string): AuthSession {
+    const phone = normalizePhone(rawPhone);
+    if (!phone) throw new ActionError('Enter a valid phone number');
+    const otp = this.otps.get(phone);
+    if (!otp || Date.now() > otp.sentAt + OTP_TTL_MS) { this.otps.delete(phone); throw new ActionError('This code has expired. Ask for a new one', 400); }
+    if (String(code ?? '').trim() !== otp.code) {
+      otp.attempts += 1;
+      if (otp.attempts >= OTP_MAX_ATTEMPTS) { this.otps.delete(phone); throw new ActionError('Too many wrong codes. Ask for a new one', 429); }
+      throw new ActionError('Wrong code', 401);
+    }
+    this.otps.delete(phone);
+    let user: AuthUser;
+    if (otp.role === 'courier') {
+      const c = this.courierByPhone(phone);
+      if (!c) throw new ActionError('No courier account for this number', 404);
+      if (c.suspended) throw new ActionError('This courier account is suspended. Contact Yallo support', 403);
+      user = this.auth.users.find(u => u.role === 'courier' && u.courierId === c.id)
+        ?? this.addUser({ id: c.id, role: 'courier', phone, name: c.name, courierId: c.id });
+    } else {
+      const given = typeof name === 'string' ? name.trim().slice(0, 60) : '';
+      user = this.auth.users.find(u => u.role === 'customer' && u.phone === phone)
+        ?? this.addUser({ id: 'u' + this.auth.nextCustomer++, role: 'customer', phone, ...(given ? { name: given } : {}) });
+      if (given && !user.name) user.name = given;
+    }
+    const token = randomBytes(24).toString('hex');
+    this.auth.sessions.push({ token, userId: user.id, createdAt: new Date().toISOString() });
+    this.scheduleSave();
+    return { token, user: { ...user } };
+  }
+
+  private addUser(u: AuthUser) {
+    this.auth.users.push(u);
+    return u;
+  }
+
+  /** The user a token belongs to, or undefined. */
+  userForToken(token: string | undefined): AuthUser | undefined {
+    if (!token) return undefined;
+    const session = this.auth.sessions.find(x => x.token === token);
+    return session && this.auth.users.find(u => u.id === session.userId);
+  }
+
+  signOut(token: string | undefined) {
+    this.auth.sessions = this.auth.sessions.filter(x => x.token !== token);
+    this.scheduleSave();
   }
 }
