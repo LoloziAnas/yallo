@@ -1,6 +1,6 @@
 // In-memory state for the mock API: the shared demo seed plus the rules every app's actions go through.
 import {
-  ACTIVE_STATUSES, COURIERS, DEMO_ELAPSED_SEC, DEMO_START_MIN, MERCHANTS, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
+  ACTIVE_STATUSES, COURIERS, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, MERCHANTS, clockAt, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
   type ApiCourier, type ApiOrder, type LiveState, type OpenTicketBody, type OrderStatus, type PlaceOrderBody, type Ticket, type TicketPriority,
   type TicketSource, type ZoneName,
 } from '@yallo/shared';
@@ -28,12 +28,6 @@ const SOURCES: TicketSource[] = ['customer', 'courier', 'merchant'];
 const PRIORITIES: TicketPriority[] = ['urgent', 'high', 'normal', 'low'];
 const MAX_TEXT = 2000;
 
-/** Demo wall-clock time at second `t`, "HH:MM". */
-export function clockAt(t: number) {
-  const min = DEMO_START_MIN + Math.floor(t / 60);
-  return String(Math.floor(min / 60) % 24).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0');
-}
-
 function cleanText(text: unknown, what: string) {
   if (typeof text !== 'string' || !text.trim()) throw new ActionError(what + ' is required');
   if (text.length > MAX_TEXT) throw new ActionError(what + ' is too long (max ' + MAX_TEXT + ' characters)');
@@ -45,7 +39,7 @@ function seed(): LiveState {
     t: 0,
     merchants: clone(MERCHANTS),
     couriers: COURIERS.map(c => ({ ...clone(c), suspended: false, app: false })),
-    orders: ORDERS.map(o => ({ ...clone(o), elapsedSec: DEMO_ELAPSED_SEC[o.id] ?? 0 })),
+    orders: ORDERS.map(o => ({ ...clone(o), elapsedSec: DEMO_ELAPSED_SEC[o.id] ?? 0, statusAt: { ...DEMO_STATUS_AT[o.id] } })),
     tickets: clone(TICKETS),
   };
 }
@@ -66,6 +60,13 @@ export class Store {
   }
 
   private changed() { this.listeners.forEach(fn => fn(this.s)); }
+
+  /** Moves an order to a status and records when it first got there. */
+  private setStatus(o: ApiOrder, status: OrderStatus) {
+    o.status = status;
+    o.statusAt ??= {};
+    o.statusAt[status] ??= this.s.t;
+  }
 
   private order(id: string) {
     const key = id.startsWith('#') ? id : '#' + id;
@@ -113,8 +114,8 @@ export class Store {
       if (!isActive(o.status)) continue;
       o.elapsedSec += 1;
       if (this.auto.has(o.id)) {
-        if (o.status === 'pending' && o.elapsedSec >= AUTO_ACCEPT_SEC) o.status = 'preparing';
-        else if (o.status === 'preparing' && o.elapsedSec >= AUTO_READY_SEC) o.status = readyStatus(o);
+        if (o.status === 'pending' && o.elapsedSec >= AUTO_ACCEPT_SEC) this.setStatus(o, 'preparing');
+        else if (o.status === 'preparing' && o.elapsedSec >= AUTO_READY_SEC) this.setStatus(o, readyStatus(o));
       }
     }
     for (const o of s.orders) {
@@ -171,6 +172,7 @@ export class Store {
       zone: body.zone,
       dropoff: { x: Math.min(97, Math.max(3, centre.x + Math.cos(angle) * r)), y: Math.min(97, Math.max(3, centre.y + Math.sin(angle) * r)) },
       status: 'pending',
+      statusAt: { pending: this.s.t },
       courierId: null,
       items: body.items.map(i => ({ qty: i.qty, name: i.name, price: i.price })),
       fee,
@@ -224,7 +226,7 @@ export class Store {
     if (o.courierId !== c.id) this.release(o.courierId);
     o.courierId = c.id;
     c.status = 'busy';
-    if (o.status === 'ready') o.status = 'picking';
+    if (o.status === 'ready') this.setStatus(o, 'picking');
     delete o.offer;
     delete o.lastOffer;
   }
@@ -312,7 +314,10 @@ export class Store {
     if (o.status === 'delivering') throw new ActionError(o.id + ' is already picked up; cancel it instead', 409);
     this.release(o.courierId);
     o.courierId = null;
-    if (o.status === 'picking') o.status = 'ready';
+    if (o.status === 'picking') {
+      o.status = 'ready'; // back in the queue: keep when the food was ready, forget the pickup run
+      if (o.statusAt) delete o.statusAt.picking;
+    }
     this.changed();
   }
 
@@ -324,7 +329,7 @@ export class Store {
     if ((status === 'picking' || status === 'delivering' || status === 'delivered') && !o.courierId) {
       throw new ActionError(o.id + ' has no courier yet', 409);
     }
-    o.status = status === 'ready' ? readyStatus(o) : status;
+    this.setStatus(o, status === 'ready' ? readyStatus(o) : status);
     this.auto.delete(o.id);
     if (status === 'delivered') this.release(o.courierId);
     this.changed();
@@ -334,7 +339,7 @@ export class Store {
     const o = this.order(orderId);
     if (!isActive(o.status)) throw new ActionError(o.id + ' is already ' + o.status, 409);
     if (!reason?.trim()) throw new ActionError('A cancellation reason is required');
-    o.status = 'cancelled';
+    this.setStatus(o, 'cancelled');
     o.cancelReason = reason.trim();
     this.endOffer(o, 'withdrawn');
     if (compensateCourier && o.courierId) o.courierCompensation = COMPENSATION_DH;

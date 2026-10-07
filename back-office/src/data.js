@@ -1,6 +1,6 @@
 // Demo data for the Marrakech back office (Tuesday 6 October 2026, ~18:34).
 
-import { ZONES as Z, MERCHANTS, COURIERS, ORDERS, TICKETS, DEMO_ELAPSED_SEC } from '@yallo/shared';
+import { ZONES as Z, MERCHANTS, COURIERS, ORDERS, TICKETS, DEMO_ELAPSED_SEC, DEMO_STATUS_AT } from '@yallo/shared';
 
 // The shared seed holds identities, positions and orders. The ops-only figures below (volumes,
 // acceptance, earnings, documents) belong to the back office and are joined on by id.
@@ -29,6 +29,7 @@ const MNAME = Object.fromEntries(MERCHANTS.map(m => [m.id, m.name]));
 export const toBoOrder = (o, t = 0) => ({ id:o.id, m:MNAME[o.merchantId], c:o.customerName, cz:o.zone, st:o.status, courier:o.courierId, total:o.total,
   pay:o.pay === 'cash' ? 'Cash' : 'Card', placed:o.placedAt, el:o.elapsedSec ?? DEMO_ELAPSED_SEC[o.id] ?? 0, items:o.items.map(i => [i.qty, i.name, i.price]),
   ux:o.dropoff.x, uy:o.dropoff.y, fee:o.fee, serviceFee:o.serviceFee ?? 0, discount:o.discount ?? 0, promoCode:o.promoCode ?? null, refund:o.refund, cancelReason:o.cancelReason,
+  statusAt:o.statusAt ?? DEMO_STATUS_AT[o.id] ?? { pending:0 },
   offer:o.offer ? { courier:o.offer.courierId, left:Math.max(0, o.offer.expiresAt - t) } : null, lastOffer:o.lastOffer ?? null });
 export const ORDERS0 = ORDERS.map(o => toBoOrder(o));
 

@@ -119,6 +119,11 @@ export type Order = {
   pay: PayMethod;
   /** Local time the order was placed, "HH:MM". */
   placedAt: string;
+  /**
+   * When the order first entered each status, in demo-clock seconds (`LiveState.t`; negative = before the demo
+   * started). Convert with `clockAt`.
+   */
+  statusAt?: Partial<Record<OrderStatus, number>>;
 };
 
 /** Who opened a support ticket. */

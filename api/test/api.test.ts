@@ -139,6 +139,41 @@ describe('Store', () => {
   });
 });
 
+describe('Step times', () => {
+  let s: Store;
+  beforeEach(() => { s = new Store(); });
+
+  test('a new order records each step when it happens', () => {
+    tick(s, 30);
+    const o = s.placeOrder({ merchantId: 'm1', customerName: 'Amal', zone: 'Guéliz', pay: 'cash', items: [{ qty: 1, name: 'Tea', price: 9 }] });
+    tick(s, AUTO_ACCEPT_SEC);
+    s.assignCourier(o.id, 'c3');
+    tick(s, AUTO_READY_SEC - AUTO_ACCEPT_SEC);
+    tick(s, 7);
+    s.setOrderStatus(o.id, 'delivering');
+    tick(s, 50);
+    s.setOrderStatus(o.id, 'delivered');
+    assert.deepEqual(order(s, o.id).statusAt, { pending: 30, preparing: 50, picking: 90, delivering: 97, delivered: 147 });
+  });
+
+  test('cancelling records the time; unassigning forgets the pickup run but keeps ready', () => {
+    tick(s, 12);
+    s.cancelOrder('#48216', 'Customer request', false);
+    assert.equal(order(s, '#48216').statusAt!.cancelled, 12);
+    const readyAt = order(s, '#48213').statusAt!.ready;
+    s.unassignCourier('#48213');
+    assert.deepEqual([order(s, '#48213').statusAt!.ready, order(s, '#48213').statusAt!.picking], [readyAt, undefined]);
+  });
+
+  test('seed orders come with a history that ends before the demo starts', () => {
+    for (const o of s.state.orders) {
+      const times = Object.values(o.statusAt!);
+      assert.ok(times.every(t => t! <= 0), o.id + ' has a step in the future');
+      assert.equal(o.statusAt![o.status] !== undefined, true, o.id + ' has no time for its current status');
+    }
+  });
+});
+
 describe('Job offers', () => {
   let s: Store;
   beforeEach(() => { s = new Store(); });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { DISPATCH_RADIUS_KM, createYalloClient, pickupKm } from '@yallo/shared';
+import { DISPATCH_RADIUS_KM, clockAt, createYalloClient, pickupKm } from '@yallo/shared';
 import { IC } from './icons.jsx';
 import { ZONES, MERCH, MBY, COURIERS0, ORDERS0, STATUS, ACTIVE, APPS0, DOCDEF, TICKETS0, PAY_C, PAY_M, fromLive } from './data.js';
 
@@ -196,19 +196,23 @@ export function useBackOffice({ startPage } = {}) {
   let od = { st:STATUS.pending, timeline:[], items:[] }, nearest = [];
   if (dOrderObj) {
     const o = dOrderObj, c = CBY[o.courier], m = MBY[o.m], late = lateInfo(o);
-    const steps = [['Placed',o.placed],['Accepted by merchant'],['Ready for pickup'],['Picked up'],['Delivered']];
+    // Step times come from the API: when the order first reached each status, on the demo clock.
+    const at = o.statusAt;
+    const steps = o.st === 'cancelled'
+      ? [['Placed', at.pending], ['Cancelled · ' + (o.cancelReason || 'Merchant closed'), at.cancelled]]
+      : [['Placed', at.pending], ['Accepted by merchant', at.preparing], ['Ready for pickup', at.ready ?? at.picking], ['Picked up', at.delivering], ['Delivered', at.delivered]];
     const idx = { pending:0, preparing:1, ready:2, picking:2, delivering:3, delivered:4, cancelled:-1 }[o.st];
-    const [hh, mm] = o.placed.split(':').map(Number); const tAt = off => { const t = hh * 60 + mm + off; return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
-    const offs = [0, 1, 9, 13, 26];
+    // Minutes to go for the courier: to the store until pickup, then to the drop-off (2.9 min/km, as in the picker).
+    const etaMin = c ? Math.max(1, Math.round(pickupKm({ x:c.x, y:c.y }, o.st === 'delivering' ? { x:o.ux, y:o.uy } : { x:m.x, y:m.y }) * 2.9)) : 0;
     od = { ...o, st:STATUS[o.st], timer:mmss(el(o)), late:!!late, lateMsg:late, maddr:m.addr, caddr:o.cz + ', Marrakech · ' + (o.pay === 'Cash' ? 'collect ' + o.total + ' DH' : 'paid online'),
-      hasCourier:!!c, noCourier:!c && !o.offer && o.st !== 'cancelled', courier:c && c.name, cIni:c && ini(c.name), cVeh:c && c.veh, cPhone:c && c.phone, cEta:c ? (o.st === 'picking' ? 'At store in 3 min' : o.st === 'delivering' ? 'Drop-off in 6 min' : 'Done') : '', openCourier:c ? openCourier(c.id) : null,
+      hasCourier:!!c, noCourier:!c && !o.offer && o.st !== 'cancelled', courier:c && c.name, cIni:c && ini(c.name), cVeh:c && c.veh, cPhone:c && c.phone, cEta:!c ? '' : o.st === 'delivering' ? 'Drop-off in ' + etaMin + ' min' : ACTIVE.includes(o.st) ? 'At store in ' + etaMin + ' min' : 'Done', openCourier:c ? openCourier(c.id) : null,
       hasOffer:!!o.offer, offerName:o.offer && CBY[o.offer.courier].name, offerLeft:o.offer && mmss(o.offer.left),
       offerNote:!o.offer && !c && o.lastOffer && o.lastOffer.outcome !== 'withdrawn' ? CBY[o.lastOffer.courierId].name + (o.lastOffer.outcome === 'declined' ? ' declined the offer' : ' didn\'t answer the offer') : null,
       canAssign:ACTIVE.includes(o.st), cantCancel:!ACTIVE.includes(o.st), refunded:!!o.refund, refundAmt:o.refund,
       items:o.items.map(([q, n, pp]) => ({ q, n, p:q * pp })),
-      timeline:(o.st === 'cancelled' ? [['Placed',o.placed],['Cancelled · ' + (o.cancelReason || 'Merchant closed'),tAt(6)]] : steps).map((st, i, arr) => {
+      timeline:steps.map((st, i, arr) => {
         const doneStep = o.st === 'cancelled' ? true : i <= idx, cur = o.st !== 'cancelled' && i === idx && o.st !== 'delivered';
-        return { label:st[0], t:doneStep ? (st[1] || tAt(offs[i])) : '—', dot:cur ? 'var(--color-accent)' : doneStep ? 'var(--color-accent-2-500)' : 'var(--color-neutral-300)', ring:cur ? '0 0 0 4px var(--color-accent-200)' : 'none', line:i === arr.length - 1 ? 'transparent' : doneStep && !cur ? 'var(--color-accent-2-300)' : 'var(--color-neutral-200)', fg:doneStep ? 'var(--color-text)' : 'var(--color-neutral-600)', fw:cur ? 700 : 500 };
+        return { label:st[0], t:doneStep && st[1] !== undefined ? clockAt(st[1]) : '—', dot:cur ? 'var(--color-accent)' : doneStep ? 'var(--color-accent-2-500)' : 'var(--color-neutral-300)', ring:cur ? '0 0 0 4px var(--color-accent-200)' : 'none', line:i === arr.length - 1 ? 'transparent' : doneStep && !cur ? 'var(--color-accent-2-300)' : 'var(--color-neutral-200)', fg:doneStep ? 'var(--color-text)' : 'var(--color-neutral-600)', fw:cur ? 700 : 500 };
       }) };
     nearest = s.couriers.filter(x => x.st === 'idle' && !s.suspended[x.id] && !offeredTo.has(x.id)).map(x => { const d = pickupKm({ x:x.x, y:x.y }, { x:m.x, y:m.y }), inRange = d <= DISPATCH_RADIUS_KM; return { ...x, d, dist:d.toFixed(1), eta:Math.max(2, Math.round(d * 2.9)), inRange, onClick:inRange ? () => offer(o.id, x.id) : null }; }).sort((a, b) => a.d - b.d).slice(0, 4);
   }
