@@ -9,7 +9,15 @@
 //
 // Options: --api <url> (required), --init-keystore, --allow-dirty (build with uncommitted changes).
 import { execFileSync, spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -148,6 +156,33 @@ run(
 );
 
 const built = path.join(root, 'android/app/build/outputs/apk/release/app-release.apk');
+
+// Refuse an APK that isn't signed with the Yallo key (e.g. the template's debug key): it couldn't be updated later.
+const buildTools = path.join(
+  process.env.ANDROID_HOME || path.join(homedir(), 'Android/Sdk'),
+  'build-tools',
+);
+const apksigner = existsSync(buildTools)
+  ? readdirSync(buildTools)
+      .sort()
+      .reverse()
+      .map((v) => path.join(buildTools, v, 'apksigner'))
+      .find(existsSync)
+  : undefined;
+if (apksigner) {
+  const certs = execFileSync(apksigner, ['verify', '--print-certs', built], {
+    env,
+    encoding: 'utf8',
+  });
+  if (!/CN=Yallo/.test(certs)) fail('The APK is not signed with the Yallo release key:\n' + certs);
+  console.log(
+    '\n✔ Signed with the Yallo release key (' +
+      certs.match(/SHA-256 digest: (\w+)/)?.[1].slice(0, 16) +
+      '…)',
+  );
+} else {
+  console.warn('⚠ apksigner not found (Android build-tools): signature not checked.');
+}
 mkdirSync(path.join(root, 'apk'), { recursive: true });
 const out = path.join(root, 'apk', `yallo-${version}-${sha}.apk`);
 copyFileSync(built, out);
