@@ -120,8 +120,9 @@ apps drop anything they remembered about the old data.
 
 ## Public demo
 
-The hosted demo for investors and testers (Render + Neon, `DEPLOY_PROFILE=demo`) is described in
-[`DEMO.md`](DEMO.md): links, tester phones, setup and limits. To try the profile locally:
+The hosted demo for investors and testers (web apps on GitHub Pages, the API on the laptop behind a Cloudflare quick
+tunnel, `deploy/demo-host.sh`) is described in [`DEMO.md`](DEMO.md): links, tester phones, setup and limits. To try
+the profile locally:
 
 ```sh
 cd api && npm run build && PORT=5196 DEPLOY_PROFILE=demo STATE_FILE=off node dist/server.mjs

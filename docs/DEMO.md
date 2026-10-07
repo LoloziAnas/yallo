@@ -1,21 +1,22 @@
 # Yallo public demo
 
 A hosted copy of Yallo for investors and managers to try: the customer app, the courier app and the ops back office,
-all sharing one live server. Everything runs on free hosting (Render + Neon). It's a demo: no real money, no real
-SMS, no real stores.
+all sharing one live server. The apps are on GitHub Pages; the server runs on the team's laptop and is reached through
+a free Cloudflare tunnel. It's a demo: no real money, no real SMS, no real stores.
 
 ## Links
 
 | What | Link |
 |---|---|
-| Customer app (web, works on iPhone in Safari) | `https://yallo-app.onrender.com` (fill in after deploying) |
-| Courier app (web) | `https://yallo-courier.onrender.com` (fill in) |
-| Back office (ops, use a computer) | `https://yallo-ops.onrender.com` (fill in) |
+| Start page (links to everything, shows whether the server is up) | https://lolozianas.github.io/yallo/ |
+| Customer app (web, works on iPhone in Safari) | https://lolozianas.github.io/yallo/app/ |
+| Courier app (web) | https://lolozianas.github.io/yallo/courier/ |
+| Back office (ops, use a computer) | https://lolozianas.github.io/yallo/ops/ |
 | Android apps (APK) | shared separately by the team |
-| Server status | `https://yallo-api.onrender.com/api/health` (fill in) |
 
-**First visit after a quiet spell:** the free server sleeps and takes about a minute to wake. The apps show
-"Connecting…" until then. Wait, don't refresh.
+These links never change. **The laptop must be on** (and online) for the apps to work: if they keep saying
+"Connecting…", the server is off or restarting. After a restart the apps reconnect by themselves within about a
+minute; there's no need to reinstall or refresh.
 
 ## Signing in
 
@@ -77,8 +78,9 @@ number and code 123456.
 
 ## Known limits
 
-- **Cold start.** After 15 minutes without visitors the server sleeps (unless the keep-warm ping runs) and the next
-  visit waits about a minute.
+- **The laptop must be on.** The server runs on the team's laptop: when it's asleep, off or offline, the apps can't
+  connect. Quick tunnels also have no uptime guarantee; when one drops, the laptop opens a new one and the apps find it
+  again within about a minute.
 - **One shared world.** Testers can see each other's effects: a store paused by one ops tester is paused for all, and
   a reset clears everyone's orders.
 - **No real SMS, payments or bank transfers.** Codes are always 123456. Payment is cash on delivery and only recorded,
@@ -94,44 +96,70 @@ number and code 123456.
 
 ## Running the demo (for the team)
 
+How it fits together:
+
+- **API:** `deploy/demo-host.sh` runs it on the laptop on port 5180, from a build of a commit (`.deploy/demo/<sha>`),
+  with `DEPLOY_PROFILE=demo` and its state in `~/.local/share/yallo-demo/state.json`. It is separate from the :5190
+  integration server.
+- **Tunnel:** a Cloudflare quick tunnel (`~/.local/bin/cloudflared`, no account) makes the API reachable at
+  `https://<random>.trycloudflare.com`. The URL changes every time the tunnel starts.
+- **api.json:** the laptop publishes the current URL as `https://lolozianas.github.io/yallo/api.json`
+  (`{"api": "https://….trycloudflare.com", "updatedAt": "…"}`) by pushing to the `gh-pages` branch over the personal
+  SSH alias (`github-lolozianas`). Every app reads it at start-up and again whenever the API stops answering
+  (`createYalloClient(…, { configUrl: DEMO_API_CONFIG_URL })`), so APKs and sites never need rebuilding for a new URL.
+- **Sites:** the GitHub Actions workflow `.github/workflows/demo-pages.yml` builds the back office, customer web and
+  courier web on every push to `main` and publishes them to `gh-pages` under `ops/`, `app/` and `courier/`, with the
+  start page and a 404 page that sends deep links back into the right app. It never touches `api.json`. An app that
+  fails to build keeps its previous version online.
+
 ### One-time setup
 
-1. **Database.** Create a free Neon project and copy its connection string (`postgres://…?sslmode=require`). The
-   API creates its one table (`yallo_state`) on start.
-2. **Render.** New → Blueprint → repository `LoloziAnas/yallo`, branch `main`. Render reads `render.yaml` and creates
-   four free services:
-   - `yallo-api`: Node web service, the API with `DEPLOY_PROFILE=demo`
-   - `yallo-ops`: static site, the back office
-   - `yallo-app`: static site, the customer web build
-   - `yallo-courier`: static site, the courier web build
-   It asks for the values marked `sync: false`:
-   - `yallo-api`: `DATABASE_URL` (from Neon), and `CORS_ORIGINS` (the three static sites' URLs, comma-separated,
-     no trailing slash)
-   - `yallo-ops`: `VITE_API_URL` = the API's URL, e.g. `https://yallo-api.onrender.com`
-   - `yallo-app`: `YALLO_API_URL` = the same
-   - `yallo-courier`: `EXPO_PUBLIC_API_URL` = the same
-   The static sites read the API URL at build time: after changing it, redeploy the site.
-3. **Check** `https://<api>/api/health`. Expect `"demo": true`, `"auth": "enforce"`, `"clock": "real"`, and `"time"`
-   equal to the time in Morocco now. If the hour is wrong, set `DEMO_TIME_ZONE` on `yallo-api` (`+00:00`,
-   `+01:00`, or `Africa/Casablanca`) and redeploy. The saved demo keeps going and the clock is corrected.
-4. **Keep it warm.** Have a free uptime monitor (e.g. UptimeRobot or cron-job.org) request
-   `https://<api>/api/health` every 10 minutes. Render's free plan gives 750 hours a month, enough for one service
-   awake around the clock.
-5. **Android APKs.** These are built locally with the API's URL. Customer: `cd mobile && npm run apk -- --api
-   https://<api>`. It is signed with `~/yallo-keys/yallo-customer.jks`, which is outside git: back it up, because
-   updates must be signed with the same key. Its fingerprint is in `~/yallo-keys/yallo-customer.README.txt`.
-   Courier: `cd courier && npm run apk -- --api https://<api>` → `courier/dist/yallo-courier-1.0.0-<sha>.apk`
-   (arm64 + x86_64; `--all-abis` adds 32-bit phones). It needs the Android SDK and JDK 17–21, and the first build takes
-   about 45 minutes. It's signed with the courier release key in `~/yallo-keys` (outside git, back it up too).
+1. **GitHub Pages.** Repository settings → Pages → Source: *Deploy from a branch*, branch `gh-pages`, folder `/`. The
+   branch appears after the first push to `main` (the workflow) or the first tunnel start (the laptop). Actions need
+   *Read and write* workflow permissions (Settings → Actions → General) to push `gh-pages`.
+2. **Build and start the server** on the laptop:
+   ```sh
+   deploy/demo-host.sh prepare      # builds HEAD into .deploy/demo/<sha>
+   deploy/demo-host.sh install      # systemd --user services: yallo-demo-api and yallo-demo-tunnel, started now and at boot
+   deploy/demo-host.sh status       # local health, tunnel URL, what api.json says
+   ```
+   `install` warns if lingering is off (`loginctl enable-linger`); with it on, the services run without anyone
+   logged in.
+3. **Check the clock.** `status` shows `"time"`: it should be the time in Morocco now. If not, put
+   `DEMO_TIME_ZONE=+01:00` (or `+00:00`, `Africa/Casablanca`) in `~/.config/yallo-demo.env` and run
+   `deploy/demo-host.sh restart`. The default is `+00:00`: Morocco has been on UTC+0 since 20 Sep 2026 (tzdata 2026),
+   while Node's bundled zone data still says UTC+1 for Africa/Casablanca.
+4. **Android APKs** are built once and read `api.json`, so they keep working when the tunnel URL changes:
+   - customer: `cd mobile && npm run apk -- --config https://lolozianas.github.io/yallo/api.json`. It is signed with
+     `~/yallo-keys/yallo-customer.jks` (outside git; back it up, updates must use the same key; fingerprint in
+     `~/yallo-keys/yallo-customer.README.txt`).
+   - courier: see `courier/README.md` (`npm run apk`, signed with the courier key in `~/yallo-keys`; the first build
+     takes about 45 minutes).
+
+### Keeping the laptop available
+
+- Plugged in, on a network that allows outgoing connections. Quick tunnels work behind ordinary home and office
+  routers; nothing has to be opened.
+- No sleep: Settings → Power → *Automatic suspend* off (on battery and plugged in). To keep it running with the lid
+  closed, set `HandleLidSwitch=ignore` and `HandleLidSwitchExternalPower=ignore` in `/etc/systemd/logind.conf` (needs
+  sudo), then `sudo systemctl restart systemd-logind`, or simply keep the lid open.
+- After a reboot the services start by themselves (lingering on). The tunnel gets a new URL and republishes it.
 
 ### Day to day
 
-- **Reset the demo** (fresh orders and couriers; signs everyone out): sign in to the back office as ops, then
-  `POST /api/reset` with that session. For example, from the browser console on the back office:
-  `fetch('<api>/api/reset', { method: 'POST', headers: { authorization: 'Bearer ' + localStorage.getItem('yallo-ops-token') } })`.
-- **Deploys.** Pushing to `main` redeploys the services whose folders changed (`shared/` changes redeploy all four).
-  The demo state survives deploys and restarts (it's in Neon).
-- **Logs.** In the Render dashboard (`yallo-api` → Logs): sign-ins, refused requests, push messages.
+- `deploy/demo-host.sh status`: is it up, which URL, what the apps see.
+- `deploy/demo-host.sh logs`: follow the API and tunnel logs (sign-ins, refused requests, tunnel restarts).
+- **Deploy a new API version:** `deploy/demo-host.sh prepare && deploy/demo-host.sh restart`. The state survives;
+  the tunnel restarts with a new URL, which the apps pick up.
+- **Deploy the web apps:** push to `main` (the workflow runs when `back-office/`, `mobile/`, `courier/`, `shared/` or
+  `deploy/pages/` change; it can also be started by hand in the Actions tab). Pages updates a minute or two later.
+- **Reset the demo** (fresh orders and couriers; signs everyone out): sign in to the back office as ops, then run
+  `fetch((await (await fetch('https://lolozianas.github.io/yallo/api.json?_=' + Date.now())).json()).api + '/api/reset', { method: 'POST', headers: { authorization: 'Bearer ' + localStorage.getItem('yallo-ops-token') } })`
+  in the browser console on the back office.
+- **Stop the demo:** `deploy/demo-host.sh uninstall` (the state is kept in `~/.local/share/yallo-demo`).
+- Settings live in `~/.config/yallo-demo.env` (`KEY=value`): `DEMO_PORT` (5180), `DEMO_TIME_ZONE` (+00:00),
+  `CORS_ORIGINS` (https://lolozianas.github.io), `CLOUDFLARED`, `PAGES_REMOTE` (this repo's origin; a plain
+  `github.com` remote is refused so the work SSH key is never used), `PAGES_BRANCH` (gh-pages), `DEMO_DATA`.
 
 ### Settings the demo profile turns on (`DEPLOY_PROFILE=demo`)
 
@@ -142,11 +170,11 @@ number and code 123456.
 | One-time codes | always 123456 (`/api/auth/otp` answers `fixedCode`, so the apps can show it) |
 | `/api/reset` | allowed, ops only |
 | Rate limits | on, 6× the production limits (a room of testers shares one address) |
-| `TRUST_PROXY` | on (`TRUST_PROXY=0` turns it off) |
+| `TRUST_PROXY` | on: rate limits use the client address the tunnel forwards (`TRUST_PROXY=0` turns it off) |
 | Clock | real time in `DEMO_TIME_ZONE` (default `Africa/Casablanca`), sent to the apps as `LiveState.clock` |
 | Store hours | shown, not enforced |
 | Stand-in merchant / courier | on: stores accept and prepare; couriers without the app ride, pick up and deliver |
 | Auto-dispatch | an order without a courier 30 s after the store accepts it is offered to couriers with the app open first, then the nearest |
 | Tester couriers | `DEMO_TESTER_COURIERS` (c21–c26) are seeded, offline |
-| Storage | Postgres when `DATABASE_URL` is set (otherwise `STATE_FILE`) |
+| Storage | `STATE_FILE` (the laptop: `~/.local/share/yallo-demo/state.json`), or Postgres when `DATABASE_URL` is set |
 | Cleanup | finished orders dropped 2 days after they end |

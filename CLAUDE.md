@@ -146,10 +146,15 @@ Tell the app owners before changing their screen text, because the run asserts o
 
 ## Public demo
 
-`DEPLOY_PROFILE=demo` runs the API as the public demo server (Render + Neon, `render.yaml` at the root). Everything
-about it (links, tester phones, what changes, setup) is in [`docs/DEMO.md`](docs/DEMO.md). In short: auth enforced,
-no dev tokens, every code 123456 (`/api/auth/otp` answers `fixedCode`, and `/api/health` has `demo: true`), real
-time with every store open, stand-in merchants and couriers, auto-dispatch, state in Postgres via `DATABASE_URL`.
+The public demo: the web apps on GitHub Pages (https://lolozianas.github.io/yallo/ops/, /app/, /courier/, built by
+`.github/workflows/demo-pages.yml` on push to `main`), and the API on the laptop (`deploy/demo-host.sh`, port 5180,
+`DEPLOY_PROFILE=demo`) behind a Cloudflare quick tunnel whose URL changes on every restart. The laptop publishes the
+current URL as https://lolozianas.github.io/yallo/api.json (`ApiConfig`, `DEMO_API_CONFIG_URL`), and the apps find
+the API with `createYalloClient(lastGood, { configUrl: DEMO_API_CONFIG_URL, onBaseUrl })`, which re-reads it whenever
+the API stops answering. Everything (links, tester phones, setup, limits) is in [`docs/DEMO.md`](docs/DEMO.md). The
+demo profile: auth enforced, no dev tokens, every code 123456 (`/api/auth/otp` answers `fixedCode`; `/api/health` has
+`demo: true`), real time with every store open, stand-in merchants and couriers, auto-dispatch. `DATABASE_URL` keeps
+the state in Postgres instead of a file.
 
 ## Production
 

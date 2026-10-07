@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yallo demo</title>
+<meta name="description" content="Try Yallo, a delivery platform for Marrakech: customer app, courier app and ops back office.">
+<style>
+  :root { --bg: #faf6f0; --card: #fff; --text: #2b1f1a; --muted: #6d5f57; --accent: #d0451b; --line: #eadfd3; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1d1714; --card: #2a221e; --text: #f6efe8; --muted: #b9aaa0; --accent: #f06a3c; --line: #3b302a; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 40px 16px 56px; }
+  h1 { font-size: 40px; margin: 0 0 4px; letter-spacing: -.02em; }
+  h1 span { color: var(--accent); }
+  .lead { color: var(--muted); margin: 0 0 28px; }
+  .apps { display: grid; gap: 12px; }
+  a.app { display: block; padding: 18px 20px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); color: inherit; text-decoration: none; }
+  a.app:hover { border-color: var(--accent); }
+  a.app strong { display: block; font-size: 18px; }
+  a.app span { color: var(--muted); font-size: 14px; }
+  .note { margin-top: 28px; padding: 16px 18px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); font-size: 14px; }
+  .note b { color: var(--accent); }
+  #status { margin-top: 12px; font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Yallo<span>.</span></h1>
+  <p class="lead">Food and grocery delivery for Marrakech. A live demo: the three apps below share one world.</p>
+  <div class="apps">
+    <a class="app" href="app/"><strong>Customer app</strong><span>Order from a store and follow your courier. Works on a phone.</span></a>
+    <a class="app" href="courier/"><strong>Courier app</strong><span>Go online, accept jobs and deliver. Tester numbers 0600 00 00 01 to 06.</span></a>
+    <a class="app" href="ops/"><strong>Back office</strong><span>Ops: live map, dispatch, support, payouts. Best on a computer.</span></a>
+  </div>
+  <div class="note">
+    Every sign-in code is <b>123456</b> (there's no SMS in the demo). The server runs on the team's laptop: if the apps
+    say they're connecting for more than a minute, it's switched off or restarting.
+    <div id="status">Checking the server…</div>
+  </div>
+</main>
+<script>
+  // Shows whether the demo API is reachable, from the address the laptop publishes in api.json.
+  (function () {
+    var el = document.getElementById('status');
+    fetch('api.json?_=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (c) { return fetch(c.api + '/api/health', { cache: 'no-store' }); })
+      .then(function (r) { return r.json(); })
+      .then(function (h) { el.textContent = h.ok ? 'Server is up · Marrakech time ' + h.time : 'Server is not answering'; })
+      .catch(function () { el.textContent = 'Server is not reachable right now'; });
+  })();
+</script>
+</body>
+</html>

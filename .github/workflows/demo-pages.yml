@@ -1,0 +1,100 @@
+# Builds the three web apps for the public demo and publishes them on GitHub Pages (docs/DEMO.md):
+#   https://lolozianas.github.io/yallo/        landing page
+#   https://lolozianas.github.io/yallo/ops/    back office
+#   https://lolozianas.github.io/yallo/app/    customer app
+#   https://lolozianas.github.io/yallo/courier/ courier app
+# Pages serves the gh-pages branch. This workflow only replaces the app folders and the landing files; api.json
+# (the API's current address) is written by the laptop hosting the API (deploy/demo-host.sh) and is never touched here.
+# An app that fails to build keeps its previous version online.
+name: Demo sites
+
+on:
+  push:
+    branches: [main]
+    paths: [back-office/**, mobile/**, courier/**, shared/**, deploy/pages/**, .github/workflows/demo-pages.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: demo-pages
+  cancel-in-progress: false
+
+env:
+  CONFIG_URL: https://lolozianas.github.io/yallo/api.json
+
+jobs:
+  sites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Shared package
+        run: cd shared && npm ci --no-audit --no-fund
+
+      - name: Back office
+        id: ops
+        continue-on-error: true
+        run: cd back-office && npm ci --no-audit --no-fund && npm run build
+        env:
+          VITE_BASE: /yallo/ops/
+          VITE_API_CONFIG: ${{ env.CONFIG_URL }}
+
+      - name: Customer app
+        id: app
+        continue-on-error: true
+        run: cd mobile && npm ci --no-audit --no-fund && npm run web:build
+        env:
+          YALLO_API_CONFIG_URL: ${{ env.CONFIG_URL }}
+          YALLO_BASE_PATH: /yallo/app
+
+      - name: Courier app
+        id: courier
+        continue-on-error: true
+        run: cd courier && npm ci --no-audit --no-fund && npm run web:build
+        env:
+          YALLO_API_CONFIG_URL: ${{ env.CONFIG_URL }}
+          YALLO_BASE_PATH: /yallo/courier
+
+      - name: Publish to gh-pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILT: ${{ steps.ops.outcome == 'success' && 'ops=back-office/dist' || '' }} ${{ steps.app.outcome == 'success' && 'app=mobile/web-dist' || '' }} ${{ steps.courier.outcome == 'success' && 'courier=courier/web-dist' || '' }}
+        run: |
+          set -euo pipefail
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          # Each try starts from a fresh copy of gh-pages, so a concurrent api.json update from the laptop is kept.
+          for try in 1 2 3 4 5; do
+            rm -rf site
+            if ! git clone -q --depth 1 --branch gh-pages "$remote" site; then
+              git init -q site && git -C site checkout -q --orphan gh-pages && git -C site remote add origin "$remote"
+            fi
+            for pair in $BUILT; do
+              name=${pair%%=*} dir=${pair#*=}
+              [ -f "$dir/index.html" ] || { echo "::warning::$name built no index.html; keeping the published one"; continue; }
+              rm -rf "site/$name" && cp -r "$dir" "site/$name"
+            done
+            cp deploy/pages/index.html deploy/pages/404.html site/
+            touch site/.nojekyll
+            git -C site add -A
+            if git -C site diff --cached --quiet; then echo "nothing changed"; exit 0; fi
+            git -C site -c user.name="github-actions" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -qm "sites: ${GITHUB_SHA::7} (${BUILT// /, })"
+            if git -C site push -q origin HEAD:gh-pages; then echo "published: $BUILT"; exit 0; fi
+            sleep $((try * 3))
+          done
+          echo "::error::could not push gh-pages"; exit 1
+
+      - name: Report
+        if: always()
+        run: |
+          echo "### Demo sites" >> "$GITHUB_STEP_SUMMARY"
+          echo "- back office: ${{ steps.ops.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- customer app: ${{ steps.app.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- courier app: ${{ steps.courier.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          [ "${{ steps.ops.outcome }}${{ steps.app.outcome }}${{ steps.courier.outcome }}" = successsuccesssuccess ] || { echo "::warning::some apps failed to build; their previous versions stay online"; }
