@@ -105,7 +105,7 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
 
   const firstReply = avgFirstReplyMin(s.rawTickets);
   const TITLES = { overview:['Overview',new Date(dateAt(s.t) + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC' }).replace(',', '') + ' · Marrakech · all figures live'], live:['Live operations', active.length + ' active orders · ' + s.couriers.filter(c => c.st !== 'off').length + ' couriers online · ' + needs.length + ' need action'], orders:['Orders','Search, inspect and refund orders'], couriers:['Couriers','Fleet status, documents and new applications'], merchants:['Merchants','Store status, prep times and quality'], support:['Support', openT.length + ' open tickets' + (firstReply === null ? '' : ' · avg first reply ' + firstReply + ' min')], payouts:['Payouts','Weekly settlement for couriers and merchants'] };
-  const nowMin = 18 * 60 + 34 + Math.floor(s.t / 60), clock = String(Math.floor(nowMin / 60)).padStart(2, '0') + ':' + String(nowMin % 60).padStart(2, '0') + ':' + String(s.t % 60).padStart(2, '0');
+  const clock = clockAt(s.t) + ':' + String(((s.t % 60) + 60) % 60).padStart(2, '0');
 
   // overview
   const lateCount = active.filter(o => lateInfo(o)).length;
