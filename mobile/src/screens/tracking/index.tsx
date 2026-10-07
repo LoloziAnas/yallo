@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, IconButton } from '@/components/button';
 import { Icon } from '@/components/icon';
 import { Screen } from '@/components/screen';
+import { confirm } from '@/utils/confirm';
 import { dial } from '@/utils/dial';
 import { Txt } from '@/components/txt';
 import { storeById } from '@/data/catalog';
@@ -29,6 +30,7 @@ export function Tracking() {
   const set = useApp((s) => s.set);
   const showToast = useApp((s) => s.showToast);
   const finishOrder = useApp((s) => s.finishOrder);
+  const cancelActive = useApp((s) => s.cancelActive);
 
   // The order can disappear (Done pressed) while this screen is still mounted.
   if (!live) return <Screen edges={[]}>{null}</Screen>;
@@ -259,6 +261,19 @@ export function Tracking() {
               {pin}
             </Txt>
           </View>
+        )}
+
+        {/* Until the store accepts, the customer can still cancel (the API refuses afterwards). */}
+        {status === 'pending' && !active.lost && (
+          <Button
+            variant="ghost"
+            label={t.cancelOrder}
+            fontSize={15}
+            onPress={async () => {
+              if (await confirm(t.cancelQ, t.cancelQB, t.cancelOrder, t.keepOrder)) cancelActive();
+            }}
+            style={{ alignSelf: 'center', height: 40, marginBottom: 6 }}
+          />
         )}
 
         {/* Rider card: hidden for cancelled orders, whose message is shown above. */}

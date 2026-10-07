@@ -4,6 +4,7 @@
 import type {
   ApiOrder,
   AuthSession,
+  CustomerHistory,
   DeliveryAddress,
   LiveState,
   PlaceOrderBody,
@@ -59,6 +60,32 @@ export type ActiveOrder = Omit<Order, 'date' | 'status'> & {
   /** Code the customer gives the rider at the door; the courier app needs it to mark the order delivered. */
   pin?: string;
 };
+
+/** An order from the account history as a receipt. Lines priced outside the catalogue can't be reordered, so they're left out. */
+function historyOrder(o: ApiOrder, addrId: string): Order {
+  const lines: CartLine[] = o.items
+    .filter((i) => i.productId && productById[i.productId])
+    .map((i) => {
+      const sel = (i.options ?? {}) as Selection;
+      return { key: lineKey(i.productId!, sel), pid: i.productId!, sel, qty: i.qty, unit: i.price };
+    });
+  const a = o.address;
+  return {
+    id: o.id,
+    storeId: o.merchantId,
+    date: 'Today · ' + o.placedAt,
+    lines,
+    sub: o.subtotal ?? o.items.reduce((x, i) => x + i.qty * i.price, 0),
+    fee: o.fee,
+    service: o.serviceFee ?? 0,
+    disc: o.discount ?? 0,
+    total: o.total,
+    status: o.status,
+    addrId,
+    ...(a ? { place: `${a.label} · ${a.street}, ${a.district}` } : {}),
+    pay: o.pay,
+  };
+}
 
 /** How long a just-placed order may be missing from the live feed before it counts as lost. */
 const PLACE_GRACE_MS = 5000;
@@ -146,6 +173,10 @@ type Actions = {
 
   placeOrder: () => Promise<void>;
   finishOrder: () => void;
+  /** Cancel the tracked order while the store hasn't accepted it yet. False (with a toast) when the API refuses. */
+  cancelActive: () => Promise<boolean>;
+  /** Replace the order history and tickets with the signed-in account's, from the API. */
+  syncHistory: () => Promise<void>;
   reorder: (order: Order) => void;
   /** Opens a support ticket (optionally about an order). Resolves with its id, or null on failure. */
   openTicket: (topic: HelpTopic, text: string, orderId: string | null) => Promise<string | null>;
@@ -316,6 +347,7 @@ export const useApp = create<State & Actions>()(
       signIn: ({ token, user }) => {
         api.setToken(token);
         set({ token, phone: user.phone, userName: user.name ?? null });
+        get().syncHistory();
       },
 
       logout: () => {
@@ -466,6 +498,37 @@ export const useApp = create<State & Actions>()(
         if (s.rating && status !== 'cancelled') s.showToast(t().thanks);
       },
 
+      cancelActive: async () => {
+        const a = get().active;
+        if (!a) return false;
+        try {
+          await api.cancelOrderAsCustomer(a.id);
+          return true;
+        } catch (e) {
+          // 409 once the store has accepted: the API says so ("…Contact support").
+          get().showToast(e instanceof Error && e.message ? e.message : t().orderFailed);
+          return false;
+        }
+      },
+
+      syncHistory: async () => {
+        if (!get().token) return;
+        let h: CustomerHistory;
+        try {
+          h = await api.myHistory();
+        } catch {
+          return; // Offline or signed out elsewhere: keep what's on the device.
+        }
+        const s = get();
+        set({
+          // Delivered orders are the receipts; the live one is on the tracking screen, cancelled ones aren't kept.
+          orders: h.orders
+            .filter((o) => o.status === 'delivered' && storeById[o.merchantId])
+            .map((o) => historyOrder(o, s.addrId)),
+          tickets: h.tickets.map((x) => x.id),
+        });
+      },
+
       reorder: (o) => {
         const st = storeById[o.storeId];
         if (storeState(st.id, get().live) !== 'open') {
@@ -609,7 +672,10 @@ export const useApp = create<State & Actions>()(
       storage: createJSONStorage(() => AsyncStorage),
       // Give the API client the saved session before anything talks to the API.
       onRehydrateStorage: () => (state) => {
-        if (state?.token) api.setToken(state.token);
+        if (state?.token) {
+          api.setToken(state.token);
+          state.syncHistory();
+        }
       },
       // v1 used the app's own store ids (s1–s10); the shared catalogue uses m1–m10.
       migrate: (saved, version) => {

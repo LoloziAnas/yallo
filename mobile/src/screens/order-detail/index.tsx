@@ -84,7 +84,7 @@ export function OrderDetail({ id }: { id: string }) {
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <Icon name="pin" size={15} color={colors.accent} />
           <Txt size={14} style={{ flex: 1 }}>
-            {addr.label} · {addr.street}, {addr.district}
+            {order.place ?? `${addr.label} · ${addr.street}, ${addr.district}`}
           </Txt>
         </View>
         <Txt label style={{ marginTop: 20, marginBottom: 8 }}>

@@ -89,6 +89,8 @@ export type Order = {
   total: number;
   status: OrderStatus;
   addrId: string;
+  /** Delivery address as the API recorded it ("Home · 12 Rue de la Liberté, Guéliz"), for orders from the account history. */
+  place?: string;
   pay: PayMethod;
 };
 
