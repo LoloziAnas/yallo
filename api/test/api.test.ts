@@ -2,7 +2,7 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import { createYalloClient, type LiveState, type YalloClient } from '@yallo/shared';
-import { OFFER_SEC, courierPayFor, tripKm } from '@yallo/shared';
+import { DISPATCH_RADIUS_KM, OFFER_SEC, courierPayFor, pickupKm, tripKm } from '@yallo/shared';
 import { AUTO_ACCEPT_SEC, AUTO_READY_SEC, STAND_IN_ACCEPT_SEC, Store } from '../src/store';
 import { createApi } from '../src/server';
 
@@ -21,31 +21,31 @@ describe('Store', () => {
   });
 
   test('assigning a ready order sends the courier to the store', () => {
-    s.assignCourier('48214', 'c2');
+    s.assignCourier('48214', 'c5');
     assert.equal(order(s, '#48214').status, 'picking');
-    assert.equal(order(s, '#48214').courierId, 'c2');
-    assert.equal(courier(s, 'c2').status, 'busy');
+    assert.equal(order(s, '#48214').courierId, 'c5');
+    assert.equal(courier(s, 'c5').status, 'busy');
   });
 
   test('reassigning frees the previous courier', () => {
-    s.assignCourier('#48214', 'c2');
-    s.assignCourier('#48214', 'c3');
-    assert.equal(courier(s, 'c2').status, 'idle');
-    assert.equal(courier(s, 'c3').status, 'busy');
+    s.assignCourier('#48214', 'c5');
+    s.assignCourier('#48214', 'c11');
+    assert.equal(courier(s, 'c5').status, 'idle');
+    assert.equal(courier(s, 'c11').status, 'busy');
   });
 
   test('refuses busy, offline and suspended couriers', () => {
     assert.throws(() => s.assignCourier('#48214', 'c1'), /not available/); // busy
     assert.throws(() => s.assignCourier('#48214', 'c10'), /not available/); // off
-    s.setCourierSuspended('c2', true);
-    assert.throws(() => s.assignCourier('#48214', 'c2'), /suspended/);
+    s.setCourierSuspended('c5', true);
+    assert.throws(() => s.assignCourier('#48214', 'c5'), /suspended/);
   });
 
   test('a delivery runs through the lifecycle and frees the courier', () => {
-    s.assignCourier('#48214', 'c2');
+    s.assignCourier('#48214', 'c5');
     s.setOrderStatus('#48214', 'delivering');
     s.setOrderStatus('#48214', 'delivered');
-    assert.equal(courier(s, 'c2').status, 'idle');
+    assert.equal(courier(s, 'c5').status, 'idle');
     assert.throws(() => s.setOrderStatus('#48214', 'delivering'), /cannot go from delivered/);
   });
 
@@ -144,74 +144,95 @@ describe('Job offers', () => {
   beforeEach(() => { s = new Store(); });
 
   test('an offer holds the order without assigning it', () => {
-    s.offerOrder('#48214', 'c2');
+    s.offerOrder('#48214', 'c5');
     const o = order(s, '#48214');
-    assert.deepEqual(o.offer, { courierId: 'c2', offeredAt: 0, expiresAt: OFFER_SEC });
+    assert.deepEqual(o.offer, { courierId: 'c5', offeredAt: 0, expiresAt: OFFER_SEC });
     assert.equal(o.courierId, null);
     assert.equal(o.status, 'ready');
-    assert.equal(courier(s, 'c2').status, 'idle');
+    assert.equal(courier(s, 'c5').status, 'idle');
   });
 
   test('a stand-in courier (no app attached) accepts after a few seconds', () => {
-    s.offerOrder('#48214', 'c2');
+    s.offerOrder('#48214', 'c5');
     tick(s, STAND_IN_ACCEPT_SEC - 1);
     assert.equal(order(s, '#48214').courierId, null);
     tick(s, 1);
     const o = order(s, '#48214');
-    assert.deepEqual([o.courierId, o.status, o.offer], ['c2', 'picking', undefined]);
-    assert.equal(courier(s, 'c2').status, 'busy');
+    assert.deepEqual([o.courierId, o.status, o.offer], ['c5', 'picking', undefined]);
+    assert.equal(courier(s, 'c5').status, 'busy');
   });
 
   test('a courier with an app answers for itself, and an unanswered offer expires', () => {
-    const detach = s.attachApp('c2');
-    assert.equal(courier(s, 'c2').app, true);
-    s.offerOrder('#48214', 'c2');
+    const detach = s.attachApp('c5');
+    assert.equal(courier(s, 'c5').app, true);
+    s.offerOrder('#48214', 'c5');
     tick(s, OFFER_SEC - 1);
     assert.ok(order(s, '#48214').offer, 'no stand-in accept while the app is attached');
     tick(s, 1);
-    assert.deepEqual(order(s, '#48214').lastOffer, { courierId: 'c2', outcome: 'expired', at: OFFER_SEC });
+    assert.deepEqual(order(s, '#48214').lastOffer, { courierId: 'c5', outcome: 'expired', at: OFFER_SEC });
     detach();
-    assert.equal(courier(s, 'c2').app, false);
+    assert.equal(courier(s, 'c5').app, false);
   });
 
   test('accept turns the offer into the assignment; decline returns the order to the queue', () => {
-    s.attachApp('c2'); s.attachApp('c3');
-    s.offerOrder('#48214', 'c2');
-    s.acceptOffer('#48214', 'c2');
-    assert.equal(order(s, '#48214').courierId, 'c2');
-    s.offerOrder('#48215', 'c3');
-    s.declineOffer('#48215', 'c3');
+    s.attachApp('c5'); s.attachApp('c11');
+    s.offerOrder('#48214', 'c5');
+    s.acceptOffer('#48214', 'c5');
+    assert.equal(order(s, '#48214').courierId, 'c5');
+    s.offerOrder('#48215', 'c11');
+    s.declineOffer('#48215', 'c11');
     assert.equal(order(s, '#48215').offer, undefined);
     assert.equal(order(s, '#48215').lastOffer!.outcome, 'declined');
-    assert.throws(() => s.acceptOffer('#48215', 'c3'), /No pending offer/);
+    assert.throws(() => s.acceptOffer('#48215', 'c11'), /No pending offer/);
   });
 
   test('a courier holds one offer at a time, and busy or picked-up cases are refused', () => {
-    s.attachApp('c2');
-    s.offerOrder('#48214', 'c2');
-    assert.throws(() => s.offerOrder('#48215', 'c2'), /considering an offer for #48214/);
-    assert.throws(() => s.assignCourier('#48215', 'c2'), /considering an offer/);
+    s.attachApp('c5');
+    s.offerOrder('#48214', 'c5');
+    assert.throws(() => s.offerOrder('#48215', 'c5'), /considering an offer for #48214/);
+    assert.throws(() => s.assignCourier('#48215', 'c5'), /considering an offer/);
     assert.throws(() => s.offerOrder('#48215', 'c1'), /not available/);
-    assert.throws(() => s.offerOrder('#48211', 'c3'), /already picked up/);
+    assert.throws(() => s.offerOrder('#48211', 'c11'), /already picked up/);
   });
 
   test('re-offering, withdrawing, cancelling, suspending or going offline ends the pending offer', () => {
-    s.attachApp('c2'); s.attachApp('c3');
-    s.offerOrder('#48214', 'c2');
-    s.offerOrder('#48214', 'c3');
-    assert.equal(order(s, '#48214').offer!.courierId, 'c3');
-    assert.deepEqual(order(s, '#48214').lastOffer, { courierId: 'c2', outcome: 'withdrawn', at: 0 });
+    s.attachApp('c5'); s.attachApp('c11');
+    s.offerOrder('#48214', 'c5');
+    s.offerOrder('#48214', 'c11');
+    assert.equal(order(s, '#48214').offer!.courierId, 'c11');
+    assert.deepEqual(order(s, '#48214').lastOffer, { courierId: 'c5', outcome: 'withdrawn', at: 0 });
     s.withdrawOffer('#48214');
     assert.equal(order(s, '#48214').offer, undefined);
-    s.offerOrder('#48215', 'c2');
+    s.offerOrder('#48215', 'c5');
     s.cancelOrder('#48215', 'Customer request', false);
     assert.equal(order(s, '#48215').offer, undefined);
-    s.offerOrder('#48218', 'c2');
-    s.setCourierSuspended('c2', true);
+    s.offerOrder('#48218', 'c5');
+    s.setCourierSuspended('c5', true);
     assert.equal(order(s, '#48218').offer, undefined);
-    s.offerOrder('#48218', 'c3');
-    s.setCourierAvailability('c3', 'off');
+    s.offerOrder('#48218', 'c11');
+    s.setCourierAvailability('c11', 'off');
     assert.equal(order(s, '#48218').lastOffer!.outcome, 'declined');
+  });
+});
+
+describe('Dispatch radius', () => {
+  let s: Store;
+  beforeEach(() => { s = new Store(); });
+
+  test('offers and direct assignments go only to couriers near the store', () => {
+    // Hamza (c2) is in Guéliz; Burger House is in Hivernage.
+    assert.throws(() => s.offerOrder('#48214', 'c2'), /Hamza Rachidi is 5\.6 km from Burger House \(dispatch radius 5 km\)/);
+    assert.throws(() => s.assignCourier('#48214', 'c2'), /dispatch radius/);
+    s.offerOrder('#48219', 'c2'); // Café Marrakech, 1.5 km away
+    assert.equal(order(s, '#48219').offer!.courierId, 'c2');
+  });
+
+  test('every seeded order waiting for a courier has one in range', () => {
+    for (const o of s.state.orders.filter(o => !o.courierId && ['pending', 'preparing', 'ready'].includes(o.status))) {
+      const m = s.state.merchants.find(m => m.id === o.merchantId)!;
+      const near = s.state.couriers.filter(c => c.status === 'idle' && pickupKm(c.pos, m.pos) <= DISPATCH_RADIUS_KM);
+      assert.ok(near.length > 0, `${o.id} at ${m.name} has no idle courier within ${DISPATCH_RADIUS_KM} km`);
+    }
   });
 });
 
@@ -226,22 +247,22 @@ describe('Courier pay', () => {
     assert.equal(courierPayFor(2.4), 19);      // 19.2
     assert.equal(courierPayFor(6.2), 30.5);    // 30.6
     assert.equal(courierPayFor(2.25), 19);     // 18.75 rounds up
-    assert.equal(tripKm({ x: 0, y: 0 }, { x: 3, y: 4 }, { x: 3, y: 14 }), 9); // (5 + 10) × 0.6
+    assert.equal(tripKm({ x: 0, y: 0 }, { x: 3, y: 4 }, { x: 3, y: 14 }), 3); // (5 + 10) × 0.2
   });
 
   test('an offer prices the job for that courier; re-offering reprices; accepting keeps it', () => {
-    s.attachApp('c2'); s.attachApp('c3');
+    s.attachApp('c5'); s.attachApp('c11');
     const o = order(s, '#48214');
-    s.offerOrder('#48214', 'c2');
-    const km2 = tripKm(courier(s, 'c2').pos, merchantPos('m2'), o.dropoff);
-    assert.deepEqual([o.courierKm, o.courierPay], [km2, courierPayFor(km2)]);
-    s.offerOrder('#48214', 'c3');
-    const km3 = tripKm(courier(s, 'c3').pos, merchantPos('m2'), o.dropoff);
-    assert.notEqual(km3, km2);
-    assert.deepEqual([o.courierKm, o.courierPay], [km3, courierPayFor(km3)]);
+    s.offerOrder('#48214', 'c5');
+    const kmA = tripKm(courier(s, 'c5').pos, merchantPos('m2'), o.dropoff);
+    assert.deepEqual([o.courierKm, o.courierPay], [kmA, courierPayFor(kmA)]);
+    s.offerOrder('#48214', 'c11');
+    const kmB = tripKm(courier(s, 'c11').pos, merchantPos('m2'), o.dropoff);
+    assert.notEqual(kmB, kmA);
+    assert.deepEqual([o.courierKm, o.courierPay], [kmB, courierPayFor(kmB)]);
     tick(s, 5); // c3 doesn't move while idle, but the price is frozen anyway
-    s.acceptOffer('#48214', 'c3');
-    assert.deepEqual([o.courierKm, o.courierPay], [km3, courierPayFor(km3)]);
+    s.acceptOffer('#48214', 'c11');
+    assert.deepEqual([o.courierKm, o.courierPay], [kmB, courierPayFor(kmB)]);
   });
 
   test('direct assignment prices the job too', () => {
@@ -325,7 +346,7 @@ describe('HTTP and live feed', () => {
 
   test('serves the state and applies actions', async () => {
     assert.equal((await client.getState()).orders.length, 16);
-    const s = await client.assignCourier('#48214', 'c2');
+    const s = await client.assignCourier('#48214', 'c5');
     assert.equal(s.orders.find(o => o.id === '#48214')!.status, 'picking');
   });
 

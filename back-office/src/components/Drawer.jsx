@@ -62,15 +62,17 @@ function OrderDetail({ v }) {
           )}
           {v.showAssign && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 8, borderRadius: 14, background: 'var(--color-surface)' }}>
-              <div className="muted" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', padding: '2px 4px' }}>Offer to nearest available</div>
+              <div className="muted" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', padding: '2px 4px' }}>Offer to nearest available · within {v.radiusKm} km</div>
               {v.nearest.map(nc => (
-                <button key={nc.id} onClick={nc.onClick} className="btn-reset hov-lift-sm" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 12, background: 'var(--color-card)' }}>
-                  <span className="dot" style={{ background: 'var(--color-accent-2-500)' }} />
+                <button key={nc.id} onClick={nc.onClick ?? undefined} disabled={!nc.inRange} title={nc.inRange ? undefined : 'Outside the dispatch radius'}
+                  className={'btn-reset' + (nc.inRange ? ' hov-lift-sm' : '')}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 12, background: 'var(--color-card)', opacity: nc.inRange ? 1 : .55, cursor: nc.inRange ? 'pointer' : 'not-allowed' }}>
+                  <span className="dot" style={{ background: nc.inRange ? 'var(--color-accent-2-500)' : 'var(--color-neutral-400)' }} />
                   <span style={{ flex: 1, minWidth: 0 }}>
                     <strong style={{ fontSize: 13 }}>{nc.name}</strong>{' '}
                     <span className="muted" style={{ fontSize: 12 }}>· {nc.veh} · ★ {nc.rating}</span>
                   </span>
-                  <span style={{ fontSize: 12, fontWeight: 700 }}>{nc.dist} km · {nc.eta} min</span>
+                  <span style={{ fontSize: 12, fontWeight: 700 }}>{nc.inRange ? `${nc.dist} km · ${nc.eta} min` : `${nc.dist} km · out of range`}</span>
                 </button>
               ))}
             </div>

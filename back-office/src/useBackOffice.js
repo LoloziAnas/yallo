@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { createYalloClient } from '@yallo/shared';
+import { DISPATCH_RADIUS_KM, createYalloClient, pickupKm } from '@yallo/shared';
 import { IC } from './icons.jsx';
 import { ZONES, MERCH, MBY, COURIERS0, ORDERS0, STATUS, ACTIVE, APPS0, DOCDEF, TICKETS0, PAY_C, PAY_M, fromLive } from './data.js';
 
@@ -210,7 +210,7 @@ export function useBackOffice({ startPage } = {}) {
         const doneStep = o.st === 'cancelled' ? true : i <= idx, cur = o.st !== 'cancelled' && i === idx && o.st !== 'delivered';
         return { label:st[0], t:doneStep ? (st[1] || tAt(offs[i])) : '—', dot:cur ? 'var(--color-accent)' : doneStep ? 'var(--color-accent-2-500)' : 'var(--color-neutral-300)', ring:cur ? '0 0 0 4px var(--color-accent-200)' : 'none', line:i === arr.length - 1 ? 'transparent' : doneStep && !cur ? 'var(--color-accent-2-300)' : 'var(--color-neutral-200)', fg:doneStep ? 'var(--color-text)' : 'var(--color-neutral-600)', fw:cur ? 700 : 500 };
       }) };
-    nearest = s.couriers.filter(x => x.st === 'idle' && !s.suspended[x.id] && !offeredTo.has(x.id)).map(x => { const d = Math.hypot(x.x - m.x, x.y - m.y) * 0.09; return { ...x, d, dist:d.toFixed(1), eta:Math.max(2, Math.round(d * 3.2)), onClick:() => offer(o.id, x.id) }; }).sort((a, b) => a.d - b.d).slice(0, 4);
+    nearest = s.couriers.filter(x => x.st === 'idle' && !s.suspended[x.id] && !offeredTo.has(x.id)).map(x => { const d = pickupKm({ x:x.x, y:x.y }, { x:m.x, y:m.y }), inRange = d <= DISPATCH_RADIUS_KM; return { ...x, d, dist:d.toFixed(1), eta:Math.max(2, Math.round(d * 2.9)), inRange, onClick:inRange ? () => offer(o.id, x.id) : null }; }).sort((a, b) => a.d - b.d).slice(0, 4);
   }
   let cd = { rows:[] };
   if (dCourierObj) {
@@ -252,7 +252,7 @@ export function useBackOffice({ startPage } = {}) {
     payKpis, payRows, payColName:isC ? 'Courier' : 'Merchant', payColN:isC ? 'Deliv.' : 'Orders', payColAdj:isC ? 'Cash held' : 'Commission',
     selCount:selKeys.length, noSel:!selKeys.length, approveSel:set({ modal:'payout' }),
     toggleAll:() => setState(() => { const d = {}; if (!allOn) selectable.forEach(r => d[r.key] = true); return { paySel:d }; }), allMark:allOn ? '✓' : '', allBg:allOn ? 'var(--color-accent)' : 'var(--color-card)', allBd:allOn ? 'var(--color-accent)' : 'var(--color-neutral-400)',
-    hasDrawer:!!(dOrderObj || dCourierObj), dOrder:!!dOrderObj, dCourier:!!dCourierObj, od, cd, nearest, showAssign:!!dOrderObj && s.assignOpen && ACTIVE.includes(dOrderObj.st) && dOrderObj.st !== 'delivering',
+    hasDrawer:!!(dOrderObj || dCourierObj), dOrder:!!dOrderObj, dCourier:!!dCourierObj, od, cd, nearest, radiusKm:DISPATCH_RADIUS_KM, showAssign:!!dOrderObj && s.assignOpen && ACTIVE.includes(dOrderObj.st) && dOrderObj.st !== 'delivering',
     assignLabel:s.assignOpen ? 'Hide' : dOrderObj && dOrderObj.courier ? 'Reassign' : 'Assign courier', toggleAssign:set({ assignOpen:!s.assignOpen }),
     closeDrawer:set({ drawer:null }), withdrawOffer:() => act(api.withdrawOffer(dOrderObj.id), 'Offer withdrawn'), callMerchant:() => toast('Calling ' + (dOrderObj && dOrderObj.m) + '…'), callCustomer:() => toast('Calling ' + (dOrderObj && dOrderObj.c) + '…'),
     openRefund:() => setState({ modal:'refund', reason:null, refundMode:'full', refundAmt:String(dOrderObj.total) }), openCancel:set({ modal:'cancel', reason:null, comp:true }),

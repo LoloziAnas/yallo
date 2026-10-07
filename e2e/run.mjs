@@ -21,11 +21,17 @@ const CUSTOMER_MODE = process.env.CUSTOMER || 'ui';
 const OUT = new URL('./out/', import.meta.url).pathname;
 
 const COURIER = { id: 'c1', name: 'Karim El Amrani' };
-// The customer app's Burger Atlas is the back office's Burger House (m2) until the store list is unified.
-const STORE = { id: 'm2', name: 'Burger House', customerName: 'Burger Atlas' };
+// Karim is in Guéliz and jobs only go to couriers within the dispatch radius (5 km), so the order comes from
+// Café Marrakech (m1), 0.7 km from him. In the customer app that store is Dar Zitoun until the store list is unified.
+const STORE = {
+  id: 'm1', name: 'Café Marrakech', customerName: 'Dar Zitoun',
+  item: { name: 'Chicken tajine, preserved lemon & olives', price: 75 },
+  fee: 9, serviceFee: 3,
+  /** Customer-app steps from the store page to "Added" in the cart. Pending from the customer session. */
+  ui: null,
+};
+const TOTAL = STORE.item.price + STORE.fee + STORE.serviceFee;
 const CUSTOMER = { name: 'Salma El Amrani', first: 'Salma', zone: 'Guéliz' };
-// Free couriers nearer to Burger House than Karim. Taking them off shift keeps him in ops' "nearest available" list.
-const NEARER_COURIERS = ['c5', 'c11', 'c8'];
 
 // ---------- helpers ----------
 
@@ -80,19 +86,18 @@ async function customerPlacesOrder() {
   if (CUSTOMER_MODE === 'api') {
     const order = await post('/orders', {
       merchantId: STORE.id, customerName: CUSTOMER.name, zone: CUSTOMER.zone, pay: 'cash',
-      fee: 0, serviceFee: 3, items: [{ qty: 1, name: 'Atlas smash burger (Fries)', price: 65 }],
+      fee: STORE.fee, serviceFee: STORE.serviceFee, items: [{ qty: 1, name: STORE.item.name, price: STORE.item.price }],
     });
     return order.id;
   }
+  if (!STORE.ui) throw new Error(`CUSTOMER=ui needs the ${STORE.customerName} steps from the customer session (or run with CUSTOMER=api)`);
   const p = pages.customer;
   const click = name => p.getByRole('button', { name, exact: typeof name === 'string' }).first().click();
   await click('Skip');
   await click('Use my location');
   await click('Continue as guest');
   await click(STORE.customerName);
-  await click('Add to cart: Atlas smash burger');
-  await click('Add to cart · 65 DH');
-  await seen(p, 'Added · 1× Atlas smash burger');
+  await STORE.ui(p, click);
   await click('View cart, 1');
   await click(/^Place order/);
   await click(/^Confirm order/);
@@ -112,10 +117,9 @@ let orderId;
 let failed = false;
 
 try {
-  await step('Reset the API, free Karim from the seeded #48213, take nearer couriers off shift', async () => {
+  await step('Reset the API and free Karim from the seeded #48213', async () => {
     await post('/reset');
     await post('/orders/48213/unassign');
-    for (const id of NEARER_COURIERS) await post(`/couriers/${id}/availability`, { status: 'off' });
     const s = await getState();
     const c = s.couriers.find(c => c.id === COURIER.id);
     if (c.status !== 'idle') throw new Error(`Karim should be idle, is ${c.status}`);
@@ -154,10 +158,10 @@ try {
     if (!c.app) throw new Error('The API does not see Karim\'s app as attached');
   });
 
-  await step(`Customer orders a burger from ${STORE.customerName}; ops sees it`, async () => {
+  await step(`Customer orders from ${STORE.customerName}; ops sees it`, async () => {
     orderId = await customerPlacesOrder();
     const o = await getOrder(orderId);
-    if (o.merchantId !== STORE.id || o.total !== 68 || o.pay !== 'cash') throw new Error(`Unexpected order: ${o.merchantId}, ${o.total} DH, ${o.pay}`);
+    if (o.merchantId !== STORE.id || o.total !== TOTAL || o.pay !== 'cash') throw new Error(`Unexpected order: ${o.merchantId}, ${o.total} DH, ${o.pay}`);
     await seen(pages.ops, orderId);
     if (pages.customer) await seen(pages.customer, 'A rider will be assigned when your order is ready');
   });

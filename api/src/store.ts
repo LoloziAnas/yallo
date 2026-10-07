@@ -1,6 +1,6 @@
 // In-memory state for the mock API: the shared demo seed plus the rules every app's actions go through.
 import {
-  ACTIVE_STATUSES, COURIERS, DEMO_ELAPSED_SEC, DEMO_START_MIN, MERCHANTS, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm,
+  ACTIVE_STATUSES, COURIERS, DEMO_ELAPSED_SEC, DEMO_START_MIN, MERCHANTS, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
   type ApiCourier, type ApiOrder, type LiveState, type OpenTicketBody, type OrderStatus, type PlaceOrderBody, type Ticket, type TicketPriority,
   type TicketSource, type ZoneName,
 } from '@yallo/shared';
@@ -211,6 +211,15 @@ export class Store {
     if (o.courierId !== c.id && c.status !== 'idle') throw new ActionError(c.name + ' is not available (' + c.status + ')', 409);
   }
 
+  /** Couriers only get jobs from stores within DISPATCH_RADIUS_KM, so nobody is sent across town. */
+  private checkInRange(o: ApiOrder, c: ApiCourier) {
+    if (o.courierId === c.id) return;
+    const m = this.merchant(o.merchantId), km = pickupKm(c.pos, m.pos);
+    if (km > DISPATCH_RADIUS_KM) {
+      throw new ActionError(`${c.name} is ${km} km from ${m.name} (dispatch radius ${DISPATCH_RADIUS_KM} km)`, 409);
+    }
+  }
+
   private assign(o: ApiOrder, c: ApiCourier) {
     if (o.courierId !== c.id) this.release(o.courierId);
     o.courierId = c.id;
@@ -247,7 +256,10 @@ export class Store {
     this.checkAvailable(o, c);
     const held = this.pendingOfferFor(c.id);
     if (held && held !== o) throw new ActionError(c.name + ' is considering an offer for ' + held.id, 409);
-    if (o.offer?.courierId !== c.id) this.price(o, c);
+    if (o.offer?.courierId !== c.id) {
+      this.checkInRange(o, c);
+      this.price(o, c);
+    }
     this.assign(o, c);
     this.changed();
   }
@@ -260,6 +272,7 @@ export class Store {
     if (o.courierId === c.id) throw new ActionError(c.name + ' already has ' + o.id, 409);
     const held = this.pendingOfferFor(c.id);
     if (held && held !== o) throw new ActionError(c.name + ' is considering an offer for ' + held.id, 409);
+    this.checkInRange(o, c);
     this.endOffer(o, 'withdrawn');
     this.price(o, c);
     o.offer = { courierId: c.id, offeredAt: this.s.t, expiresAt: this.s.t + OFFER_SEC };

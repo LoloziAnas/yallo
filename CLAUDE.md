@@ -31,6 +31,8 @@ Delivery platform for Marrakech. Several Claude sessions work here in parallel, 
 - `colors`, `space`, `radius`, `shadow`, `fonts`: Zanqa tokens (web apps also have `zanqa.css`).
 - `ZONES`, `MERCHANTS`, `COURIERS`, `ORDERS`: the Marrakech demo seed (Tue 6 Oct 2026, ~18:34).
 - `Ticket`, `TicketMessage`, `TicketSource`, `TicketPriority`, and the `TICKETS` seed: support tickets.
+- `KM_PER_MAP_PCT` (0.2, so the map is 20 km across), `COURIER_PAY`, `courierPayFor`, `tripKm`, `pickupKm`, `DISPATCH_RADIUS_KM` (5):
+  courier pay is max(15, 12 + 3 × trip km) DH, and jobs only go to couriers within 5 km of the store.
 - `createYalloClient(baseUrl)`, `LiveState`, `ApiOrder`, `ApiCourier`, `PlaceOrderBody`, `OpenTicketBody`: the mock API contract.
 
 Depend on it with `"@yallo/shared": "file:../shared"` (run `npm install ../shared` in your app).
@@ -63,6 +65,7 @@ or calling `POST /api/reset`, restores the demo seed.
     (courier), `/offer/withdraw` (ops). A pending offer is `order.offer = { courierId, offeredAt, expiresAt }` in demo
     seconds, and it expires after `OFFER_SEC` (15). A courier app subscribes with `subscribe(…, { courierId })`, which
     sets `courier.app`. Couriers without an app are played by a stand-in that accepts after 3 s.
+  - Offers and direct assignments to a courier more than `DISPATCH_RADIUS_KM` from the store are refused (409).
   - `/api/orders/:n/assign {courierId}` assigns directly, skipping the offer. Also `/unassign`, `/status {status}`, `/cancel {reason, compensateCourier}`,
     `/refund {amount, reason}`. `:n` is the order number without "#".
   - `/api/tickets` opens a ticket (body `OpenTicketBody`) and returns it. `/api/tickets/:id/messages {from: 'requester'|'ops', author, text}`
