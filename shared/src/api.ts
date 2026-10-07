@@ -320,6 +320,9 @@ export function createYalloClient(baseUrl: string, opts: { token?: string } = {}
      */
     registerPushToken: (pushToken: string, who?: { role: 'courier' | 'customer'; id: string }) =>
       post<{ ok: true }>('/push-token', { token: pushToken, ...(who ?? {}) }),
+    /** Stops pushes to this device (call on sign-out or when notifications are turned off). */
+    unregisterPushToken: (pushToken: string, who?: { role: 'courier' | 'customer'; id: string }) =>
+      post<{ ok: true }>('/push-token/remove', { token: pushToken, ...(who ?? {}) }),
     /** Restores the demo seed. */
     reset: () => post('/reset'),
   };

@@ -900,6 +900,9 @@ describe('Push notifications', () => {
     s.registerPushToken('courier', 'c1', TOKEN);
     assert.deepEqual(s.pushTokensFor('courier', 'c1'), [TOKEN]);
     assert.deepEqual(s.pushTokensFor('courier', 'c2'), []);
+    s.unregisterPushToken('courier', 'c1', TOKEN);
+    assert.deepEqual(s.pushTokensFor('courier', 'c1'), []);
+    s.unregisterPushToken('customer', 'u1', TOKEN); // nothing registered: fine
   });
 
   test('an offer notifies the courier; status changes notify the order\'s customer', () => {
@@ -960,6 +963,10 @@ describe('Push notifications', () => {
       await assert.rejects(createYalloClient(base).registerPushToken(TOKEN, { role: 'courier', id: 'c3' }), /Sign in first/);
       await createYalloClient(base, { token: DEV_TOKENS.ops }).offerOrder('#48219', 'c3');
       assert.deepEqual(sent.map(m => [m.to, m.title]), [[TOKEN, 'New delivery']]);
+      await c3.unregisterPushToken(TOKEN);
+      await createYalloClient(base, { token: DEV_TOKENS.ops }).withdrawOffer('#48219');
+      await createYalloClient(base, { token: DEV_TOKENS.ops }).offerOrder('#48219', 'c3');
+      assert.equal(sent.length, 1, 'no push after unregistering');
     } finally {
       await new Promise<void>(r => api.http.close(() => r()));
     }

@@ -113,7 +113,8 @@ back office deploy with `deploy/prepare.sh` (builds the commit into `.deploy/<sh
   - Courier GPS: `/api/couriers/:id/location {lat, lon}` (that courier or ops). The API places them with `geoToMap`
     (map point (30, 30) = 31.634, -8.0105; `mapToGeo` goes back) and stops simulating them while fixes keep coming
     (`lastFixAt`, stale after `GPS_STALE_SEC` = 60 s).
-  - Push: `/api/push-token {token}` registers the signed-in courier's or customer's Expo push token. Couriers get a
+  - Push: `/api/push-token {token}` registers the signed-in courier's or customer's Expo push token (`/api/push-token/remove`
+    forgets it, e.g. on sign-out). Couriers get a
     push per offer; customers on accepted / rider assigned / picked up / delivered / cancelled (signed-in orders
     only). `PUSH=expo` sends through Expo's push service (`EXPO_ACCESS_TOKEN` optional); otherwise it only logs.
   - Customers: `/api/orders/:n/cancel-by-customer` (their own order, only while 'pending'; `cancelledBy: 'customer'`)

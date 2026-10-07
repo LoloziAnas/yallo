@@ -904,6 +904,14 @@ export class Store {
     this.scheduleSave();
   }
 
+  /** Forgets a device's push token. Unknown tokens are fine (nothing to do). */
+  unregisterPushToken(role: 'courier' | 'customer', id: string, token: string) {
+    const key = role + ':' + id, list = this.auth.pushTokens?.[key];
+    if (!list) return;
+    this.auth.pushTokens![key] = list.filter(x => x !== String(token ?? '').trim());
+    this.scheduleSave();
+  }
+
   pushTokensFor(role: 'courier' | 'customer', id: string): string[] {
     return this.auth.pushTokens?.[role + ':' + id] ?? [];
   }

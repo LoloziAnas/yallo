@@ -99,15 +99,8 @@ const ROUTES: [string, RegExp, Rule, Handler][] = [
   ['POST', /^\/api\/courier-applications\/(a\d+)\/reject$/, ops, (s, [id], b) => (s.rejectApplication(id, b?.reason), s.state)],
   ['POST', /^\/api\/payouts\/approve$/, ops, (s, _, b) => (s.approvePayouts(b?.lineIds), s.state)],
   ['GET', /^\/api\/couriers\/([\w-]+)\/earnings$/, selfCourier, (s, [id]) => s.courierEarnings(id)],
-  ['POST', /^\/api\/push-token$/, signedIn, (s, _, b, ctx) => {
-    // The signed-in courier or customer; in warn mode an anonymous app may name itself in the body.
-    const who = ctx.user?.role === 'courier' ? { role: 'courier' as const, id: ctx.user.courierId! }
-      : ctx.user?.role === 'customer' ? { role: 'customer' as const, id: ctx.user.id }
-      : !ctx.user && !ctx.enforce ? { role: b?.role, id: String(b?.id ?? '') } : undefined;
-    if (!who) throw new ActionError('Only couriers and customers get push notifications');
-    s.registerPushToken(who.role, who.id, b?.token);
-    return { ok: true };
-  }],
+  ['POST', /^\/api\/push-token$/, signedIn, (s, _, b, ctx) => (s.registerPushToken(...pushRecipient(b, ctx), b?.token), { ok: true })],
+  ['POST', /^\/api\/push-token\/remove$/, signedIn, (s, _, b, ctx) => (s.unregisterPushToken(...pushRecipient(b, ctx), b?.token), { ok: true })],
   ['POST', /^\/api\/reset$/, ops, s => (s.reset(), s.state)],
 ];
 
@@ -132,6 +125,14 @@ function readJson(req: IncomingMessage): Promise<unknown> {
     });
     req.on('error', reject);
   });
+}
+
+/** Whose push token this is: the signed-in courier or customer; in warn mode an anonymous app may name itself. */
+function pushRecipient(b: any, ctx: Ctx): ['courier' | 'customer', string] {
+  if (ctx.user?.role === 'courier') return ['courier', ctx.user.courierId!];
+  if (ctx.user?.role === 'customer') return ['customer', ctx.user.id];
+  if (!ctx.user && !ctx.enforce && (b?.role === 'courier' || b?.role === 'customer')) return [b.role, String(b?.id ?? '')];
+  throw new ActionError('Only couriers and customers get push notifications');
 }
 
 const bearer = (header: string | undefined) => (header?.startsWith('Bearer ') ? header.slice(7).trim() : undefined);
