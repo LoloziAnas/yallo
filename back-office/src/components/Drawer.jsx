@@ -125,6 +125,12 @@ function OrderDetail({ v }) {
           )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, fontWeight: 700 }}><span>Total</span><span>{od.total} DH</span></div>
           {od.refunded && <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent-2-700)' }}>Refunded {od.refundAmt} DH</div>}
+          {od.rating && (
+            <div style={{ fontSize: 13, padding: '8px 10px', borderRadius: 10, background: 'var(--color-saffron-100)' }}>
+              <strong>Customer rating {'★'.repeat(od.rating.stars)}{'☆'.repeat(5 - od.rating.stars)}</strong>
+              {od.rating.comment && <div className="muted" style={{ marginTop: 2 }}>“{od.rating.comment}”</div>}
+            </div>
+          )}
         </div>
       </div>
       <div className="drawer-foot">

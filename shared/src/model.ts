@@ -135,6 +135,8 @@ export type Courier = {
   status: CourierStatus;
   pos: MapPoint;
   rating: number;
+  /** How many ratings `rating` averages. */
+  ratingCount?: number;
   /** Document status for ops, e.g. "Valid" or "Insurance expires in 9 days". */
   docsNote?: string;
   /** Offers answered so far: their acceptance rate is accepted / (accepted + declined + expired). */
@@ -209,6 +211,8 @@ export type Order = {
   customerPhone?: string;
   /** The signed-in customer who placed the order (absent for guest orders). */
   customerId?: string;
+  /** The customer's rating after delivery: it feeds the store's and the courier's ratings. */
+  rating?: { stars: number; comment?: string; at: number };
   /** Local time the order was placed, "HH:MM". */
   placedAt: string;
   /**

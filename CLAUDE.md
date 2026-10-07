@@ -115,6 +115,8 @@ back office deploy with `deploy/prepare.sh` (builds the commit into `.deploy/<sh
     only). `PUSH=expo` sends through Expo's push service (`EXPO_ACCESS_TOKEN` optional); otherwise it only logs.
   - Customers: `/api/orders/:n/cancel-by-customer` (their own order, only while 'pending'; `cancelledBy: 'customer'`)
     and `GET /api/me/history` → `{ orders, tickets }` for the signed-in customer (survives a reinstall).
+  - Ratings: `/api/orders/:n/rating {stars 1–5, comment?}` by the order's customer, once, after delivery. It folds into
+    the store's (`rating`/`reviewCount`) and courier's (`rating`/`ratingCount`) averages; the order keeps `rating`.
   - `/api/merchants/:id/open {open}`, `/api/couriers/:id/suspend {suspended}`,
     `/api/couriers/:id/availability {status: 'idle'|'off'}`, `/api/reset`.
 - Use `createYalloClient(url)` rather than calling these by hand. The back office uses `''`, because Vite

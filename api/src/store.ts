@@ -96,7 +96,7 @@ function seed(): LiveState {
 }
 
 /** Bump when the saved state's shape changes; an older file is set aside and the demo reseeds. */
-export const STATE_VERSION = 5;
+export const STATE_VERSION = 6;
 
 /** Things worth telling someone about, e.g. with a push notification. */
 export type StoreEvent =
@@ -929,5 +929,26 @@ export class Store {
     if (user?.role !== 'customer') throw new ActionError('Sign in as a customer', 401);
     const orders = this.s.orders.filter(o => o.customerId === user.id).sort((a, b) => (b.statusAt?.pending ?? 0) - (a.statusAt?.pending ?? 0));
     return { orders, tickets: this.s.tickets.filter(t => t.requesterId === user.id) };
+  }
+
+  /** The customer's rating of a delivered order, folded into the store's and the courier's running averages. */
+  rateOrder(orderId: string, stars: number, comment?: string, by?: AuthUser) {
+    const o = this.order(orderId);
+    if (by?.role === 'customer' && o.customerId !== by.id) throw new ActionError('This is not your order', 403);
+    if (o.status !== 'delivered') throw new ActionError('You can rate an order once it has been delivered', 409);
+    if (o.rating) throw new ActionError(o.id + ' is already rated', 409);
+    if (!Number.isInteger(stars) || stars < 1 || stars > 5) throw new ActionError('stars must be a whole number from 1 to 5');
+    const note = optText(comment, 'comment', 500);
+    o.rating = { stars, ...(note ? { comment: note } : {}), at: this.s.t };
+    const fold = (avg: number, n: number) => Math.round(((avg * n + stars) / (n + 1)) * 100) / 100;
+    const m = this.merchant(o.merchantId);
+    m.rating = fold(m.rating, m.reviewCount);
+    m.reviewCount += 1;
+    const c = o.courierId ? this.s.couriers.find(c => c.id === o.courierId) : undefined;
+    if (c) {
+      c.rating = fold(c.rating, c.ratingCount ?? 0);
+      c.ratingCount = (c.ratingCount ?? 0) + 1;
+    }
+    this.changed();
   }
 }

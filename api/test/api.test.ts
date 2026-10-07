@@ -1055,3 +1055,40 @@ describe('Courier stats', () => {
     assert.equal(courier(s, 'c10').onlineSince, undefined);
   });
 });
+
+describe('Ratings', () => {
+  const amal = { id: 'u7', role: 'customer' as const, phone: '+212600000007', name: 'Amal' };
+  const deliver = (s: Store) => {
+    const o = s.placeOrder({ merchantId: 'm1', customerName: 'Amal', zone: 'Guéliz', pay: 'cash', items: [{ productId: 'p1-6', qty: 1 }] }, amal);
+    s.assignCourier(o.id, 'c3');
+    s.setOrderStatus(o.id, 'preparing', undefined, { byOps: true });
+    s.setOrderStatus(o.id, 'ready', undefined, { byOps: true });
+    s.setOrderStatus(o.id, 'delivering');
+    s.setOrderStatus(o.id, 'delivered', order(s, o.id).deliveryPin);
+    return order(s, o.id);
+  };
+
+  test('a rating after delivery moves the store\'s and courier\'s averages', () => {
+    const s = new Store();
+    const store = s.state.merchants.find(m => m.id === 'm1')!, salma = courier(s, 'c3');
+    const [r0, n0, cr0, cn0] = [store.rating, store.reviewCount, salma.rating, salma.ratingCount!];
+    const o = deliver(s);
+    s.rateOrder(o.id, 1, ' Cold food ', amal);
+    assert.deepEqual(o.rating, { stars: 1, comment: 'Cold food', at: 0 });
+    assert.equal(store.reviewCount, n0 + 1);
+    assert.equal(store.rating, Math.round(((r0 * n0 + 1) / (n0 + 1)) * 100) / 100);
+    assert.equal(salma.ratingCount, cn0 + 1);
+    assert.ok(salma.rating < cr0);
+  });
+
+  test('only once, only delivered orders, only 1–5 whole stars, only the customer\'s own', () => {
+    const s = new Store();
+    const pending = s.placeOrder({ merchantId: 'm1', customerName: 'Amal', zone: 'Guéliz', pay: 'cash', items: [{ productId: 'p1-6', qty: 1 }] }, amal);
+    assert.throws(() => s.rateOrder(pending.id, 5, undefined, amal), /once it has been delivered/);
+    const o = deliver(s);
+    assert.throws(() => s.rateOrder(o.id, 4.5, undefined, amal), /whole number from 1 to 5/);
+    assert.throws(() => s.rateOrder(o.id, 5, undefined, { ...amal, id: 'u8' }), /not your order/);
+    s.rateOrder(o.id, 5, undefined, amal);
+    assert.throws(() => s.rateOrder(o.id, 5, undefined, amal), /already rated/);
+  });
+});

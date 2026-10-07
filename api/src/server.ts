@@ -38,7 +38,7 @@ const assignedCourier: Rule = (c, [n], _, s) => {
 const orderCustomer: Rule = (c, [n], _, s) => {
   if (isOps(c)) return true;
   const o = s.state.orders.find(o => o.id === '#' + n);
-  return (c.user?.role === 'customer' && (!o || o.customerId === c.user.id)) || 'Only the customer who placed the order can cancel it here';
+  return (c.user?.role === 'customer' && (!o || o.customerId === c.user.id)) || 'Only the customer who placed the order can do this';
 };
 /** The courier in the path, acting on themself. */
 const selfCourier: Rule = (c, [id]) => isOps(c) || isCourier(c, id) || 'Couriers can only do this for themselves';
@@ -72,6 +72,7 @@ const ROUTES: [string, RegExp, Rule, Handler][] = [
     (s.setOrderStatus(id, b?.status, b?.pin, { byOps: ctx.user?.role === 'ops', strictPin: ctx.enforce }), s.state)],
   ['POST', /^\/api\/orders\/(\d+)\/cancel$/, ops, (s, [id], b) => (s.cancelOrder(id, b?.reason, !!b?.compensateCourier), s.state)],
   ['POST', /^\/api\/orders\/(\d+)\/cancel-by-customer$/, orderCustomer, (s, [id], _, ctx) => (s.cancelOrderAsCustomer(id, ctx.user), s.state)],
+  ['POST', /^\/api\/orders\/(\d+)\/rating$/, orderCustomer, (s, [id], b, ctx) => (s.rateOrder(id, b?.stars, b?.comment, ctx.user), s.state)],
   ['GET', /^\/api\/me\/history$/, signedIn, (s, _, __, ctx) => s.customerHistory(ctx.user)],
   ['POST', /^\/api\/orders\/(\d+)\/refund$/, ops, (s, [id], b) => (s.refundOrder(id, b?.amount, b?.reason), s.state)],
   ['POST', /^\/api\/merchants\/([\w-]+)\/open$/, ops, (s, [id], b) => (s.setMerchantOpen(id, b?.open), s.state)],

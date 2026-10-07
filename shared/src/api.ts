@@ -276,6 +276,8 @@ export function createYalloClient(baseUrl: string, opts: { token?: string } = {}
       post(`/orders/${orderPath(orderId)}/cancel`, { reason, compensateCourier }),
     /** The customer cancels their own order. Only while it's new (before the store accepts it). */
     cancelOrderAsCustomer: (orderId: string) => post(`/orders/${orderPath(orderId)}/cancel-by-customer`),
+    /** The customer rates a delivered order once (1–5 stars, optional comment); it feeds the store's and courier's ratings. */
+    rateOrder: (orderId: string, stars: number, comment?: string) => post(`/orders/${orderPath(orderId)}/rating`, { stars, ...(comment ? { comment } : {}) }),
     /** The signed-in customer's orders (newest first) and tickets: their history, kept with the account. */
     myHistory: () => call<CustomerHistory>('GET', '/me/history'),
     refundOrder: (orderId: string, amount: number, reason: string) => post(`/orders/${orderPath(orderId)}/refund`, { amount, reason }),
