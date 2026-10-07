@@ -20,6 +20,7 @@ import { api } from '@/api/client';
 import { zoneForDistrict } from '@/location/zones';
 import { type HelpTopic, helpTopics } from '@/data/help';
 import { locate } from '@/location/locate';
+import { getPushToken, notifyLocally, setUpNotifications } from '@/notifications';
 
 import {
   type Address,
@@ -39,7 +40,9 @@ import { type Lang, strings } from '@/data/strings';
 import {
   type Cart,
   clock,
+  customerStep,
   type Promo,
+  riderNames,
   type SortKey,
   demoClock,
   storeState,
@@ -85,6 +88,30 @@ function historyOrder(o: ApiOrder, addrId: string): Order {
     ...(a ? { place: `${a.label} · ${a.street}, ${a.district}` } : {}),
     pay: o.pay,
   };
+}
+
+/**
+ * A local notification when our order reaches a new step while the app is in the background, unless
+ * the API pushes it (a push token is registered) or the customer cancelled it themself.
+ */
+function alertStatus(s: State, o: ApiOrder) {
+  if (!s.notif || s.pushToken) return;
+  const tx = t();
+  const step = customerStep(o.status);
+  const was = s.live?.orders.find((x) => x.id === o.id);
+  if (was && customerStep(was.status) === step) return;
+  if (step < 0) {
+    if (o.cancelledBy !== 'customer') notifyLocally(tx.cancelledT, tx.cancelledB);
+    return;
+  }
+  const courier = s.live?.couriers.find((c) => c.id === o.courierId);
+  const name = courier ? riderNames(courier.name).first : '';
+  const titles = [tx.s0, tx.s1, tx.s2, tx.s3, tx.s4];
+  const bodies = [tx.s0b, tx.s1b, tx.s2b, tx.s3b, tx.s4b];
+  notifyLocally(
+    `${titles[step]} · ${storeById[o.merchantId]?.name ?? ''}`,
+    bodies[step].replace('%n', name),
+  );
 }
 
 /** How long a just-placed order may be missing from the live feed before it counts as lost. */
@@ -151,6 +178,10 @@ type State = {
   /** Drives the "can't reach Yallo" state on Home: set while the live feed is down. */
   networkError: boolean;
   notif: boolean;
+  /** This install's Expo push token once the API has it; then the API sends order updates, not the app. */
+  pushToken: string | null;
+  /** Asks for notification permission and registers for push (when signed in, with notifications on). */
+  setUpPush: () => Promise<void>;
 };
 
 type Actions = {
@@ -172,7 +203,8 @@ type Actions = {
   applyPromo: () => void;
 
   placeOrder: () => Promise<void>;
-  finishOrder: () => void;
+  /** Leaves the tracking screen for Orders; sends the stars (and comment) if the customer rated a delivered order. */
+  finishOrder: (comment?: string) => void;
   /** Cancel the tracked order while the store hasn't accepted it yet. False (with a toast) when the API refuses. */
   cancelActive: () => Promise<boolean>;
   /** Replace the order history and tickets with the signed-in account's, from the API. */
@@ -323,6 +355,20 @@ export const useApp = create<State & Actions>()(
       networkError: false,
       locDraft: null,
       notif: true,
+      pushToken: null,
+      setUpPush: async () => {
+        const s = get();
+        if (!s.token || !s.notif) return;
+        if (!(await setUpNotifications(t().notifications))) return;
+        const pushToken = await getPushToken();
+        if (!pushToken || pushToken === get().pushToken) return;
+        try {
+          await api.registerPushToken(pushToken);
+          set({ pushToken });
+        } catch {
+          // Keep the local alerts.
+        }
+      },
 
       setLang: (lang) => set({ lang }),
       set: (patch) => set(patch),
@@ -482,20 +528,27 @@ export const useApp = create<State & Actions>()(
         router.push('/tracking');
       },
 
-      finishOrder: () => {
+      finishOrder: (comment) => {
         const s = get();
         if (!s.active) return;
-        const { placedAt, lost, scheduledFor, ...rest } = s.active;
-        const status = lost
-          ? 'cancelled'
-          : (s.live?.orders.find((o) => isOurOrder(o, s.active!))?.status ?? 'delivered');
+        const { placedAt, lost, scheduledFor, pin, ...rest } = s.active;
+        const liveOrder = lost ? undefined : s.live?.orders.find((o) => isOurOrder(o, s.active!));
+        const status = lost ? 'cancelled' : (liveOrder?.status ?? 'delivered');
         // Cancelled orders aren't kept in the history.
         const at = s.live ? demoClock(s.live.t) : clock(Date.now());
         const done: Order = { ...rest, date: 'Today · ' + at, status };
         set({ orders: status === 'cancelled' ? s.orders : [done, ...s.orders], active: null });
         router.dismissAll();
         router.navigate('/orders');
-        if (s.rating && status !== 'cancelled') s.showToast(t().thanks);
+        // Rated once, after delivery; an order already rated (e.g. on another device) keeps its rating.
+        if (s.rating && status === 'delivered' && !liveOrder?.rating) {
+          api
+            .rateOrder(rest.id, s.rating, comment?.trim() || undefined)
+            .then(() => get().showToast(t().thanks))
+            .catch((e) =>
+              get().showToast(e instanceof Error && e.message ? e.message : t().rateFailed),
+            );
+        }
       },
 
       cancelActive: async () => {
@@ -590,6 +643,8 @@ export const useApp = create<State & Actions>()(
             const { active } = get();
             if (!active) return set({ live });
             const o = live.orders.find((x) => isOurOrder(x, active));
+            const before = get().live?.orders.find((x) => isOurOrder(x, active));
+            if (o && before && o.status !== before.status) alertStatus(get(), o);
             const lost = active.lost || (!o && Date.now() - active.placedAt > PLACE_GRACE_MS);
             set({ live, ...(lost !== !!active.lost ? { active: { ...active, lost } } : {}) });
           },

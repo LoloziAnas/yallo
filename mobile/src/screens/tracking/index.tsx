@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -7,6 +8,7 @@ import { Icon } from '@/components/icon';
 import { Screen } from '@/components/screen';
 import { confirm } from '@/utils/confirm';
 import { dial } from '@/utils/dial';
+import { TextField } from '@/components/text-field';
 import { Txt } from '@/components/txt';
 import { storeById } from '@/data/catalog';
 import { useApp, useT } from '@/store/app-store';
@@ -30,6 +32,7 @@ export function Tracking() {
   const set = useApp((s) => s.set);
   const showToast = useApp((s) => s.showToast);
   const finishOrder = useApp((s) => s.finishOrder);
+  const [comment, setComment] = useState('');
   const cancelActive = useApp((s) => s.cancelActive);
 
   // The order can disappear (Done pressed) while this screen is still mounted.
@@ -43,6 +46,9 @@ export function Tracking() {
   const times = [0, 1, 2, 3, 4].map((i) => stepTime(order?.statusAt, i));
   const count = active.lines.reduce((a, l) => a + l.qty, 0);
   const pin = order?.deliveryPin ?? active.pin;
+  // A rating the API already has (sent from another device) is shown, not asked for again.
+  const saved = order?.rating;
+  const stars = saved?.stars ?? rating;
   const mapH = MAP_H + insets.top;
 
   const openChat = () => router.push('/chat');
@@ -155,19 +161,31 @@ export function Tracking() {
               {[1, 2, 3, 4, 5].map((n) => (
                 <Pressable
                   key={n}
-                  onPress={() => set({ rating: n })}
+                  onPress={() => !saved && set({ rating: n })}
+                  disabled={!!saved}
                   accessibilityRole="button"
                   accessibilityLabel={`Rate ${n}`}
-                  accessibilityState={{ selected: n <= rating }}
+                  accessibilityState={{ selected: n <= stars }}
                   style={{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon name="star" size={34} color={colors.saffron} filled={n <= rating} />
+                  <Icon name="star" size={34} color={colors.saffron} filled={n <= stars} />
                 </Pressable>
               ))}
             </View>
+            {step === 4 && !saved && rating > 0 && (
+              <TextField
+                value={comment}
+                onChangeText={setComment}
+                placeholder={t.rateComment}
+                accessibilityLabel={t.rateComment}
+                maxLength={500}
+                multiline
+                minHeight={64}
+              />
+            )}
             <Button
               label={t.done}
               fontSize={17}
-              onPress={finishOrder}
+              onPress={() => finishOrder(comment)}
               style={{ height: 50, marginTop: 4 }}
             />
           </View>

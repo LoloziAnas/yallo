@@ -38,7 +38,8 @@
         {
           "locationWhenInUsePermission": "Yallo uses your location to deliver your order to where you are."
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,

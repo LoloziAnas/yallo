@@ -64,6 +64,11 @@ export default function RootLayout() {
 
   // Live state from the shared mock API (orders, couriers, merchants), pushed every second.
   useEffect(() => connectLive(), [connectLive, token]);
+  const notif = useApp((s) => s.notif);
+  const setUpPush = useApp((s) => s.setUpPush);
+  useEffect(() => {
+    setUpPush();
+  }, [setUpPush, token, notif]);
 
   if (!ready) return null;
 
