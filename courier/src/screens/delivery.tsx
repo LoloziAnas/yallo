@@ -125,10 +125,11 @@ function MapView() {
     showToast('Opening route in your navigation app');
     openUrl(mapsUrl(isPick ? order.navTo.store : order.navTo.customer, app));
   };
-  // Calls really dial when the customer app sent a number; the store and demo orders stay simulated.
+  // Calls really dial the store or the customer when the number is known; demo orders stay simulated.
   const callSheet = () => {
     showToast(sheet.call);
-    if (!isPick && order.phone) openUrl(telUrl(order.phone));
+    const phone = isPick ? order.storePhone : order.phone;
+    if (phone) openUrl(telUrl(phone));
   };
 
   return (
@@ -549,7 +550,10 @@ function AtPickup() {
             label={t('Call restaurant')}
             height={52}
             style={{ flex: 1 }}
-            onPress={() => showToast(`Calling ${order.store}…`)}
+            onPress={() => {
+              showToast(`Calling ${order.store}…`);
+              if (order.storePhone) openUrl(telUrl(order.storePhone));
+            }}
           />
           <Btn
             variant="secondary"

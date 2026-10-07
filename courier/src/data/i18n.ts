@@ -27,6 +27,9 @@ const PHR: [string, string, string][] = [
   ],
   ['Scheduled for {0}', 'Prévue pour {0}', 'مجدولة لـ {0}'],
   ['Groceries', 'Courses', 'بقالة'],
+  ['Shop', 'Boutique', 'متجر'],
+  ['Bakery', 'Pâtisserie', 'مخبزة'],
+  ['Drinks', 'Boissons', 'مشروبات'],
   // Added for the live API: arriving before the food is ready.
   [
     'The restaurant is still preparing this order.',

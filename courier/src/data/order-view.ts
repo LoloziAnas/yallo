@@ -17,6 +17,8 @@ export interface OrderView {
   storeKind: string;
   store: string;
   storeAddr: string;
+  /** The store's phone (live catalogue); calls to the store are simulated without it. */
+  storePhone?: string;
   storeNote: string;
   /** Customer first name, and full name. */
   cust: string;
@@ -65,8 +67,15 @@ export const DEMO_ORDER: OrderView = {
   dropLine: 'Rue de la Liberté, Marrakech',
 };
 
-/** Merchant categories that aren't food: shown as themselves; every other category is a restaurant. */
-const NOT_RESTAURANT = ['Pharmacy', 'Groceries'];
+/** How each catalogue store kind is named to couriers. */
+const STORE_KIND: Record<string, string> = {
+  restaurants: 'Restaurant',
+  groceries: 'Groceries',
+  pharmacy: 'Pharmacy',
+  shops: 'Shop',
+  bakery: 'Bakery',
+  drinks: 'Drinks',
+};
 
 /** The seeded live order that the design's #1284 depicts; it keeps the design's addresses and notes. */
 const DESIGN_ORDER_ID = '#48213';
@@ -93,9 +102,10 @@ export function fromApi(o: ApiOrder, m: Merchant, courierPos: MapPoint): OrderVi
   const km = o.courierKm ?? tripKm(courierPos, m.pos, o.dropoff);
   return {
     id: o.id,
-    storeKind: NOT_RESTAURANT.includes(m.category) ? m.category : 'Restaurant',
+    storeKind: STORE_KIND[m.kind] ?? 'Restaurant',
     store: m.name,
     storeAddr: m.address,
+    storePhone: m.phone || undefined,
     storeNote: design ? O.storeNote : '',
     cust: o.customerName.split(' ')[0],
     custFull: o.customerName,

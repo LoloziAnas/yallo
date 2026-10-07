@@ -7,6 +7,8 @@ const merchant = (patch: Partial<Merchant> = {}) =>
     id: 'm1',
     name: 'Dar Zitoun',
     category: 'Moroccan',
+    kind: 'restaurants',
+    phone: '+212524430000',
     zone: 'Guéliz',
     address: '12 Av. Mohammed V, Guéliz',
     pos: { x: 33, y: 26 },
@@ -97,9 +99,13 @@ describe('places and people', () => {
 
   it('names the kind of store', () => {
     expect(fromApi(order(), merchant(), courierPos).storeKind).toBe('Restaurant');
-    expect(fromApi(order(), merchant({ category: 'Pharmacy' }), courierPos).storeKind).toBe(
-      'Pharmacy',
-    );
+    expect(
+      fromApi(order(), merchant({ category: 'Pharmacy', kind: 'pharmacy' }), courierPos).storeKind,
+    ).toBe('Pharmacy');
+  });
+
+  it("carries the store's phone for real calls", () => {
+    expect(fromApi(order(), merchant(), courierPos).storePhone).toBe('+212524430000');
   });
 
   it('measures the current leg: to the store, then to the customer', () => {

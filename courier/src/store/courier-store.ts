@@ -53,6 +53,8 @@ export interface Data {
   /** This courier's support conversations (live), and how many ops replies were read in each. */
   tickets: Ticket[];
   repliesSeen: Record<string, number>;
+  /** "While using the app" location is granted (tracking can start). */
+  locationOk: boolean;
   /** Latest GPS fix from this phone, and where tracking stands. */
   gps: { lat: number; lon: number; accuracy: number | null; at: number } | null;
   tracking: 'off' | 'foreground' | 'background' | 'foreground-only';
@@ -140,6 +142,7 @@ const INITIAL: Data = {
   opsComp: 0,
   tickets: [],
   repliesSeen: {},
+  locationOk: false,
   gps: null,
   tracking: 'off',
   clock: null,

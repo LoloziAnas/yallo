@@ -47,12 +47,11 @@ if (Platform.OS !== 'web') {
 export async function requestForegroundLocation(): Promise<boolean> {
   if (Platform.OS === 'web') return true;
   const current = await Location.getForegroundPermissionsAsync();
-  if (current.granted) return true;
-  if (!current.canAskAgain) {
-    Linking.openSettings().catch(() => {});
-    return false;
-  }
-  return (await Location.requestForegroundPermissionsAsync()).granted;
+  let granted = current.granted;
+  if (!granted && !current.canAskAgain) Linking.openSettings().catch(() => {});
+  else if (!granted) granted = (await Location.requestForegroundPermissionsAsync()).granted;
+  useCourier.setState({ locationOk: granted });
+  return granted;
 }
 
 /** Goes online once the courier allows location; otherwise shows the "Location is off" screen. */
@@ -65,6 +64,9 @@ export async function goOnlineWithLocation() {
 
 async function startBackground(): Promise<Tracking> {
   try {
+    // A job can start without "Go online" (already assigned at sign-in); Android only grants
+    // background location on top of foreground location, so ask for that first.
+    if (!(await requestForegroundLocation())) return 'off';
     if (!(await Location.requestBackgroundPermissionsAsync()).granted) return 'foreground-only';
     if (!(await Location.hasStartedLocationUpdatesAsync(BG_TASK))) {
       await Location.startLocationUpdatesAsync(BG_TASK, {
@@ -104,16 +106,24 @@ async function stopBackground() {
 export function useTracking() {
   const online = useCourier((s) => s.signedIn && s.online);
   const onJob = useCourier((s) => inDelivery(s.phase));
+  const locationOk = useCourier((s) => s.locationOk);
+
+  // Pick up a permission granted earlier (e.g. on a previous launch).
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    Location.getForegroundPermissionsAsync()
+      .then((p) => useCourier.setState({ locationOk: p.granted }))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
-    if (Platform.OS === 'web' || !online) {
+    if (Platform.OS === 'web' || !online || !locationOk) {
       useCourier.setState({ tracking: 'off' });
       return;
     }
     let sub: Location.LocationSubscription | null = null;
     let cancelled = false;
     (async () => {
-      if (!(await Location.getForegroundPermissionsAsync()).granted || cancelled) return;
       sub = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 15 },
         onFix,
@@ -125,7 +135,7 @@ export function useTracking() {
       cancelled = true;
       sub?.remove();
     };
-  }, [online]);
+  }, [online, locationOk]);
 
   useEffect(() => {
     if (Platform.OS === 'web' || !online) return;
