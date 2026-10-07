@@ -1404,3 +1404,23 @@ describe('API discovery (configUrl)', () => {
     }
   });
 });
+
+describe('Live feed subscriptions', () => {
+  test('after unsubscribing, the closing socket reports nothing (a newer subscription may already be live)', async () => {
+    const a = createApi({ tickMs: 0 });
+    await new Promise<void>(r => a.http.listen(0, '127.0.0.1', r));
+    try {
+      const c = createYalloClient(`http://127.0.0.1:${(a.http.address() as AddressInfo).port}`);
+      const status: boolean[] = [];
+      let states = 0;
+      await new Promise<void>(resolve => {
+        const stop = c.subscribe(() => { states++; stop(); setTimeout(resolve, 300); }, s => status.push(s));
+      });
+      assert.deepEqual(status, [true], 'no "offline" from the replaced socket');
+      assert.equal(states, 1);
+    } finally {
+      a.http.closeAllConnections();
+      await new Promise<void>(r => a.http.close(() => r()));
+    }
+  });
+});

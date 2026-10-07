@@ -316,15 +316,18 @@ export function createYalloClient(baseUrl: string, opts: { token?: string; confi
         const wsUrl = (base || (typeof location !== 'undefined' ? location.origin : '')).replace(/^http/, 'ws') + '/api/live' + query;
         let opened = false;
         ws = new WebSocket(wsUrl);
-        ws.onopen = () => { opened = true; failures = 0; onStatus?.(true); };
+        // After unsubscribing, a socket still closing must not report anything: a newer subscription (e.g. after
+        // sign-in) may already be connected, and a late "offline" would contradict it.
+        ws.onopen = () => { opened = true; failures = 0; if (!stopped) onStatus?.(true); };
         ws.onmessage = e => {
           const msg = JSON.parse(String(e.data)) as LiveMessage;
-          if (msg.type === 'state') {
+          if (msg.type === 'state' && !stopped) {
             applyClock(msg.state.clock);
             onState(msg.state);
           }
         };
         ws.onclose = () => {
+          if (stopped) return;
           onStatus?.(false);
           failures = opened ? 1 : failures + 1;
           if (!stopped) retry = setTimeout(open, 1500);
