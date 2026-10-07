@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yallo</title>
+<script>
+  // GitHub Pages has no rewrites: an unknown path inside one of the apps (a deep link or a reload on a client-side
+  // route) lands here. Send it to that app's index with the path inside the app in ?p= (e.g. /yallo/courier/chat →
+  // /yallo/courier/?p=%2Fchat), which the app restores. Anything else goes to the landing page.
+  (function () {
+    var base = '/yallo/', apps = ['ops', 'app', 'courier'], l = location;
+    var rest = l.pathname.indexOf(base) === 0 ? l.pathname.slice(base.length) : '';
+    var app = rest.split('/')[0], inner = rest.slice(app.length);
+    if (apps.indexOf(app) < 0) { l.replace(base); return; }
+    // The app's own index is missing (not deployed yet): stop here instead of looping.
+    if (inner === '' || inner === '/') { document.addEventListener('DOMContentLoaded', function () { document.getElementById('msg').hidden = false; }); return; }
+    l.replace(base + app + '/?p=' + encodeURIComponent(inner + l.search) + l.hash);
+  })();
+</script>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; font: 16px/1.5 system-ui, sans-serif; background: #faf6f0; color: #2b1f1a; padding: 16px; box-sizing: border-box; }
+</style>
+</head>
+<body>
+  <p id="msg" hidden>This part of the Yallo demo isn't published yet. <a href="/yallo/">Back to the demo</a></p>
+</body>
+</html>

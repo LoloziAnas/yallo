@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "**",
+      "destination": "/yallo/app/index.html"
+    }
+  ]
+}
