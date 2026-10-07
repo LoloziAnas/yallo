@@ -105,6 +105,9 @@ back office deploy with `deploy/prepare.sh` (builds the commit into `.deploy/<sh
     `/:id/approve` (creates the courier, who can then sign in) and `/:id/reject {reason}`. In LiveState as `applications`.
   - Payouts: `LiveState.payouts` (weekly run) and `/api/payouts/approve {lineIds}`. Earnings: `GET /api/couriers/:id/earnings`
     and `courierEarnings(orders, courierId)` in shared (jobs, pay, tips, compensation, cash held, history).
+  - Courier GPS: `/api/couriers/:id/location {lat, lon}` (that courier or ops). The API places them with `geoToMap`
+    (map point (30, 30) = 31.634, -8.0105; `mapToGeo` goes back) and stops simulating them while fixes keep coming
+    (`lastFixAt`, stale after `GPS_STALE_SEC` = 60 s).
   - `/api/merchants/:id/open {open}`, `/api/couriers/:id/suspend {suspended}`,
     `/api/couriers/:id/availability {status: 'idle'|'off'}`, `/api/reset`.
 - Use `createYalloClient(url)` rather than calling these by hand. The back office uses `''`, because Vite

@@ -66,6 +66,7 @@ const ROUTES: [string, RegExp, Rule, Handler][] = [
   ['POST', /^\/api\/orders\/(\d+)\/refund$/, ops, (s, [id], b) => (s.refundOrder(id, b?.amount, b?.reason), s.state)],
   ['POST', /^\/api\/merchants\/([\w-]+)\/open$/, ops, (s, [id], b) => (s.setMerchantOpen(id, b?.open), s.state)],
   ['POST', /^\/api\/couriers\/([\w-]+)\/suspend$/, ops, (s, [id], b) => (s.setCourierSuspended(id, b?.suspended), s.state)],
+  ['POST', /^\/api\/couriers\/([\w-]+)\/location$/, selfCourier, (s, [id], b) => (s.setCourierLocation(id, b?.lat, b?.lon), s.state)],
   ['POST', /^\/api\/couriers\/([\w-]+)\/availability$/, selfCourier, (s, [id], b) => (s.setCourierAvailability(id, b?.status), s.state)],
   ['POST', /^\/api\/tickets$/, signedIn, (s, _, b, ctx) => s.openTicket(b, ctx.user)],
   ['POST', /^\/api\/tickets\/(T-\d+)\/messages$/, ticketParty, (s, [id], b) => (s.addTicketMessage(id, b?.from, b?.author, b?.text), s.state)],

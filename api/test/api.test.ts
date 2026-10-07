@@ -2,7 +2,7 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import { createYalloClient, type LiveState, type YalloClient } from '@yallo/shared';
-import { DEV_OTP_CODE, DEV_TOKENS, DISPATCH_RADIUS_KM, OFFER_SEC, courierPayFor, normalizePhone, pickupKm, tripKm } from '@yallo/shared';
+import { DEV_OTP_CODE, DEV_TOKENS, DISPATCH_RADIUS_KM, GEO_ANCHOR, GPS_STALE_SEC, geoToMap, mapToGeo, OFFER_SEC, courierPayFor, normalizePhone, pickupKm, tripKm } from '@yallo/shared';
 import { AUTO_ACCEPT_SEC, AUTO_READY_SEC, STAND_IN_ACCEPT_SEC, STATE_VERSION, Store } from '../src/store';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -333,6 +333,31 @@ describe('Dispatch radius', () => {
       const near = s.state.couriers.filter(c => c.status === 'idle' && pickupKm(c.pos, m.pos) <= DISPATCH_RADIUS_KM);
       assert.ok(near.length > 0, `${o.id} at ${m.name} has no idle courier within ${DISPATCH_RADIUS_KM} km`);
     }
+  });
+});
+
+describe('Courier GPS', () => {
+  let s: Store;
+  beforeEach(() => { s = new Store(); });
+
+  test('GPS and the demo map convert both ways around the Guéliz anchor', () => {
+    assert.deepEqual(geoToMap(GEO_ANCHOR.lat, GEO_ANCHOR.lon), { x: 30, y: 30 });
+    const p = geoToMap(31.64, -8.0);   // ~1 km east and ~0.7 km north of the anchor
+    assert.ok(p.x > 30 && p.y < 30);
+    const back = mapToGeo(p);
+    assert.ok(Math.abs(back.lat - 31.64) < 1e-9 && Math.abs(back.lon + 8.0) < 1e-9);
+    assert.deepEqual(geoToMap(48.85, 2.35), { x: 100, y: 0 }, 'far away clamps to the map edge');
+  });
+
+  test('a fix places the courier, and the simulation leaves them until fixes stop', () => {
+    s.setCourierLocation('c1', 31.6352, -8.0099);
+    const placed = { ...courier(s, 'c1').pos };
+    assert.equal(courier(s, 'c1').lastFixAt, 0);
+    tick(s, GPS_STALE_SEC);
+    assert.deepEqual(courier(s, 'c1').pos, placed, 'no simulated movement while fixes are fresh');
+    tick(s, 2);
+    assert.notDeepEqual(courier(s, 'c1').pos, placed, 'stale fixes: the simulation takes over again');
+    assert.throws(() => s.setCourierLocation('c1', 95, 0), /lat must be/);
   });
 });
 
@@ -744,6 +769,11 @@ describe('Authorization (enforce mode)', () => {
     assert.equal((await raw('POST', '/orders/48214/status', DEV_TOKENS.courier('c3'), { status: 'ready' })).status, 403, 'not their order');
     assert.equal((await raw('GET', '/couriers/c2/earnings', DEV_TOKENS.courier('c3'))).status, 403);
     assert.equal((await raw('GET', '/couriers/c3/earnings', DEV_TOKENS.courier('c3'))).status, 200);
+  });
+
+  test('only the courier themself (or ops) posts their location', async () => {
+    assert.equal((await raw('POST', '/couriers/c1/location', DEV_TOKENS.courier('c2'), { lat: 31.63, lon: -8.0 })).status, 403);
+    assert.equal((await raw('POST', '/couriers/c1/location', DEV_TOKENS.courier('c1'), { lat: 31.63, lon: -8.0 })).status, 200);
   });
 
   test('tickets: the requester is the signed-in user; only they and ops write there', async () => {

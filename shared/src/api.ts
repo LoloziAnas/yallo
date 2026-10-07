@@ -29,7 +29,15 @@ export type ApiCourier = Courier & {
    * stand-in that accepts offers after a few seconds.
    */
   app: boolean;
+  /**
+   * Demo second of the courier's last GPS fix from their app. While fixes keep coming (within GPS_STALE_SEC), the
+   * simulation leaves the courier where the app puts them.
+   */
+  lastFixAt?: number;
 };
+
+/** After this long without a fix, the simulation moves the courier again. */
+export const GPS_STALE_SEC = 60;
 
 /** Everything the apps share. The server pushes the whole snapshot on every change and every tick. */
 export type LiveState = {
@@ -259,6 +267,8 @@ export function createYalloClient(baseUrl: string, opts: { token?: string } = {}
     refundOrder: (orderId: string, amount: number, reason: string) => post(`/orders/${orderPath(orderId)}/refund`, { amount, reason }),
     setMerchantOpen: (merchantId: string, open: boolean) => post(`/merchants/${merchantId}/open`, { open }),
     setCourierSuspended: (courierId: string, suspended: boolean) => post(`/couriers/${courierId}/suspend`, { suspended }),
+    /** The courier app reports where the courier is (real GPS); the API places them on the demo map. */
+    setCourierLocation: (courierId: string, lat: number, lon: number) => post(`/couriers/${courierId}/location`, { lat, lon }),
     /** Courier app going online ('idle') or offline ('off'). 'busy' is set by assignment. */
     setCourierAvailability: (courierId: string, status: 'idle' | 'off') => post(`/couriers/${courierId}/availability`, { status }),
     /** A customer, courier or merchant opens a ticket. Returns the new ticket. */

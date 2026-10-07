@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { dirname } from 'node:path';
 // In-memory state for the mock API: the shared demo seed plus the rules every app's actions go through.
 import {
-  ACTIVE_STATUSES, APPLICATIONS, OPS_STAFF, DEV_TOKENS, PAYOUTS, COURIERS, courierEarnings, normalizePhone as normPhone, requiredDocs, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, MERCHANTS, clockAt, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
+  ACTIVE_STATUSES, APPLICATIONS, OPS_STAFF, DEV_TOKENS, GPS_STALE_SEC, geoToMap, PAYOUTS, COURIERS, courierEarnings, normalizePhone as normPhone, requiredDocs, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, MERCHANTS, clockAt, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
   type ApiCourier, type ApiOrder, type LiveState, type OpenTicketBody, type OrderStatus, type PlaceOrderBody, type Ticket, type TicketPriority,
   type TicketSource, type ZoneName, type ApplyBody, type ApplicationStatus, type CourierApplication, type DocKey, type Vehicle, type AuthRole, type AuthSession, type AuthUser, DEV_OTP_CODE, normalizePhone, type OrderItem, type OrderLineInput, type Quote, PricingError, quoteOrder, storeAvailability,
 } from '@yallo/shared';
@@ -253,6 +253,8 @@ export class Store {
     }
     for (const c of s.couriers) {
       if (c.status !== 'busy') continue;
+      // The courier's app is reporting real positions: don't move them.
+      if (c.lastFixAt !== undefined && s.t - c.lastFixAt <= GPS_STALE_SEC) continue;
       const o = s.orders.find(o => o.courierId === c.id && isActive(o.status));
       if (!o) continue;
       // Until pickup the courier heads to the store, even while the food is still being prepared.
@@ -806,5 +808,16 @@ export class Store {
       return { ...base, orders, couriers: s.couriers.filter(c => riders.has(c.id)), tickets: s.tickets.filter(tk => tk.requesterId === user.id) };
     }
     return { ...base, couriers: [], orders: [], tickets: [] };
+  }
+
+  /** A GPS fix from the courier's app. The courier is placed on the demo map and the simulation stops moving them. */
+  setCourierLocation(courierId: string, lat: number, lon: number) {
+    const c = this.courier(courierId);
+    if (typeof lat !== 'number' || typeof lon !== 'number' || !(Math.abs(lat) <= 90) || !(Math.abs(lon) <= 180)) {
+      throw new ActionError('lat must be in -90..90 and lon in -180..180');
+    }
+    c.pos = geoToMap(lat, lon);
+    c.lastFixAt = this.s.t;
+    this.changed();
   }
 }
