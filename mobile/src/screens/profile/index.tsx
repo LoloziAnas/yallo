@@ -17,7 +17,7 @@ export function Profile() {
   const lang = useApp((s) => s.lang);
   const setLang = useApp((s) => s.setLang);
   const notif = useApp((s) => s.notif);
-  const set = useApp((s) => s.set);
+  const setNotif = useApp((s) => s.setNotif);
   const showToast = useApp((s) => s.showToast);
   const logout = useApp((s) => s.logout);
   const addresses = useApp((s) => s.addresses);
@@ -129,7 +129,7 @@ export function Profile() {
           <Txt w={500} style={{ flex: 1 }}>
             {t.notifications}
           </Txt>
-          <PillSwitch value={notif} onChange={() => set({ notif: !notif })} />
+          <PillSwitch value={notif} onChange={() => setNotif(!notif)} />
         </Row>
         <Row icon="globe" minHeight={62}>
           <Txt w={500} style={{ flex: 1 }}>

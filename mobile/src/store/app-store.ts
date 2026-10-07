@@ -182,6 +182,8 @@ type State = {
   pushToken: string | null;
   /** Asks for notification permission and registers for push (when signed in, with notifications on). */
   setUpPush: () => Promise<void>;
+  /** The Profile switch. Turning it off also stops the API pushing to this device. */
+  setNotif: (on: boolean) => void;
 };
 
 type Actions = {
@@ -356,6 +358,11 @@ export const useApp = create<State & Actions>()(
       locDraft: null,
       notif: true,
       pushToken: null,
+      setNotif: (on) => {
+        const pt = get().pushToken;
+        set({ notif: on, ...(on ? {} : { pushToken: null }) });
+        if (!on && pt) api.unregisterPushToken(pt).catch(() => {});
+      },
       setUpPush: async () => {
         const s = get();
         if (!s.token || !s.notif) return;
@@ -398,8 +405,12 @@ export const useApp = create<State & Actions>()(
 
       logout: () => {
         // End the API session and clear this person's data from the device; keep only the language.
-        api.signOut().catch(() => {});
-        set(userDefaults());
+        // The push token goes first: removing it needs the session that signOut ends.
+        const pt = get().pushToken;
+        (pt ? api.unregisterPushToken(pt) : Promise.resolve())
+          .catch(() => {})
+          .finally(() => api.signOut().catch(() => {}));
+        set({ ...userDefaults(), pushToken: null });
         router.dismissAll();
         router.replace('/sign-in');
       },

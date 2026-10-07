@@ -1,13 +1,23 @@
 // Order status alerts. With an Expo push token (a dev/store build with an EAS project id), the API
 // pushes them; until then, a local notification is shown when the live feed reports a new step
 // while the app is in the background.
-import Constants from 'expo-constants';
-import * as Notifications from 'expo-notifications';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { AppState, Platform } from 'react-native';
 
 const ORDERS_CHANNEL = 'orders';
 
-if (Platform.OS !== 'web') {
+/**
+ * expo-notifications, or null where it can't load: on web, and in Expo Go on Android, where importing
+ * it throws (remote notifications were removed from Expo Go in SDK 53). Required lazily for that reason.
+ */
+const Notifications: typeof import('expo-notifications') | null =
+  Platform.OS === 'web' ||
+  (Platform.OS === 'android' && Constants.executionEnvironment === ExecutionEnvironment.StoreClient)
+    ? null
+    : // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('expo-notifications');
+
+if (Notifications) {
   // In front, the tracking screen is the alert; only background notifications show.
   Notifications.setNotificationHandler({
     handleNotification: async () => {
@@ -24,7 +34,7 @@ if (Platform.OS !== 'web') {
 
 /** Asks for notification permission and sets up the Android channel. False on web or when refused. */
 export async function setUpNotifications(channelName: string): Promise<boolean> {
-  if (Platform.OS === 'web') return false;
+  if (!Notifications) return false;
   try {
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync(ORDERS_CHANNEL, {
@@ -45,7 +55,7 @@ export async function setUpNotifications(channelName: string): Promise<boolean> 
  * push credentials, Expo Go on Android, permission refused). Never throws.
  */
 export async function getPushToken(): Promise<string | null> {
-  if (Platform.OS === 'web') return null;
+  if (!Notifications) return null;
   try {
     const projectId =
       Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId ?? undefined;
@@ -58,7 +68,7 @@ export async function getPushToken(): Promise<string | null> {
 
 /** Shows an order update as a local notification, only when the app isn't in front. */
 export function notifyLocally(title: string, body: string) {
-  if (Platform.OS === 'web' || AppState.currentState === 'active') return;
+  if (!Notifications || AppState.currentState === 'active') return;
   Notifications.scheduleNotificationAsync({
     content: { title, body, sound: 'default', data: { kind: 'order' } },
     trigger: Platform.OS === 'android' ? { channelId: ORDERS_CHANNEL } : null,
