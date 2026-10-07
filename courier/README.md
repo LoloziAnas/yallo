@@ -46,6 +46,27 @@ development builds; a release build would need HTTPS (or cleartext allowed for t
   LAN-preview builds against the mock API); production on HTTPS keeps the platform defaults.
 - Identifiers: `ma.yallo.courier` on iOS and Android.
 
+### Demo builds without EAS
+
+- **Android APK**: `npm run apk -- --api https://<api host>` runs `expo prebuild` and
+  `gradlew assembleRelease` locally and writes `dist/yallo-courier-<version>-<sha>.apk`. It needs
+  the Android SDK (`ANDROID_HOME`, default `~/Android/Sdk`) and a JDK 17–21, which the script finds
+  under `/usr/lib/jvm` if `JAVA_HOME` is older. It builds for arm64 phones and the x86_64 emulator;
+  `--all-abis` adds 32-bit devices, and `--clean` regenerates `android/`. The first build takes
+  about 45 minutes, later ones a few.
+- **Signing**: the release key is outside git, in `~/yallo-keys/` (`courier-release.jks` and
+  `courier-release.properties`; read `README.txt` there). `plugins/with-release-signing.js` reads
+  it when Gradle runs (`YALLO_KEYSTORE_PROPERTIES` overrides the path). Back both files up:
+  testers can only update an install that was signed with the same key.
+- **Web (iPhone testers)**: `npm run web:export -- --api https://<api host> [--out dir] [--base /path]`
+  writes a single-page static folder. On a host's build step, use
+  `EXPO_PUBLIC_API_URL=https://<api host> npm run web:build`, which writes `web-dist/`. The host must
+  rewrite every path to `/index.html`. On web, location only works while the page is open.
+- Builds show `version · commit` on the welcome and profile screens.
+- **Cold start**: the free demo API sleeps when idle. The app pings it at launch; while it wakes,
+  the app shows "Connecting to Yallo…" and sign-in keeps retrying for about 90 s. A saved session
+  survives this: the app keeps it rather than signing out.
+
 ## Device features
 
 - **GPS**: going online asks for location ("Location is off" screen and Settings if refused). While
