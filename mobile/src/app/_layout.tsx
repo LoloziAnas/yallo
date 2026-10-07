@@ -89,6 +89,9 @@ export default function RootLayout() {
             <Stack.Screen name="help" options={sheet} />
           </Stack.Protected>
           {/* Address sheets are also used during onboarding ("Enter address manually"). */}
+          {/* Legal pages are reachable signed out (from sign-in) and signed in. */}
+          <Stack.Screen name="terms" />
+          <Stack.Screen name="privacy" />
           <Stack.Screen name="address" options={sheet} />
           <Stack.Screen name="new-address" options={sheet} />
         </Stack>

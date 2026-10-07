@@ -28,7 +28,7 @@ export function Profile() {
   const rows: [IconName, string, string, () => void][] = [
     ['user', t.personal, 'Salma El Amrani · salma.amrani@gmail.com', soon],
     ['pin', t.addresses, addresses.map((a) => a.label).join(' · '), () => router.push('/address')],
-    ['card', t.payments, `${t.cash} · Visa 4821`, () => router.push('/payments')],
+    ['card', t.payments, t.cash, () => router.push('/payments')],
     [
       'receipt',
       t.orders,

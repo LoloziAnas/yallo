@@ -1,20 +1,16 @@
 import { View } from 'react-native';
 
-import { Button } from '@/components/button';
 import { Icon, type IconName } from '@/components/icon';
 import { Sheet } from '@/components/sheet';
 import { Txt } from '@/components/txt';
-import { useApp, useT } from '@/store/app-store';
+import { useT } from '@/store/app-store';
 import { colors } from '@/theme';
 
 /** Saved payment methods (sheet). */
 export function Payments() {
   const t = useT();
-  const showToast = useApp((s) => s.showToast);
-  const methods: [IconName, string, string][] = [
-    ['cash', t.cash, t.cashSub],
-    ['card', 'Visa •••• 4821', t.cardSub],
-  ];
+  // Cash on delivery only for now; card payments come later.
+  const methods: [IconName, string, string][] = [['cash', t.cash, t.cashSub]];
 
   return (
     <Sheet>
@@ -41,13 +37,6 @@ export function Payments() {
           </View>
         </View>
       ))}
-      <Button
-        variant="ghost"
-        icon="plus"
-        label={t.addCard}
-        onPress={() => showToast(t.soon)}
-        style={{ alignSelf: 'flex-start', marginTop: 10, height: 44 }}
-      />
     </Sheet>
   );
 }

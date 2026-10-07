@@ -36,9 +36,9 @@ export function CheckoutScreen() {
       : `${t.schedule} · ${addr.district}`
     : '';
   const instrOptions = [t.q2, t.q1, 'Leave with the gardien', t.q3];
+  // Cash on delivery only for now; card payments come later.
   const pays: { id: PayMethod; label: string; sub: string; icon: IconName }[] = [
     { id: 'cash', label: t.cash, sub: t.cashSub, icon: 'cash' },
-    { id: 'card', label: 'Visa •••• 4821', sub: t.cardSub, icon: 'card' },
   ];
   const toggleChip = (x: string) =>
     s.set({

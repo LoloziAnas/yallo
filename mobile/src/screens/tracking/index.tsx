@@ -1,10 +1,11 @@
 import { router } from 'expo-router';
-import { Linking, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, IconButton } from '@/components/button';
 import { Icon } from '@/components/icon';
 import { Screen } from '@/components/screen';
+import { dial } from '@/utils/dial';
 import { Txt } from '@/components/txt';
 import { storeById } from '@/data/catalog';
 import { useApp, useT } from '@/store/app-store';
@@ -25,7 +26,6 @@ export function Tracking() {
   const { width } = useWindowDimensions();
   const live = useLiveOrder();
   const rating = useApp((s) => s.rating);
-  const chat = useApp((s) => s.chat);
   const set = useApp((s) => s.set);
   const showToast = useApp((s) => s.showToast);
   const finishOrder = useApp((s) => s.finishOrder);
@@ -42,10 +42,7 @@ export function Tracking() {
   const count = active.lines.reduce((a, l) => a + l.qty, 0);
   const mapH = MAP_H + insets.top;
 
-  const openChat = () => {
-    if (!chat.length) set({ chat: [{ me: false, text: t.chatHi }] });
-    router.push('/chat');
-  };
+  const openChat = () => router.push('/chat');
 
   return (
     <Screen edges={[]}>
@@ -279,7 +276,7 @@ export function Tracking() {
                   onPress={() => {
                     // Opens the phone's dialer with the courier's number from the API.
                     showToast(withName(t.calling, rider.first));
-                    Linking.openURL('tel:' + courier.phone.replace(/\s/g, '')).catch(() => {});
+                    dial(courier.phone);
                   }}
                   accessibilityLabel={t.call}
                   style={{ flex: 1, height: 48 }}>

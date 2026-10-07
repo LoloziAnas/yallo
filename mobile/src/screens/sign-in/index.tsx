@@ -138,7 +138,23 @@ export function SignIn() {
                 style={{ height: 48, alignSelf: 'center' }}
               />
               <Txt size={12} color={colors.neutral600} center style={{ marginTop: 8 }}>
-                {t.terms}
+                {/* "[Terms]" and "[Privacy Policy]" in the sentence become links, in every language. */}
+                {t.terms.split(/\[([^\]]+)\]/).map((part, i) =>
+                  i % 2 ? (
+                    <Txt
+                      key={i}
+                      size={12}
+                      w={600}
+                      color={colors.accent700}
+                      accessibilityRole="link"
+                      onPress={() => router.push(i === 1 ? '/terms' : '/privacy')}
+                      style={{ textDecorationLine: 'underline' }}>
+                      {part}
+                    </Txt>
+                  ) : (
+                    part
+                  ),
+                )}
               </Txt>
             </View>
           ) : (

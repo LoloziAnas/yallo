@@ -53,7 +53,6 @@ export type ActiveOrder = Omit<Order, 'date' | 'status'> & {
 
 /** How long a just-placed order may be missing from the live feed before it counts as lost. */
 const PLACE_GRACE_MS = 5000;
-export type ChatMessage = { me: boolean; text: string };
 type PendingAdd = { pid: string; sel: Selection; qty: number; fromProduct: boolean };
 
 type State = {
@@ -94,7 +93,6 @@ type State = {
   // orders & tracking
   active: ActiveOrder | null;
   rating: number;
-  chat: ChatMessage[];
   orders: Order[];
 
   // misc
@@ -136,7 +134,6 @@ type Actions = {
   replyTicket: (ticketId: string, text: string) => Promise<boolean>;
   /** Starts the live feed. Returns a function that stops it. */
   connectLive: () => () => void;
-  sendChat: (text: string) => void;
 
   kickSearch: () => void;
   addRecent: (q: string) => void;
@@ -214,7 +211,6 @@ const userDefaults = () => ({
   pay: 'cash' as const,
   active: null,
   rating: 0,
-  chat: [],
   orders: seedOrders,
   tickets: [] as string[],
 });
@@ -232,11 +228,9 @@ const persisted = [
   'recent',
   'promoInput',
   'promo',
-  'pay',
   'notif',
   'active',
   'rating',
-  'chat',
   'orders',
   'tickets',
 ] as const satisfies readonly (keyof State)[];
@@ -417,7 +411,6 @@ export const useApp = create<State & Actions>()(
           promoInput: '',
           promoMsg: '',
           rating: 0,
-          chat: [],
         });
         router.dismissAll();
         router.push('/tracking');
@@ -490,14 +483,6 @@ export const useApp = create<State & Actions>()(
           },
           (connected) => set({ connected, networkError: !connected }),
         ),
-
-      sendChat: (text) => {
-        set((s) => ({ chat: [...s.chat, { me: true, text }] }));
-        setTimeout(
-          () => set((s) => ({ chat: [...s.chat, { me: false, text: t().chatReply }] })),
-          1300,
-        );
-      },
 
       kickSearch: () => {
         clearTimeout(searchTimer);

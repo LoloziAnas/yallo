@@ -1,24 +1,30 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
+import { Button } from '@/components/button';
+import { Icon } from '@/components/icon';
 import { Sheet } from '@/components/sheet';
 import { Txt } from '@/components/txt';
-import { useLiveOrder } from '@/hooks/use-live-order';
+import { useLiveOrder, withName } from '@/hooks/use-live-order';
 import { useApp, useT } from '@/store/app-store';
-import { colors, radius } from '@/theme';
+import { colors } from '@/theme';
+import { dial } from '@/utils/dial';
 
 import { stepLabel } from '../tracking/order-text';
 
-/** Chat with the rider (sheet): header, message bubbles and quick replies. */
+/**
+ * Chat with the rider (sheet). In-app chat isn't available yet, so this says so honestly and offers
+ * a call instead of showing invented messages.
+ */
 export function Chat() {
   const t = useT();
-  const chat = useApp((s) => s.chat);
+  const showToast = useApp((s) => s.showToast);
   const live = useLiveOrder();
   const rider = live?.rider;
-  const sendChat = useApp((s) => s.sendChat);
+  const courier = live?.courier;
 
   return (
-    <Sheet scroll>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+    <Sheet>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 }}>
         <View
           style={{
             width: 40,
@@ -42,49 +48,36 @@ export function Chat() {
         </View>
       </View>
 
-      <View style={{ gap: 8, minHeight: 160, paddingTop: 8, paddingBottom: 14 }}>
-        {chat.map((m, i) => (
-          <View
-            key={i}
-            style={{
-              alignSelf: m.me ? 'flex-end' : 'flex-start',
-              maxWidth: '78%',
-              paddingVertical: 9,
-              paddingHorizontal: 14,
-              borderRadius: 18,
-              borderWidth: 1,
-              borderColor: m.me ? colors.accent : colors.divider,
-              backgroundColor: m.me ? colors.accent : colors.card,
-            }}>
-            <Txt size={14} color={m.me ? colors.white : colors.text}>
-              {m.text}
-            </Txt>
-          </View>
-        ))}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 10,
+          padding: 14,
+          marginBottom: 14,
+          borderRadius: 14,
+          backgroundColor: colors.card,
+          borderWidth: 1,
+          borderColor: colors.divider,
+        }}>
+        <Icon name="msg" color={colors.neutral600} />
+        <Txt size={14} color={colors.neutral700} style={{ flex: 1 }}>
+          {withName(t.chatSoon, rider?.first ?? '')}
+        </Txt>
       </View>
 
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {[t.q1, t.q2, t.q3].map((q) => (
-          <Pressable
-            key={q}
-            onPress={() => sendChat(q)}
-            accessibilityRole="button"
-            style={({ pressed }) => ({
-              minHeight: 38,
-              paddingVertical: 6,
-              paddingHorizontal: 12,
-              justifyContent: 'center',
-              borderRadius: radius.pill,
-              borderWidth: 1,
-              borderColor: colors.accent,
-              backgroundColor: pressed ? colors.accent100 : 'transparent',
-            })}>
-            <Txt w={500} size={13} lh={1.3} color={colors.accent700}>
-              {q}
-            </Txt>
-          </Pressable>
-        ))}
-      </View>
+      {rider && courier && (
+        <Button
+          icon="phone"
+          label={t.call}
+          fontSize={16}
+          onPress={() => {
+            showToast(withName(t.calling, rider.first));
+            dial(courier.phone);
+          }}
+          style={{ height: 50 }}
+        />
+      )}
     </Sheet>
   );
 }
