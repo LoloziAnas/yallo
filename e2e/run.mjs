@@ -94,6 +94,11 @@ async function shoot(label) {
     await page.screenshot({ path: `${OUT}${label}-${app}.png` }).catch(() => {});
   }
 }
+/** Logged when a step's feature isn't in the app build being tested, so the run still passes on older builds. */
+const skip = why => console.log('  · skipped: ' + why);
+/** The courier's side through the API, for features whose courier screens the run doesn't drive yet. */
+const asCourier = (path, body) => fetch(API + path, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer dev-courier-' + COURIER.id },
+  body: JSON.stringify(body) }).then(async r => { const j = await r.json(); if (!r.ok) throw new Error(`POST ${path} → ${r.status}: ${j.error}`); return j; });
 const seen = (page, text, timeout = 10_000) => page.getByText(text).first().waitFor({ timeout });
 const tap = (page, name, opts = {}) => page.getByRole(opts.role ?? 'button', { name, exact: opts.exact ?? true }).first().tap();
 
@@ -247,6 +252,22 @@ try {
     }
   });
 
+  await step('Customer and Karim chat about the order', async () => {
+    const p = pages.customer;
+    const chat = p?.getByRole('button', { name: 'Chat', exact: true });
+    if (!p || !(await chat.count())) return skip('the customer build has no chat');
+    await chat.first().click();
+    await p.getByLabel(/^Message Karim/).fill('Blue door, 2nd floor');
+    await p.getByRole('button', { name: 'Send', exact: true }).click();
+    await waitForOrder(orderId, o => o.chat?.some(m => m.from === 'customer' && m.text === 'Blue door, 2nd floor'), 'carrying the customer\'s message', 5000);
+    // Karim answers through the API: the run doesn't drive the courier app's chat screen yet.
+    await asCourier(`/orders/${orderId.slice(1)}/messages`, { text: "On my way to Dar Zitoun" });
+    await seen(p, 'On my way to Dar Zitoun');
+    await seen(pages.ops.locator('.drawer'), 'Customer ↔ courier chat');
+    await p.goBack();
+    await seen(p, 'Your rider');
+  });
+
   await step('Karim drives to the store while the food is prepared', async () => {
     await tap(pages.courier, 'Start navigation');
     // The stand-in merchant has the food ready 60 s after the order was placed. Karim gets there
@@ -295,6 +316,46 @@ try {
     await seen(pages.courier, "You're online");
     if (pages.customer) await seen(pages.customer, /Enjoy your meal/);
     console.log(`  ${o.id}: ${o.total} DH ${o.pay}, placed ${o.placedAt}`);
+  });
+
+  await step('The customer rates the delivery; ops sees the rating', async () => {
+    const p = pages.customer;
+    const star = p?.getByLabel('Rate 4', { exact: true });
+    if (!p || !(await star.count())) return skip('the customer build has no ratings');
+    await star.first().click();
+    await p.getByLabel('Add a comment (optional)').fill('Hot and on time');
+    await p.getByRole('button', { name: 'Done', exact: true }).first().click();
+    await seen(p, 'Thanks for rating!');
+    const o = await waitForOrder(orderId, o => o.rating?.stars === 4, 'rated 4 stars', 5000);
+    if (o.rating.comment !== 'Hot and on time') throw new Error('Rating comment: ' + o.rating.comment);
+    await seen(pages.ops.locator('.drawer'), /Customer rating ★★★★☆/);
+  });
+
+  await step('A second order: the customer cancels it while it is new; ops sees who cancelled', async () => {
+    const p = pages.customer;
+    if (!p) return skip('no customer app in this run');
+    // Back to Home, then the same store and item; the customer is already signed in.
+    const home = p.getByRole('button', { name: 'Home', exact: true });
+    if (await home.count()) await home.first().click();
+    await STORE.ui(p, (name) => p.getByRole('button', { name, exact: typeof name === 'string' }).first().click());
+    await p.getByRole('button', { name: 'View cart, 1', exact: true }).first().click();
+    await p.getByRole('button', { name: /^Place order/ }).first().click();
+    await p.getByRole('button', { name: /^Confirm order/ }).first().click();
+    const pill = p.getByText(/^#48\d{3}$/).first();
+    await pill.waitFor({ timeout: 10_000 });
+    const second = await pill.innerText();
+    const cancel = p.getByRole('button', { name: 'Cancel order', exact: true });
+    if (!(await cancel.count())) return skip('the customer build has no customer cancel');
+    p.once('dialog', d => d.accept());   // "Cancel this order?" on web
+    await cancel.first().click();
+    await seen(p, 'Order cancelled');
+    await waitForOrder(second, o => o.status === 'cancelled' && o.cancelledBy === 'customer', 'cancelled by the customer', 5000);
+    // Cancelled orders leave the live queue: find it on the Orders page (the ops session survives the reload).
+    const ops = pages.ops;
+    await ops.goto(BACK_OFFICE + '/?page=orders');
+    await seen(ops, /^LIVE/);
+    await ops.locator('button.tr', { hasText: second }).click();
+    await seen(ops.locator('.drawer'), 'Cancelled · Cancelled by customer');
   });
 } catch {
   failed = true;
