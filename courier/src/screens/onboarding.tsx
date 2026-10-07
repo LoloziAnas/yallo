@@ -1,12 +1,16 @@
-import { router } from 'expo-router';
+import { DEV_OTP_CODE, type ApplicationStatus } from '@yallo/shared';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
+import { api, errorText } from '@/api/client';
+import { fullPhone, requestCode, verifyCode } from '@/api/session';
 import { BackButton, Btn, Spacer } from '@/components/button';
 import { Icon, type IconName } from '@/components/icon';
 import { Screen, useBottomPad } from '@/components/screen';
 import { Txt } from '@/components/txt';
 import { Circle, CodeBoxes, Keypad, haptic } from '@/components/ui';
+import { mmss } from '@/data/demo';
 import type { Lang } from '@/data/i18n';
 import { useCourier, useT, type Vehicle } from '@/store/courier-store';
 import { colors, fontFamily, radius, shadow } from '@/theme';
@@ -114,9 +118,29 @@ export function Welcome() {
 export function Login() {
   const t = useT();
   const loginPhone = useCourier((s) => s.loginPhone);
+  const live = useCourier((s) => s.source === 'live');
   const set = useCourier((s) => s.set);
   const bottom = useBottomPad(8);
   const arabic = useCourier((s) => s.lang === 'ع');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Live, the API texts a one-time code to a known courier number; the demo goes straight on.
+  const sendCode = async () => {
+    if (!live) return router.push('/otp');
+    setBusy(true);
+    setError(null);
+    try {
+      const phone = await requestCode(loginPhone);
+      router.push({ pathname: '/otp', params: { phone } });
+    } catch (e) {
+      haptic.error();
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <Screen keyboard>
       <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 12, paddingBottom: bottom }}>
@@ -139,21 +163,41 @@ export function Login() {
           </View>
           <TextInput
             value={loginPhone}
-            onChangeText={(v) => set({ loginPhone: v })}
+            onChangeText={(v) => {
+              set({ loginPhone: v });
+              setError(null);
+            }}
             keyboardType="phone-pad"
             autoComplete="tel"
             textContentType="telephoneNumber"
             accessibilityLabel={t('Phone number')}
             returnKeyType="done"
-            onSubmitEditing={() => router.push('/otp')}
+            onSubmitEditing={sendCode}
             style={[
               styles.input,
               { flex: 1, height: 56, fontSize: 18, fontFamily: fontFamily('body', 600, arabic) },
+              error ? { borderColor: colors.accent700 } : null,
             ]}
           />
         </View>
+        {error && (
+          <Txt
+            size={14}
+            weight={600}
+            color={colors.accent700}
+            accessibilityLiveRegion="polite"
+            style={{ marginTop: 8 }}>
+            {t(error)}
+          </Txt>
+        )}
         <Spacer />
-        <Btn label={t('Send code')} onPress={() => router.push('/otp')} height={60} fontSize={19} />
+        <Btn
+          label={t('Send code')}
+          onPress={sendCode}
+          disabled={busy || loginPhone.replace(/\D/g, '').length < 9}
+          height={60}
+          fontSize={19}
+        />
         <Btn
           variant="ghost"
           label={t('New to Yallo? Become a courier')}
@@ -166,24 +210,68 @@ export function Login() {
   );
 }
 
+/** Seconds before another code can be requested (the API refuses sooner). */
+const RESEND_SECS = 30;
+
 export function Otp() {
   const t = useT();
+  const { phone } = useLocalSearchParams<{ phone?: string }>();
   const loginPhone = useCourier((s) => s.loginPhone);
   const set = useCourier((s) => s.set);
   const showToast = useCourier((s) => s.showToast);
   const [otp, setOtp] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [resendIn, setResendIn] = useState(RESEND_SECS);
   const bottom = useBottomPad();
+  // A phone from the Login screen means the API sent a real code; otherwise this is the demo.
+  const live = !!phone;
+  const length = live ? 6 : 4;
 
-  // Signs in shortly after the 4th digit lands (demo: any code works).
   useEffect(() => {
-    if (otp.length !== 4) return;
-    const id = setTimeout(() => {
-      haptic.success();
-      set(signIn);
-      showToast('Welcome back, Karim');
-    }, 350);
+    if (!live || resendIn <= 0) return;
+    const id = setTimeout(() => setResendIn((n) => n - 1), 1000);
     return () => clearTimeout(id);
-  }, [otp, set, showToast]);
+  }, [live, resendIn]);
+
+  useEffect(() => {
+    if (otp.length !== length) return;
+    if (!live) {
+      // Demo: any 4 digits sign in.
+      const id = setTimeout(() => {
+        haptic.success();
+        set(signIn);
+        showToast('Welcome back, Karim');
+      }, 350);
+      return () => clearTimeout(id);
+    }
+    let cancelled = false;
+    verifyCode(phone, otp)
+      .then(() => {
+        haptic.success();
+        const first = useCourier.getState().userName.split(' ')[0];
+        showToast(`Welcome back, ${first}`);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        haptic.error();
+        setError(errorText(e));
+        setOtp('');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [otp, length, live, phone, set, showToast]);
+
+  const resend = async () => {
+    try {
+      await requestCode(phone!);
+      setResendIn(RESEND_SECS);
+      setError(null);
+      showToast('Code sent');
+    } catch (e) {
+      setError(errorText(e));
+    }
+  };
 
   return (
     <Screen>
@@ -193,18 +281,58 @@ export function Otp() {
           {t('Enter the code')}
         </Txt>
         <Txt size={16} color={colors.neutral700} style={{ marginBottom: 28 }}>
-          {t('Sent by SMS to')} +212 {loginPhone}
+          {t('Sent by SMS to')} {live ? phone : `+212 ${loginPhone}`}
         </Txt>
-        <CodeBoxes value={otp} width={68} height={76} fontSize={34} />
-        <Txt size={14} color={colors.neutral700} style={{ marginTop: 16 }}>
-          {t('Demo: any 4 digits work · Resend in 0:24')}
-        </Txt>
+        <CodeBoxes
+          value={otp}
+          error={!!error && otp.length === 0}
+          length={length}
+          gap={live ? 8 : 12}
+          width={live ? 48 : 68}
+          height={live ? 64 : 76}
+          fontSize={live ? 28 : 34}
+        />
+        {error ? (
+          <Txt
+            size={14}
+            weight={600}
+            color={colors.accent700}
+            accessibilityLiveRegion="polite"
+            style={{ marginTop: 16 }}>
+            {t(error)}
+          </Txt>
+        ) : (
+          <Txt size={14} color={colors.neutral700} style={{ marginTop: 16 }}>
+            {live
+              ? __DEV__
+                ? t(`Development code: ${DEV_OTP_CODE}`)
+                : ''
+              : t('Demo: any 4 digits work · Resend in 0:24')}
+          </Txt>
+        )}
+        {live &&
+          (resendIn > 0 ? (
+            <Txt size={14} color={colors.neutral700} style={{ marginTop: 6 }}>
+              {t(`Resend in ${mmss(resendIn)}`)}
+            </Txt>
+          ) : (
+            <Btn
+              variant="ghost"
+              label={t('Resend code')}
+              onPress={resend}
+              height={36}
+              style={{ alignSelf: 'flex-start', marginTop: 2, marginStart: -8 }}
+            />
+          ))}
         <Spacer />
         <Keypad
           keyHeight={58}
           fontSize={26}
           gap={8}
-          onDigit={(d) => setOtp((v) => (v.length < 4 ? v + d : v))}
+          onDigit={(d) => {
+            setError(null);
+            setOtp((v) => (v.length < length ? v + d : v));
+          }}
           onDelete={() => setOtp((v) => v.slice(0, -1))}
         />
       </View>
@@ -284,7 +412,13 @@ export function Signup() {
   const bottom = useBottomPad();
   const setForm = (k: keyof typeof s.form) => (v: string) =>
     s.set((st) => ({ form: { ...st.form, [k]: v } }));
-  const ok = s.form.name.trim().length > 1 && s.form.phone.trim().length > 5;
+  const live = s.source === 'live';
+  // The API needs a number plate for motorcycles and cars.
+  const needsPlate = live && s.vehicle !== 'bike';
+  const ok =
+    s.form.name.trim().length > 1 &&
+    s.form.phone.trim().length > 5 &&
+    (!needsPlate || s.form.plate.trim().length >= 3);
   const initials =
     s.form.name
       .trim()
@@ -403,6 +537,14 @@ export function Signup() {
             })}
           </View>
         </View>
+        {needsPlate && (
+          <Field
+            label={t('Plate number')}
+            value={s.form.plate}
+            onChange={setForm('plate')}
+            placeholder="12345-أ-40"
+          />
+        )}
       </ScrollView>
       <View style={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: bottom }}>
         <Btn
@@ -424,12 +566,46 @@ const DOC_DEFS: [string, string, string, IconName][] = [
   ['bank', 'Bank details (RIB)', 'For weekly payouts', 'wallet'],
 ];
 
+/** The app's document ids → the API's DocKey. */
+const DOC_KEYS = { id: 'cin', lic: 'lic', veh: 'veh', bank: 'rib' } as const;
+const VEHICLE_NAMES = { bike: 'Bicycle', moto: 'Motorcycle', car: 'Car' } as const;
+
 export function Documents() {
   const t = useT();
   const vehicle = useCourier((s) => s.vehicle);
   const docs = useCourier((s) => s.docs);
   const set = useCourier((s) => s.set);
+  const live = useCourier((s) => s.source === 'live');
   const bottom = useBottomPad();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Live, this sends the application to Yallo; the demo goes straight to its simulated review.
+  // There are no file uploads yet: the API records which documents were attached.
+  const submit = async () => {
+    if (!live || !api) return router.replace('/verify');
+    const { form, city } = useCourier.getState();
+    setBusy(true);
+    setError(null);
+    try {
+      const app = await api.applyAsCourier({
+        name: form.name.trim(),
+        phone: fullPhone(form.phone),
+        ...(form.email.trim() ? { email: form.email.trim() } : {}),
+        city,
+        vehicle: VEHICLE_NAMES[vehicle],
+        ...(vehicle !== 'bike' ? { plate: form.plate.trim() } : {}),
+        documents: defs.map(([k]) => DOC_KEYS[k as keyof typeof DOC_KEYS]),
+      });
+      set({ application: { id: app.id, phone: app.phone } });
+      router.replace('/verify');
+    } catch (e) {
+      haptic.error();
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
   // Bicycles need neither a licence nor registration.
   const defs = DOC_DEFS.filter((d) => vehicle !== 'bike' || (d[0] !== 'lic' && d[0] !== 'veh'));
   const ready = defs.every((d) => docs[d[0]]);
@@ -485,10 +661,20 @@ export function Documents() {
         })}
       </ScrollView>
       <View style={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: bottom }}>
+        {error && (
+          <Txt
+            size={14}
+            weight={600}
+            color={colors.accent700}
+            accessibilityLiveRegion="polite"
+            style={{ marginBottom: 10, textAlign: 'center' }}>
+            {t(error)}
+          </Txt>
+        )}
         <Btn
           label={t('Submit for review')}
-          disabled={!ready}
-          onPress={() => router.replace('/verify')}
+          disabled={!ready || busy}
+          onPress={submit}
           height={60}
           fontSize={19}
         />
@@ -504,23 +690,105 @@ const VERIFY_STEPS = [
 ];
 const VERIFY_STEP_MS = 1800;
 
+const APPLICATION_POLL_MS = 3000;
+
 export function Verify() {
   const t = useT();
   const s = useCourier();
-  const [vstep, setVstep] = useState(0);
+  const [demoStep, setDemoStep] = useState(0);
+  const [status, setStatus] = useState<ApplicationStatus | null>(null);
   const bottom = useBottomPad();
+  const app = s.application;
+
+  // Live: follow the application as ops reviews it.
+  useEffect(() => {
+    if (!app || !api) return;
+    let alive = true;
+    const poll = () =>
+      api!
+        .applicationStatus(app.phone)
+        .then((r) => alive && setStatus(r))
+        .catch(() => {});
+    poll();
+    const iv = setInterval(poll, APPLICATION_POLL_MS);
+    return () => {
+      alive = false;
+      clearInterval(iv);
+    };
+  }, [app]);
 
   // Demo review: each step completes on its own.
   useEffect(() => {
-    if (vstep >= 2) return;
-    const id = setTimeout(() => setVstep((v) => v + 1), VERIFY_STEP_MS);
+    if (app || demoStep >= 2) return;
+    const id = setTimeout(() => setDemoStep((v) => v + 1), VERIFY_STEP_MS);
     return () => clearTimeout(id);
-  }, [vstep]);
+  }, [app, demoStep]);
 
+  const rejected = status?.status === 'rejected';
+  const vstep = app ? (status?.status === 'approved' ? 2 : status ? 1 : 0) : demoStep;
   const done = vstep === 2;
+
+  // Approved: sign in with the normal code, texted to the phone that applied.
+  const startDelivering = async () => {
+    if (!app) {
+      s.set(signIn);
+      s.showToast('Account approved');
+      return;
+    }
+    try {
+      const phone = await requestCode(app.phone);
+      router.replace({ pathname: '/otp', params: { phone } });
+    } catch (e) {
+      s.showToast(errorText(e));
+    }
+  };
+
   useEffect(() => {
     if (done) haptic.success();
   }, [done]);
+
+  if (rejected) {
+    return (
+      <Screen>
+        <View
+          style={{
+            flex: 1,
+            paddingHorizontal: 24,
+            paddingTop: 40,
+            paddingBottom: bottom,
+            gap: 12,
+          }}>
+          <Circle size={72} bg={colors.accent200}>
+            <Icon name="x" size={32} color={colors.accent800} />
+          </Circle>
+          <Txt title size={34} accessibilityRole="header">
+            {t('Application not approved')}
+          </Txt>
+          {status?.rejectReason && (
+            <Txt size={16} color={colors.neutral800}>
+              {status.rejectReason}
+            </Txt>
+          )}
+          {Object.entries(status?.docNotes ?? {}).map(([k, note]) => (
+            <Txt key={k} size={15} color={colors.neutral800}>
+              • {t(DOC_DEFS.find(([id]) => DOC_KEYS[id as keyof typeof DOC_KEYS] === k)?.[1] ?? k)}:{' '}
+              {note}
+            </Txt>
+          ))}
+          <Spacer />
+          <Btn
+            label={t('Back to start')}
+            onPress={() => {
+              s.set({ application: null });
+              router.replace('/welcome');
+            }}
+            height={60}
+            fontSize={19}
+          />
+        </View>
+      </Screen>
+    );
+  }
 
   const vehicleWord = s.vehicle === 'bike' ? 'bicycle' : s.vehicle === 'car' ? 'car' : 'motorcycle';
   const first = s.form.name ? ', ' + s.form.name.split(' ')[0] : '';
@@ -578,10 +846,7 @@ export function Verify() {
         <Btn
           label={t('Start delivering')}
           disabled={!done}
-          onPress={() => {
-            s.set(signIn);
-            s.showToast('Account approved');
-          }}
+          onPress={startDelivering}
           height={60}
           fontSize={19}
         />

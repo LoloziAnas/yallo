@@ -3,8 +3,8 @@ import { API_PORT, createYalloClient } from '@yallo/shared';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-/** This app signs in as Karim El Amrani, courier c1 in the shared demo seed. */
-export const COURIER_ID = 'c1';
+/** Courier the offline demo plays (Karim El Amrani, c1 in the shared seed); signing in replaces it. */
+export const DEMO_COURIER = { id: 'c1', name: 'Karim El Amrani' };
 
 /**
  * The on-device demo (invented requests, nothing sent anywhere) only runs in development, or in a

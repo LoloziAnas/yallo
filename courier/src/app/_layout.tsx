@@ -19,8 +19,10 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { recheckSession, restoreSession } from '@/api/session';
 import { useLiveSync } from '@/api/sync';
-import { setUpNotifications } from '@/device/notifications';
+import { api } from '@/api/client';
+import { getPushToken, setUpNotifications } from '@/device/notifications';
 import { useTracking } from '@/device/tracking';
 import {
   EdgeOverlay,
@@ -70,11 +72,22 @@ export default function RootLayout() {
   const pathname = usePathname();
 
   useLiveSync();
+  const connected = useCourier((s) => s.connected);
+  useEffect(() => {
+    if (connected && signedIn) recheckSession();
+  }, [connected, signedIn]);
   useTracking();
 
   // Offer alerts need notification permission; ask once the courier is signed in.
   useEffect(() => {
-    if (signedIn) setUpNotifications().catch(() => {});
+    if (!signedIn) return;
+    setUpNotifications()
+      .then(async (allowed) => {
+        const token = allowed ? await getPushToken() : null;
+        if (token && api && useCourier.getState().source === 'live')
+          await api.registerPushToken(token);
+      })
+      .catch(() => {});
   }, [signedIn]);
 
   // The delivery screen only exists while there's a job: close it once the job ends,
@@ -83,11 +96,19 @@ export default function RootLayout() {
     if (pathname === '/delivery' && !onJob && !edge && router.canDismiss()) router.dismissTo('/');
   }, [pathname, onJob, edge]);
 
+  // The brand splash stays up until the saved session (if any) is restored, so a signed-in courier
+  // never sees the welcome screen flash by.
   useEffect(() => {
     if (!fontsLoaded) return;
     SplashScreen.hideAsync();
-    const id = setTimeout(() => setBrandSplash(false), BRAND_SPLASH_MS);
-    return () => clearTimeout(id);
+    let cancelled = false;
+    const minimum = new Promise((r) => setTimeout(r, BRAND_SPLASH_MS));
+    Promise.all([minimum, restoreSession().catch(() => false)]).then(() => {
+      if (!cancelled) setBrandSplash(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [fontsLoaded]);
 
   // Dispatch search, request countdown, navigation progress and edge-case timers.

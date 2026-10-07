@@ -201,18 +201,22 @@ export function CodeBoxes({
   width,
   height,
   fontSize,
+  length = 4,
+  gap = 12,
 }: {
   value: string;
   error?: boolean;
   width: number;
   height: number;
   fontSize: number;
+  length?: number;
+  gap?: number;
 }) {
   return (
     <View
-      style={{ flexDirection: 'row', gap: 12, direction: 'ltr' }}
-      accessibilityLabel={`${value.length} of 4 digits entered`}>
-      {[0, 1, 2, 3].map((i) => (
+      style={{ flexDirection: 'row', gap, direction: 'ltr' }}
+      accessibilityLabel={`${value.length} of ${length} digits entered`}>
+      {Array.from({ length }, (_, i) => i).map((i) => (
         <View
           key={i}
           style={[

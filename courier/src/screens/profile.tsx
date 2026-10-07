@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { API_URL, api } from '@/api/client';
+import { signOut } from '@/api/session';
 import { Btn } from '@/components/button';
 import { Icon, type IconName } from '@/components/icon';
 import { Screen, Scroll } from '@/components/screen';
@@ -30,7 +31,7 @@ export function Profile() {
   const lang = useCourier((s) => s.lang);
   const set = useCourier((s) => s.set);
   const showToast = useCourier((s) => s.showToast);
-  const logout = useCourier((s) => s.logout);
+  const userName = useCourier((s) => s.userName);
 
   const groups: { title: string; rows: Row[] }[] = [
     {
@@ -107,7 +108,7 @@ export function Profile() {
           </Circle>
           <View style={{ flex: 1 }}>
             <Txt title size={26}>
-              Karim El Amrani
+              {userName}
             </Txt>
             <View style={[styles.row, { gap: 6, flexWrap: 'wrap' }]}>
               <Icon name="star" size={15} color={colors.accent} />
@@ -192,7 +193,7 @@ export function Profile() {
           iconSize={20}
           label={t('Log out')}
           color={colors.accent700}
-          onPress={logout}
+          onPress={signOut}
           height={56}
           fontSize={17}
           style={{ marginTop: 6 }}
