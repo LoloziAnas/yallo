@@ -142,8 +142,9 @@ try {
       pages.customer = await customerPhone.newPage();
     }
     for (const [app, p] of Object.entries(pages)) p.on('pageerror', e => errors.push(`${app}: ${e.message}`));
-    await pages.ops.goto(BACK_OFFICE + '/?page=live');
-    await pages.courier.goto(COURIER_APP);
+    // Generous timeouts: on a loaded machine (emulators, Gradle) the first loads can take a while.
+    await pages.ops.goto(BACK_OFFICE + '/?page=live', { timeout: 90_000 });
+    await pages.courier.goto(COURIER_APP, { timeout: 90_000 });
     if (pages.customer) {
       await pages.customer.goto(CUSTOMER_APP, { waitUntil: 'networkidle', timeout: 120_000 });
       await pages.customer.waitForTimeout(2000);
