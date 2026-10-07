@@ -117,6 +117,7 @@ const version = JSON.parse(readFileSync(path.join(root, 'app.json'), 'utf8')).ex
 const env = {
   ...process.env,
   NODE_ENV: 'production',
+  YALLO_RELEASE_BUILD: 'apk', // a fresh Metro cache (metro.config.js)
   CI: '1', // no interactive prompts from expo prebuild
   EXPO_PUBLIC_API_URL: api,
   EXPO_PUBLIC_BUILD_SHA: sha,
@@ -135,7 +136,12 @@ console.log(`Building Yallo ${version} (${sha}), versionCode ${versionCode}, API
 run('npx', ['expo', 'prebuild', '--platform', 'android', '--clean', '--no-install']);
 run(
   './gradlew',
-  ['assembleRelease', '--no-daemon', '-PreactNativeArchitectures=arm64-v8a,armeabi-v7a,x86_64'],
+  [
+    'assembleRelease',
+    '--no-daemon',
+    '--build-cache',
+    '-PreactNativeArchitectures=arm64-v8a,armeabi-v7a,x86_64',
+  ],
   path.join(root, 'android'),
 );
 

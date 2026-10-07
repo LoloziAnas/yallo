@@ -39,6 +39,7 @@ const r = spawnSync('npx', ['expo', 'export', '--platform', 'web', '--output-dir
   env: {
     ...process.env,
     NODE_ENV: 'production',
+    YALLO_RELEASE_BUILD: 'web', // a fresh Metro cache (metro.config.js)
     EXPO_PUBLIC_API_URL: api,
     EXPO_PUBLIC_BUILD_SHA: sha,
   },
