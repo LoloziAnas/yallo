@@ -25,10 +25,17 @@ const COURIER = { id: 'c1', name: 'Karim El Amrani' };
 // Café Marrakech (m1), 0.7 km from him. In the customer app that store is Dar Zitoun until the store list is unified.
 const STORE = {
   id: 'm1', name: 'Café Marrakech', customerName: 'Dar Zitoun',
-  item: { name: 'Chicken tajine, preserved lemon & olives', price: 75 },
+  // The customer app sends the chosen options in the item name; the defaults are "For 1", no extras.
+  item: { name: 'Chicken tajine, preserved lemon & olives (For 1)', price: 85 },
   fee: 9, serviceFee: 3,
-  /** Customer-app steps from the store page to "Added" in the cart. Pending from the customer session. */
-  ui: null,
+  /** Customer-app steps from Home to the item in the cart. */
+  async ui(p, click) {
+    // The store cards are labelled divs, not buttons, because they hold a favourite button.
+    await p.getByLabel('Dar Zitoun', { exact: true }).first().click();
+    await click('Add to cart: Chicken tajine, preserved lemon & olives');
+    await click('Add to cart · 85 DH');
+    await seen(p, 'Added · 1× Chicken tajine, preserved lemon & olives');
+  },
 };
 const TOTAL = STORE.item.price + STORE.fee + STORE.serviceFee;
 const CUSTOMER = { name: 'Salma El Amrani', first: 'Salma', zone: 'Guéliz' };
@@ -90,13 +97,11 @@ async function customerPlacesOrder() {
     });
     return order.id;
   }
-  if (!STORE.ui) throw new Error(`CUSTOMER=ui needs the ${STORE.customerName} steps from the customer session (or run with CUSTOMER=api)`);
   const p = pages.customer;
   const click = name => p.getByRole('button', { name, exact: typeof name === 'string' }).first().click();
   await click('Skip');
   await click('Use my location');
   await click('Continue as guest');
-  await click(STORE.customerName);
   await STORE.ui(p, click);
   await click('View cart, 1');
   await click(/^Place order/);

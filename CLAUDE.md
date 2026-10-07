@@ -79,8 +79,8 @@ or calling `POST /api/reset`, restores the demo seed.
 ## Joint end-to-end run
 
 `cd e2e && npm install && npm test` drives the customer app (:8090), back office (:5191) and courier
-app (:8091) together against the API (:5190). A customer orders from Burger Atlas, ops offers it to
+app (:8091) together against the API (:5190). A customer orders from Dar Zitoun (Café Marrakech, near Karim), ops offers it to
 Karim, Karim accepts, picks it up and delivers, and the customer's tracking follows. Every step is
-checked from each side, with screenshots in `e2e/out/`. It takes about 4 minutes, mostly simulated
+checked from each side, with screenshots in `e2e/out/`. It takes about 2 minutes, mostly simulated
 driving. It resets the API first. `CUSTOMER=api` skips the customer app; `HEADED=1` shows the browsers.
 Tell the app owners before changing their screen text, because the run asserts on it.
