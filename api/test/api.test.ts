@@ -1146,3 +1146,21 @@ describe('Order chat', () => {
     ]);
   });
 });
+
+describe('Deployment', () => {
+  test('health check, and a CORS allowlist that leaves app requests (no Origin) alone', async () => {
+    const api = createApi({ tickMs: 0, authMode: 'enforce', corsOrigins: ['https://ops.yallo.ma'] });
+    await new Promise<void>(r => api.http.listen(0, '127.0.0.1', r));
+    const base = `http://127.0.0.1:${(api.http.address() as AddressInfo).port}/api`;
+    try {
+      const health = await fetch(base + '/health').then(r => r.json());
+      assert.deepEqual([health.ok, health.auth, typeof health.epoch], [true, 'enforce', 'string']);
+      const ok = await fetch(base + '/state', { headers: { origin: 'https://ops.yallo.ma' } });
+      assert.deepEqual([ok.status, ok.headers.get('access-control-allow-origin')], [200, 'https://ops.yallo.ma']);
+      assert.equal((await fetch(base + '/state', { headers: { origin: 'https://evil.example' } })).status, 403);
+      assert.equal((await fetch(base + '/state')).status, 200);
+    } finally {
+      await new Promise<void>(r => api.http.close(() => r()));
+    }
+  });
+});

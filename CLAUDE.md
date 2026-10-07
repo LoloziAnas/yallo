@@ -133,3 +133,14 @@ Karim, Karim accepts, picks it up and delivers, and the customer's tracking foll
 checked from each side, with screenshots in `e2e/out/`. It takes about 2 minutes, mostly simulated
 driving. It resets the API first. `CUSTOMER=api` skips the customer app; `HEADED=1` shows the browsers.
 Tell the app owners before changing their screen text, because the run asserts on it.
+
+## Production
+
+- API: `cd api && npm ci && npm run build` bundles `dist/server.mjs` (ws stays external); run it with
+  `npm run start:prod` (`NODE_ENV=production`: auth enforced, dev tokens off). Settings are env vars, listed in
+  `api/.env.example`: `PORT`, `HOST`, `STATE_FILE`, `AUTH_MODE`, `CORS_ORIGINS` (browser allowlist; apps send no
+  Origin and are always allowed), `PUSH=expo`, `EXPO_ACCESS_TOKEN`, `STAND_IN_MERCHANT=off`, `YALLO_VERSION`.
+  `GET /api/health` → `{ ok, version, auth, epoch, t }` for deploy checks.
+- Back office: build with `VITE_API_URL=https://<api host> npm run build` (see `back-office/.env.example`) and serve
+  `back-office/dist/` as static files (any path → `index.html`). Without `VITE_API_URL` it calls its own origin, so a
+  reverse proxy must route `/api` (REST and the `/api/live` WebSocket) to the API.

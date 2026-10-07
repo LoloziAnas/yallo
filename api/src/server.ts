@@ -59,6 +59,7 @@ const ticketParty: Rule = (c, [id], b, s) => {
 
 /** [method, path, who may call it, handler]. Handlers return the response body; most return the new state. */
 const ROUTES: [string, RegExp, Rule, Handler][] = [
+  ['GET', /^\/api\/health$/, anyone, (s, _, __, ctx) => ({ ok: true, version: process.env.YALLO_VERSION ?? 'dev', auth: ctx.enforce ? 'enforce' : 'warn', epoch: s.state.epoch, t: s.state.t })],
   ['GET', /^\/api\/state$/, anyone, s => s.state],
   ['POST', /^\/api\/auth\/otp$/, anyone, (s, _, b) => s.requestOtp(b?.phone, b?.role)],
   ['POST', /^\/api\/auth\/verify$/, anyone, (s, _, b) => s.verifyOtp(b?.phone, b?.code, b?.name)],
@@ -140,14 +141,23 @@ const bearer = (header: string | undefined) => (header?.startsWith('Bearer ') ? 
  * @param tickMs demo clock interval; 0 disables the clock (tests tick by hand).
  * @param authMode see AuthMode.
  */
-export function createApi({ tickMs = 1000, store = new Store(), authMode = 'warn' as AuthMode, push = createPush('log') as PushSender } = {}) {
+/**
+ * @param corsOrigins browser origins allowed to call the API and open the live feed, e.g. ['https://ops.yallo.ma'].
+ *   Unset allows any origin (development). Requests without an Origin (mobile apps, curl) are always allowed.
+ */
+export function createApi({ tickMs = 1000, store = new Store(), authMode = 'warn' as AuthMode, push = createPush('log') as PushSender,
+  corsOrigins = undefined as string[] | undefined } = {}) {
+  const originAllowed = (origin: string | undefined) => !origin || !corsOrigins || corsOrigins.includes(origin);
   const enforce = authMode === 'enforce';
   /** The state this viewer gets: everything in warn mode, their own view when enforcing. */
   const viewFor = (user: AuthUser | undefined): LiveState => (enforce ? store.viewFor(user) : store.state);
 
   const http = createServer(async (req, res) => {
-    // Any local app may call the API: Vite dev servers, Expo web, simulators.
-    res.setHeader('access-control-allow-origin', '*');
+    // CORS: any origin in development; only the allowlist when CORS_ORIGINS is set.
+    const origin = req.headers.origin;
+    if (!originAllowed(origin)) return send(res, 403, { error: 'Origin not allowed: ' + origin });
+    res.setHeader('access-control-allow-origin', corsOrigins && origin ? origin : '*');
+    if (corsOrigins) res.setHeader('vary', 'Origin');
     res.setHeader('access-control-allow-headers', 'content-type, authorization');
     res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS');
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
@@ -179,7 +189,7 @@ export function createApi({ tickMs = 1000, store = new Store(), authMode = 'warn
   const viewers = new WeakMap<WebSocket, string | undefined>();
   http.on('upgrade', (req, socket, head) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
-    if (url.pathname !== '/api/live') { socket.destroy(); return; }
+    if (url.pathname !== '/api/live' || !originAllowed(req.headers.origin)) { socket.destroy(); return; }
     wss.handleUpgrade(req, socket, head, ws => {
       viewers.set(ws, url.searchParams.get('token') ?? undefined);
       // A courier app subscribes with ?courier=<id>, so the server knows that courier answers its own offers.

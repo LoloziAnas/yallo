@@ -12,21 +12,26 @@ const host = process.env.HOST || '0.0.0.0';
 const file = process.env.STATE_FILE === 'off' ? undefined
   : process.env.STATE_FILE || fileURLToPath(new URL(`../data/state-${port}.json`, import.meta.url));
 
-// AUTH_MODE=enforce refuses unauthorised calls and filters the live state per viewer; warn (default) only logs.
-const authMode = process.env.AUTH_MODE === 'enforce' ? 'enforce' : 'warn';
+const production = process.env.NODE_ENV === 'production';
+// AUTH_MODE=enforce refuses unauthorised calls and filters the live state per viewer; warn only logs.
+// Default: enforce in production, warn otherwise.
+const authMode = (process.env.AUTH_MODE ?? (production ? 'enforce' : 'warn')) === 'enforce' ? 'enforce' : 'warn';
+// CORS_ORIGINS=https://ops.yallo.ma,https://app.yallo.ma limits which browser origins may call the API.
+const corsOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',').map(s => s.trim()).filter(Boolean) : undefined;
 // DEV_TOKENS=off turns off the fixed test tokens (dev-ops, dev-courier-<id>, dev-customer).
-const devTokens = process.env.DEV_TOKENS !== 'off' && process.env.NODE_ENV !== 'production';
+const devTokens = process.env.DEV_TOKENS !== 'off' && !production;
 
 // STAND_IN_MERCHANT=off: nobody moves new orders through accepted → ready except ops.
 const standInMerchant = process.env.STAND_IN_MERCHANT !== 'off';
 const store = new Store({ file, devTokens, standInMerchant });
 // PUSH=expo sends notifications through the Expo push service; anything else only logs them.
 const pushMode = process.env.PUSH === 'expo' ? 'expo' : 'log';
-const { http } = createApi({ store, authMode, push: createPush(pushMode, process.env.EXPO_ACCESS_TOKEN) });
+const { http } = createApi({ store, authMode, corsOrigins, push: createPush(pushMode, process.env.EXPO_ACCESS_TOKEN) });
 
 http.listen(port, host, () => {
   console.log(`Yallo mock API on http://localhost:${port}  (live feed: ws://localhost:${port}/api/live)`);
   console.log(file ? `State: ${file} (epoch ${store.state.epoch}, demo clock t=${store.state.t}s)` : 'State: in memory only');
+  console.log(`CORS: ${corsOrigins ? corsOrigins.join(', ') : 'any origin'}`);
   console.log(`Auth: ${authMode}${devTokens ? ', dev tokens on' : ''} · Push: ${pushMode} · Stand-in merchant: ${standInMerchant ? 'on' : 'off'}`);
 });
 
