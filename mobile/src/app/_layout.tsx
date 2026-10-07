@@ -21,7 +21,7 @@ import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Toast } from '@/components/toast';
-import { useApp } from '@/store/app-store';
+import { useApp, useHydrated } from '@/store/app-store';
 import { colors } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -50,17 +50,20 @@ export default function RootLayout() {
     IBMPlexSansArabic_600SemiBold,
     IBMPlexSansArabic_700Bold,
   });
+  // Saved state (sign-in, cart, live order…) must be back before choosing the first screen.
+  const hydrated = useHydrated();
+  const ready = fontsLoaded && hydrated;
   const signedIn = useApp((s) => s.signedIn);
   const connectLive = useApp((s) => s.connectLive);
 
   useEffect(() => {
-    if (fontsLoaded) SplashScreen.hideAsync();
-  }, [fontsLoaded]);
+    if (ready) SplashScreen.hideAsync();
+  }, [ready]);
 
   // Live state from the shared mock API (orders, couriers, merchants), pushed every second.
   useEffect(() => connectLive(), [connectLive]);
 
-  if (!fontsLoaded) return null;
+  if (!ready) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

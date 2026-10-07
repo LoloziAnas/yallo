@@ -2,8 +2,11 @@
 // Orders go to the shared mock API, and the live feed drives tracking.
 // Screen-local UI state (product options, store tab, form fields) lives in the screens instead.
 import type { ApiOrder, DeliveryAddress, LiveState, PlaceOrderBody, ZoneName } from '@yallo/shared';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { useSyncExternalStore } from 'react';
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { api } from '@/api/client';
 import { merchantForStore, zoneForDistrict } from '@/data/api-merchants';
@@ -180,292 +183,342 @@ const t = () => strings[useApp.getState().lang];
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
-export const useApp = create<State & Actions>()((set, get) => ({
-  lang: 'en',
+/** The signed-in person's data: the demo starting point, and what logging out returns to. */
+const userDefaults = () => ({
   signedIn: false,
   phone: null,
   addresses: seedAddresses,
   addrId: 'a1',
   cart: { storeId: null, lines: [] },
-  pending: null,
   favStores: ['s1', 's4', 's6'],
   favProducts: ['p4-1', 'p1-2', 'p7-2'],
-
-  q: '',
   recent: ['Tajine', 'Paracetamol', 'Msemen'],
-  fCat: null,
-  fRating: false,
-  fFast: false,
-  fPrice: 0,
-  sort: 'rec',
-  searching: false,
-
   promoInput: '',
   promo: null,
-  promoMsg: '',
-  pay: 'cash',
-  instr: '',
-  instrChips: [],
-  when: 'now',
-  slot: 0,
-  placing: false,
-
+  promoMsg: '' as const,
+  pay: 'cash' as const,
   active: null,
   rating: 0,
   chat: [],
   orders: seedOrders,
+});
 
-  toast: null,
-  homeLoading: false,
-  live: null,
-  connected: null,
-  networkError: false,
-  notif: true,
+/** Saved on the device and restored on the next launch. Everything else starts fresh. */
+const persisted = [
+  'lang',
+  'signedIn',
+  'phone',
+  'addresses',
+  'addrId',
+  'cart',
+  'favStores',
+  'favProducts',
+  'recent',
+  'promoInput',
+  'promo',
+  'pay',
+  'notif',
+  'active',
+  'rating',
+  'chat',
+  'orders',
+] as const satisfies readonly (keyof State)[];
 
-  setLang: (lang) => set({ lang }),
-  set: (patch) => set(patch),
+type Persisted = Pick<State, (typeof persisted)[number]>;
 
-  showToast: (msg) => {
-    clearTimeout(toastTimer);
-    set({ toast: msg });
-    toastTimer = setTimeout(() => set({ toast: null }), 2200);
-  },
+export const useApp = create<State & Actions>()(
+  persist(
+    (set, get) => ({
+      lang: 'en',
+      ...userDefaults(),
+      pending: null,
 
-  toggleFav: (kind, id) =>
-    set((s) => ({
-      [kind]: s[kind].includes(id) ? s[kind].filter((x) => x !== id) : [...s[kind], id],
-    })),
+      q: '',
+      fCat: null,
+      fRating: false,
+      fFast: false,
+      fPrice: 0,
+      sort: 'rec',
+      searching: false,
 
-  enterApp: (phone) => {
-    set({ signedIn: true, homeLoading: true, phone: phone ?? null });
-    router.replace('/');
-    setTimeout(() => set({ homeLoading: false }), 900);
-  },
-
-  logout: () => {
-    set({ signedIn: false, phone: null });
-    router.dismissAll();
-    router.replace('/sign-in');
-  },
-
-  retryHome: () => {
-    // The live feed reconnects by itself; show the loading state, then whatever the connection says.
-    set({ homeLoading: true });
-    setTimeout(
-      () => set((s) => ({ homeLoading: false, networkError: s.connected === false })),
-      900,
-    );
-  },
-
-  addLine: (pid, sel, qty, fromProduct = false) => {
-    const p = productById[pid];
-    const store = storeById[p.storeId];
-    const s = get();
-    // Closed in the catalogue, or paused by ops in the back office.
-    const merchant = s.live?.merchants.find((m) => m.id === merchantForStore[store.id]);
-    if (store.closed || merchant?.open === false) {
-      s.showToast(`${store.name} · ${t().closed}${store.closed ? ' · ' + store.opens : ''}`);
-      return false;
-    }
-    if (s.cart.storeId && s.cart.storeId !== p.storeId && s.cart.lines.length) {
-      set({ pending: { pid, sel, qty, fromProduct } });
-      router.push('/new-cart');
-      return false;
-    }
-    const key = lineKey(pid, sel);
-    const unit = unitPrice(p, sel);
-    set((st) => {
-      const lines = st.cart.lines.slice();
-      const i = lines.findIndex((l) => l.key === key);
-      if (i >= 0) lines[i] = { ...lines[i], qty: lines[i].qty + qty };
-      else lines.push({ key, pid, sel, qty, unit });
-      return { cart: { storeId: p.storeId, lines } };
-    });
-    return true;
-  },
-
-  confirmNewCart: () => {
-    const pd = get().pending;
-    set({ cart: { storeId: null, lines: [] }, pending: null, promo: null, promoMsg: '' });
-    // Close the sheet, and the product screen too when the add came from there.
-    router.dismiss(pd?.fromProduct ? 2 : 1);
-    if (pd && get().addLine(pd.pid, pd.sel, pd.qty)) {
-      get().showToast(`${t().added} · ${productById[pd.pid].name}`);
-    }
-  },
-
-  changeQty: (key, delta) =>
-    set((s) => {
-      const lines = s.cart.lines
-        .map((l) => (l.key === key ? { ...l, qty: l.qty + delta } : l))
-        .filter((l) => l.qty > 0);
-      return { cart: { storeId: lines.length ? s.cart.storeId : null, lines } };
-    }),
-
-  applyPromo: () => {
-    const c = get().promoInput.trim().toUpperCase();
-    if (!c) return;
-    set(
-      c === 'MARHABA' || c === 'LIVRAISON'
-        ? { promo: c, promoMsg: 'ok' }
-        : { promo: null, promoMsg: 'bad' },
-    );
-  },
-
-  placeOrder: async () => {
-    const s = get();
-    if (s.placing || !s.cart.storeId) return;
-    const store = storeById[s.cart.storeId];
-    const addr = s.addresses.find((a) => a.id === s.addrId) ?? s.addresses[0];
-    const tt = totals(s.cart, s.promo);
-    const body: PlaceOrderBody = {
-      merchantId: merchantForStore[store.id],
-      customerName: CUSTOMER_NAME,
-      zone: (addr.zone as ZoneName | undefined) ?? zoneForDistrict(addr.district),
-      items: s.cart.lines.map((l) => {
-        const p = productById[l.pid];
-        const opts = optionText(p, l.sel);
-        return { qty: l.qty, name: opts ? `${p.name} (${opts})` : p.name, price: l.unit };
-      }),
-      pay: s.pay,
-      // Sent explicitly: the API charges 15 DH when fee is omitted.
-      fee: tt.fee,
-      serviceFee: tt.service,
-      discount: tt.disc,
-      ...(s.promo ? { promoCode: s.promo } : {}),
-      ...deliveryDetails(s, addr),
-    };
-    set({ placing: true });
-    let placed: ApiOrder;
-    try {
-      placed = await api.placeOrder(body);
-    } catch (e) {
-      set({ placing: false });
-      const paused = e instanceof Error && /paused/i.test(e.message);
-      get().showToast(paused ? `${store.name} · ${t().closed}` : t().orderFailed);
-      return;
-    }
-    const active: ActiveOrder = {
-      id: placed.id,
-      storeId: store.id,
-      lines: s.cart.lines,
-      sub: tt.sub,
-      fee: tt.fee,
-      service: tt.service,
-      disc: tt.disc,
-      total: placed.total,
-      placedAt: Date.now(),
-      ...(s.when === 'sched' ? { scheduledFor: SCHEDULE_SLOTS[s.slot] } : {}),
-      addrId: s.addrId,
-      pay: s.pay,
-    };
-    set({
+      instr: '',
+      instrChips: [],
+      when: 'now',
+      slot: 0,
       placing: false,
-      active,
-      cart: { storeId: null, lines: [] },
-      promo: null,
-      promoInput: '',
-      promoMsg: '',
-      rating: 0,
-      chat: [],
-    });
-    router.dismissAll();
-    router.push('/tracking');
-  },
 
-  finishOrder: () => {
-    const s = get();
-    if (!s.active) return;
-    const { placedAt, lost, scheduledFor, ...rest } = s.active;
-    const status = lost
-      ? 'cancelled'
-      : (s.live?.orders.find((o) => o.id === rest.id)?.status ?? 'delivered');
-    // Cancelled orders aren't kept in the history.
-    const at = s.live ? demoClock(s.live.t) : clock(Date.now());
-    const done: Order = { ...rest, date: 'Today · ' + at, status };
-    set({ orders: status === 'cancelled' ? s.orders : [done, ...s.orders], active: null });
-    router.dismissAll();
-    router.navigate('/orders');
-    if (s.rating && status !== 'cancelled') s.showToast(t().thanks);
-  },
+      toast: null,
+      homeLoading: false,
+      live: null,
+      connected: null,
+      networkError: false,
+      notif: true,
 
-  reorder: (o) => {
-    const st = storeById[o.storeId];
-    if (st.closed) {
-      get().showToast(`${st.name} · ${t().closed}`);
-      return;
-    }
-    const lines: CartLine[] = o.lines.map((l) => ({ ...l, key: lineKey(l.pid, l.sel) }));
-    set({ cart: { storeId: o.storeId, lines }, promo: null, promoMsg: '' });
-    router.push('/cart');
-  },
+      setLang: (lang) => set({ lang }),
+      set: (patch) => set(patch),
 
-  connectLive: () =>
-    api.subscribe(
-      (live) => {
-        const { active } = get();
-        if (!active) return set({ live });
-        const o = live.orders.find((x) => x.id === active.id);
-        const lost = !o && Date.now() - active.placedAt > PLACE_GRACE_MS;
-        set({ live, ...(lost !== !!active.lost ? { active: { ...active, lost } } : {}) });
+      showToast: (msg) => {
+        clearTimeout(toastTimer);
+        set({ toast: msg });
+        toastTimer = setTimeout(() => set({ toast: null }), 2200);
       },
-      (connected) => set({ connected, networkError: !connected }),
-    ),
 
-  sendChat: (text) => {
-    set((s) => ({ chat: [...s.chat, { me: true, text }] }));
-    setTimeout(() => set((s) => ({ chat: [...s.chat, { me: false, text: t().chatReply }] })), 1300);
-  },
+      toggleFav: (kind, id) =>
+        set((s) => ({
+          [kind]: s[kind].includes(id) ? s[kind].filter((x) => x !== id) : [...s[kind], id],
+        })),
 
-  kickSearch: () => {
-    clearTimeout(searchTimer);
-    set({ searching: true });
-    searchTimer = setTimeout(() => set({ searching: false }), 450);
-  },
+      enterApp: (phone) => {
+        set({ signedIn: true, homeLoading: true, phone: phone ?? null });
+        router.replace('/');
+        setTimeout(() => set({ homeLoading: false }), 900);
+      },
 
-  addRecent: (q) => {
-    q = q.trim();
-    if (!q) return;
-    set((s) => ({
-      recent: [q, ...s.recent.filter((r) => r.toLowerCase() !== q.toLowerCase())].slice(0, 5),
-    }));
-  },
+      logout: () => {
+        // Clear this person's data from the device; keep only the language.
+        set(userDefaults());
+        router.dismissAll();
+        router.replace('/sign-in');
+      },
 
-  searchFor: (q) => {
-    set({ q });
-    get().addRecent(q);
-    get().kickSearch();
-  },
+      retryHome: () => {
+        // The live feed reconnects by itself; show the loading state, then whatever the connection says.
+        set({ homeLoading: true });
+        setTimeout(
+          () => set((s) => ({ homeLoading: false, networkError: s.connected === false })),
+          900,
+        );
+      },
 
-  openCategory: (c) => {
-    set({ fCat: c, q: '' });
-    router.navigate('/search');
-    get().kickSearch();
-  },
+      addLine: (pid, sel, qty, fromProduct = false) => {
+        const p = productById[pid];
+        const store = storeById[p.storeId];
+        const s = get();
+        // Closed in the catalogue, or paused by ops in the back office.
+        const merchant = s.live?.merchants.find((m) => m.id === merchantForStore[store.id]);
+        if (store.closed || merchant?.open === false) {
+          s.showToast(`${store.name} · ${t().closed}${store.closed ? ' · ' + store.opens : ''}`);
+          return false;
+        }
+        if (s.cart.storeId && s.cart.storeId !== p.storeId && s.cart.lines.length) {
+          set({ pending: { pid, sel, qty, fromProduct } });
+          router.push('/new-cart');
+          return false;
+        }
+        const key = lineKey(pid, sel);
+        const unit = unitPrice(p, sel);
+        set((st) => {
+          const lines = st.cart.lines.slice();
+          const i = lines.findIndex((l) => l.key === key);
+          if (i >= 0) lines[i] = { ...lines[i], qty: lines[i].qty + qty };
+          else lines.push({ key, pid, sel, qty, unit });
+          return { cart: { storeId: p.storeId, lines } };
+        });
+        return true;
+      },
 
-  clearFilters: () => set({ q: '', fCat: null, fRating: false, fFast: false, fPrice: 0 }),
+      confirmNewCart: () => {
+        const pd = get().pending;
+        set({ cart: { storeId: null, lines: [] }, pending: null, promo: null, promoMsg: '' });
+        // Close the sheet, and the product screen too when the add came from there.
+        router.dismiss(pd?.fromProduct ? 2 : 1);
+        if (pd && get().addLine(pd.pid, pd.sel, pd.qty)) {
+          get().showToast(`${t().added} · ${productById[pd.pid].name}`);
+        }
+      },
 
-  saveAddress: (a) => {
-    const id = 'a' + Date.now();
-    set((s) => ({
-      addresses: [...s.addresses, { ...a, id, label: a.label.trim() || 'Other' }],
-      addrId: id,
-    }));
-  },
+      changeQty: (key, delta) =>
+        set((s) => {
+          const lines = s.cart.lines
+            .map((l) => (l.key === key ? { ...l, qty: l.qty + delta } : l))
+            .filter((l) => l.qty > 0);
+          return { cart: { storeId: lines.length ? s.cart.storeId : null, lines } };
+        }),
 
-  locateMe: async () => {
-    const r = await locate();
-    if (!r.ok) return r.reason;
-    const here: Address = { ...r.address, id: 'loc', label: t().currentLoc };
-    set((s) => ({
-      addresses: [...s.addresses.filter((a) => a.id !== 'loc'), here],
-      addrId: 'loc',
-    }));
-    const where = [here.district, here.city].filter(Boolean).join(', ') || here.street;
-    get().showToast(t().located.replace('%s', where));
-    return 'ok';
-  },
-}));
+      applyPromo: () => {
+        const c = get().promoInput.trim().toUpperCase();
+        if (!c) return;
+        set(
+          c === 'MARHABA' || c === 'LIVRAISON'
+            ? { promo: c, promoMsg: 'ok' }
+            : { promo: null, promoMsg: 'bad' },
+        );
+      },
+
+      placeOrder: async () => {
+        const s = get();
+        if (s.placing || !s.cart.storeId) return;
+        const store = storeById[s.cart.storeId];
+        const addr = s.addresses.find((a) => a.id === s.addrId) ?? s.addresses[0];
+        const tt = totals(s.cart, s.promo);
+        const body: PlaceOrderBody = {
+          merchantId: merchantForStore[store.id],
+          customerName: CUSTOMER_NAME,
+          zone: (addr.zone as ZoneName | undefined) ?? zoneForDistrict(addr.district),
+          items: s.cart.lines.map((l) => {
+            const p = productById[l.pid];
+            const opts = optionText(p, l.sel);
+            return { qty: l.qty, name: opts ? `${p.name} (${opts})` : p.name, price: l.unit };
+          }),
+          pay: s.pay,
+          // Sent explicitly: the API charges 15 DH when fee is omitted.
+          fee: tt.fee,
+          serviceFee: tt.service,
+          discount: tt.disc,
+          ...(s.promo ? { promoCode: s.promo } : {}),
+          ...deliveryDetails(s, addr),
+        };
+        set({ placing: true });
+        let placed: ApiOrder;
+        try {
+          placed = await api.placeOrder(body);
+        } catch (e) {
+          set({ placing: false });
+          const paused = e instanceof Error && /paused/i.test(e.message);
+          get().showToast(paused ? `${store.name} · ${t().closed}` : t().orderFailed);
+          return;
+        }
+        const active: ActiveOrder = {
+          id: placed.id,
+          storeId: store.id,
+          lines: s.cart.lines,
+          sub: tt.sub,
+          fee: tt.fee,
+          service: tt.service,
+          disc: tt.disc,
+          total: placed.total,
+          placedAt: Date.now(),
+          ...(s.when === 'sched' ? { scheduledFor: SCHEDULE_SLOTS[s.slot] } : {}),
+          addrId: s.addrId,
+          pay: s.pay,
+        };
+        set({
+          placing: false,
+          active,
+          cart: { storeId: null, lines: [] },
+          promo: null,
+          promoInput: '',
+          promoMsg: '',
+          rating: 0,
+          chat: [],
+        });
+        router.dismissAll();
+        router.push('/tracking');
+      },
+
+      finishOrder: () => {
+        const s = get();
+        if (!s.active) return;
+        const { placedAt, lost, scheduledFor, ...rest } = s.active;
+        const status = lost
+          ? 'cancelled'
+          : (s.live?.orders.find((o) => o.id === rest.id)?.status ?? 'delivered');
+        // Cancelled orders aren't kept in the history.
+        const at = s.live ? demoClock(s.live.t) : clock(Date.now());
+        const done: Order = { ...rest, date: 'Today · ' + at, status };
+        set({ orders: status === 'cancelled' ? s.orders : [done, ...s.orders], active: null });
+        router.dismissAll();
+        router.navigate('/orders');
+        if (s.rating && status !== 'cancelled') s.showToast(t().thanks);
+      },
+
+      reorder: (o) => {
+        const st = storeById[o.storeId];
+        if (st.closed) {
+          get().showToast(`${st.name} · ${t().closed}`);
+          return;
+        }
+        const lines: CartLine[] = o.lines.map((l) => ({ ...l, key: lineKey(l.pid, l.sel) }));
+        set({ cart: { storeId: o.storeId, lines }, promo: null, promoMsg: '' });
+        router.push('/cart');
+      },
+
+      connectLive: () =>
+        api.subscribe(
+          (live) => {
+            const { active } = get();
+            if (!active) return set({ live });
+            const o = live.orders.find((x) => x.id === active.id);
+            const lost = !o && Date.now() - active.placedAt > PLACE_GRACE_MS;
+            set({ live, ...(lost !== !!active.lost ? { active: { ...active, lost } } : {}) });
+          },
+          (connected) => set({ connected, networkError: !connected }),
+        ),
+
+      sendChat: (text) => {
+        set((s) => ({ chat: [...s.chat, { me: true, text }] }));
+        setTimeout(
+          () => set((s) => ({ chat: [...s.chat, { me: false, text: t().chatReply }] })),
+          1300,
+        );
+      },
+
+      kickSearch: () => {
+        clearTimeout(searchTimer);
+        set({ searching: true });
+        searchTimer = setTimeout(() => set({ searching: false }), 450);
+      },
+
+      addRecent: (q) => {
+        q = q.trim();
+        if (!q) return;
+        set((s) => ({
+          recent: [q, ...s.recent.filter((r) => r.toLowerCase() !== q.toLowerCase())].slice(0, 5),
+        }));
+      },
+
+      searchFor: (q) => {
+        set({ q });
+        get().addRecent(q);
+        get().kickSearch();
+      },
+
+      openCategory: (c) => {
+        set({ fCat: c, q: '' });
+        router.navigate('/search');
+        get().kickSearch();
+      },
+
+      clearFilters: () => set({ q: '', fCat: null, fRating: false, fFast: false, fPrice: 0 }),
+
+      saveAddress: (a) => {
+        const id = 'a' + Date.now();
+        set((s) => ({
+          addresses: [...s.addresses, { ...a, id, label: a.label.trim() || 'Other' }],
+          addrId: id,
+        }));
+      },
+
+      locateMe: async () => {
+        const r = await locate();
+        if (!r.ok) return r.reason;
+        const here: Address = { ...r.address, id: 'loc', label: t().currentLoc };
+        set((s) => ({
+          addresses: [...s.addresses.filter((a) => a.id !== 'loc'), here],
+          addrId: 'loc',
+        }));
+        const where = [here.district, here.city].filter(Boolean).join(', ') || here.street;
+        get().showToast(t().located.replace('%s', where));
+        return 'ok';
+      },
+    }),
+    {
+      name: 'yallo-customer',
+      version: 1,
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (s): Persisted =>
+        Object.fromEntries(persisted.map((k) => [k, s[k]])) as Persisted,
+    },
+  ),
+);
+
+/** True once the saved state has been read back from the device (or there was none). */
+export function useHydrated() {
+  return useSyncExternalStore(
+    (cb) => useApp.persist.onFinishHydration(cb),
+    () => useApp.persist.hasHydrated(),
+  );
+}
 
 /** Current language's strings. */
 export const useT = () => strings[useApp((s) => s.lang)];

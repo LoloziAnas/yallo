@@ -70,4 +70,8 @@ The app is in English, French and Arabic, and Arabic switches the layout to righ
   nearest shared zone to the fix. Web has no reverse geocoding, so the street shows the coordinates. If
   permission is refused or there's no fix, the address form opens and explains why. On the Android emulator,
   set a position with `adb emu "geo fix <lon> <lat>"` (quoted, because the longitude is negative).
+- **Saved state:** sign-in, language, addresses, cart, favourites, recent searches, order history and the live
+  order are kept on the device (zustand `persist` with AsyncStorage, or `localStorage` on web, key
+  `yallo-customer`), so tracking resumes after a restart. Logging out clears it all except the language. If the
+  saved format changes, bump `version` in `src/store/app-store.ts`.
 - **Photos** are placeholders: a gradient, a category icon and a caption naming the shot to take.
