@@ -56,6 +56,8 @@ answer support tickets, review a new courier's sign-up, and approve the weekly p
 **Alone?** You still see a whole delivery. The demo plays the stores and any courier without the app open, so an
 order placed by a single tester is accepted, prepared, picked up and delivered by itself in about 3 to 5 minutes. A
 courier tester with the app open always gets first refusal on jobs near them.
+A courier tester who closes the app while still online is then played by the simulation, which can take and deliver
+jobs as them. Go offline before leaving to avoid that.
 
 **Sign up as a new courier.** In the courier app, choose to apply, then fill in the form. In the back office
 (Couriers → Applications), accept each document and activate the courier. The new courier can then sign in with that
@@ -118,7 +120,9 @@ number and code 123456.
 5. **Android APKs.** These are built locally with the API's URL. Customer: `cd mobile && npm run apk -- --api
    https://<api>`. It is signed with `~/yallo-keys/yallo-customer.jks`, which is outside git: back it up, because
    updates must be signed with the same key. Its fingerprint is in `~/yallo-keys/yallo-customer.README.txt`.
-   Courier: see `courier/README.md`.
+   Courier: `cd courier && npm run apk -- --api https://<api>` → `courier/dist/yallo-courier-1.0.0-<sha>.apk`
+   (arm64 + x86_64; `--all-abis` adds 32-bit phones). It needs the Android SDK and JDK 17–21, and the first build takes
+   about 45 minutes. It's signed with the courier release key in `~/yallo-keys` (outside git, back it up too).
 
 ### Day to day
 

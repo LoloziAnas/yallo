@@ -76,14 +76,15 @@ services:
       - key: YALLO_API_URL
         sync: false
 
-  # Courier app, web build. PLACEHOLDER: the courier app session sets the build command and output folder.
+  # Courier app, web build (owned by the courier app session; see courier/README.md). A single-page build: the
+  # rewrite is required.
   - type: web
     name: yallo-courier
     runtime: static
     repo: https://github.com/LoloziAnas/yallo
     branch: main
     rootDir: courier
-    buildCommand: npm ci && npx expo export --platform web --output-dir web-dist
+    buildCommand: npm ci && npm run web:build
     staticPublishPath: web-dist
     buildFilter:
       paths: [courier/**, shared/**]
