@@ -271,8 +271,20 @@ try {
     await p.getByLabel(/^Message Karim/).fill('Blue door, 2nd floor');
     await p.getByRole('button', { name: 'Send', exact: true }).click();
     await waitForOrder(orderId, o => o.chat?.some(m => m.from === 'customer' && m.text === 'Blue door, 2nd floor'), 'carrying the customer\'s message', 5000);
-    // Karim answers through the API: the run doesn't drive the courier app's chat screen yet.
-    await asCourier(`/orders/${orderId.slice(1)}/messages`, { text: "On my way to Dar Zitoun" });
+    // Karim answers from his app when the build has order chat, otherwise through the API as him.
+    const k = pages.courier, openChat = k.getByRole('button', { name: `Chat with ${CUSTOMER.first}`, exact: true });
+    if (await openChat.count()) {
+      await openChat.first().tap();
+      await seen(k, 'Blue door, 2nd floor');
+      await k.getByLabel('Write a message', { exact: true }).fill('On my way to Dar Zitoun');
+      await tap(k, 'Send');
+      await waitForOrder(orderId, o => o.chat?.some(m => m.from === 'courier' && m.text === 'On my way to Dar Zitoun'), 'carrying Karim\'s reply', 5000);
+      await k.goBack();
+      await seen(k, 'Start navigation');
+    } else {
+      skip('the courier build has no order chat: Karim replies through the API');
+      await asCourier(`/orders/${orderId.slice(1)}/messages`, { text: 'On my way to Dar Zitoun' });
+    }
     await seen(p, 'On my way to Dar Zitoun');
     await seen(pages.ops.locator('.drawer'), 'Customer ↔ courier chat');
     await p.goBack();
