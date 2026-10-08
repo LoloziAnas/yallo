@@ -1,3 +1,4 @@
+import LiveMap from '../components/LiveMap.jsx';
 import { SegTabs, StatusPill } from '../components/ui.jsx';
 
 export default function Live({ v }) {
@@ -35,6 +36,7 @@ export default function Live({ v }) {
       </div>
 
       <div className="map">
+        <LiveMap v={v} fallback={<>
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="map-svg">
           <ellipse cx="30" cy="32" rx="17" ry="20" fill="var(--color-accent-100)" opacity=".8" />
           <ellipse cx="52" cy="62" rx="14" ry="16" fill="var(--color-accent-2-100)" opacity=".9" />
@@ -67,6 +69,7 @@ export default function Live({ v }) {
         {v.layers.couriers && v.mapCouriers.map(mc => (
           <button key={mc.name} onClick={mc.onClick} title={mc.name} className="map-pin" style={{ left: mc.x, top: mc.y, width: mc.size, height: mc.size, borderRadius: '50%', border: 0, padding: 0, cursor: 'pointer', background: mc.bg, boxShadow: mc.sh, transition: 'left 1s linear,top 1s linear' }} />
         ))}
+        </>} />
         <div className="map-panel" style={{ top: 14, left: 14, gap: 6, padding: 4, borderRadius: 999 }}>
           {v.layerBtns.map(lb => (
             <button key={lb.label} onClick={lb.onClick} style={{ height: 30, padding: '0 12px', border: 0, borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, background: lb.bg, color: lb.fg }}>
@@ -74,7 +77,7 @@ export default function Live({ v }) {
             </button>
           ))}
         </div>
-        <div className="map-panel" style={{ left: 14, bottom: 14, flexWrap: 'wrap', gap: '6px 14px', padding: '10px 14px', borderRadius: 14, fontSize: 12, fontWeight: 600, maxWidth: 'calc(100% - 28px)' }}>
+        <div className="map-panel" style={{ left: 14, bottom: 40, flexWrap: 'wrap', gap: '6px 14px', padding: '10px 14px', borderRadius: 14, fontSize: 12, fontWeight: 600, maxWidth: 'calc(100% - 28px)' }}>
           {v.fleetLegend.map(fl => (
             <span key={fl.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ width: 10, height: 10, borderRadius: '50%', background: fl.c }} />{fl.label} <span className="faint">{fl.n}</span>

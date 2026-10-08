@@ -85,3 +85,13 @@ button.tr { width: 100%; border-left: 0; border-right: 0; border-bottom: 0; curs
 
 /* Offline: the last known state stays visible, actions are paused */
 .offline-note { flex: none; padding: 8px 24px; background: var(--color-accent-100); color: var(--color-accent-800); font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--color-divider); }
+
+/* Live map (MapLibre): markers drawn as HTML on top of the tiles. */
+.livemap { position: absolute; inset: 0; transition: opacity .3s; }
+.livemap-store { width: 28px; height: 28px; border-radius: 9px; border: 0; cursor: pointer; display: grid; place-items: center; padding: 0; }
+.livemap-courier { width: 14px; height: 14px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; }
+.livemap-zone { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--color-neutral-600); pointer-events: none; text-shadow: 0 0 3px #fff, 0 0 6px #fff; }
+.livemap-customer { display: flex; flex-direction: column; align-items: center; pointer-events: none; }
+.livemap-customer span { padding: 3px 8px; border-radius: 999px; background: var(--color-neutral-900); color: #fff; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.livemap-customer i { width: 12px; height: 12px; border-radius: 50%; background: var(--color-accent-2); box-shadow: 0 0 0 3px #fff; margin-top: 4px; }
+.map .maplibregl-ctrl-top-right { top: 6px; right: 6px; }

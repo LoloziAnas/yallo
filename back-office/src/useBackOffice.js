@@ -161,10 +161,10 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
   const selOrder = selId ? s.orders.find(o => o.id === selId) : null;
   const selCourierId = s.drawer && s.drawer.type === 'courier' ? s.drawer.id : selOrder && selOrder.courier;
   const busyMerch = {}; active.forEach(o => busyMerch[o.m] = true);
-  const mapMerchants = s.merchants.map(m => { const sel = selOrder && selOrder.m === m.name; return { name:m.name, x:m.x + '%', y:m.y + '%', onClick:() => { const o = active.find(o => o.m === m.name); if (o) openOrder(o.id)(); else toast(m.name + ' · no active orders'); },
+  const mapMerchants = s.merchants.map(m => { const sel = selOrder && selOrder.m === m.name; return { name:m.name, pos:{ x:m.x, y:m.y }, x:m.x + '%', y:m.y + '%', onClick:() => { const o = active.find(o => o.m === m.name); if (o) openOrder(o.id)(); else toast(m.name + ' · no active orders'); },
     bg:sel ? 'var(--color-accent)' : !takingOrders(m) ? 'var(--color-neutral-300)' : 'var(--color-card)', fg:sel ? '#fff' : !takingOrders(m) ? 'var(--color-neutral-600)' : 'var(--color-accent)', sh:sel ? '0 0 0 4px var(--color-accent-200),var(--shadow-md)' : 'var(--shadow-md)' }; });
   const CC = { idle:'var(--color-accent-2-500)', busy:'var(--color-accent)', off:'var(--color-neutral-400)' };
-  const mapCouriers = s.couriers.map(c => { const sel = c.id === selCourierId; return { name:c.name, x:c.x.toFixed(2) + '%', y:c.y.toFixed(2) + '%', onClick:openCourier(c.id), size:sel ? '20px' : '14px', bg:CC[c.st], sh:sel ? '0 0 0 3px #fff,0 0 0 6px ' + CC[c.st] : '0 0 0 2.5px #fff,var(--shadow-sm)' }; });
+  const mapCouriers = s.couriers.map(c => { const sel = c.id === selCourierId; return { name:c.name, pos:{ x:c.x, y:c.y }, x:c.x.toFixed(2) + '%', y:c.y.toFixed(2) + '%', onClick:openCourier(c.id), size:sel ? '20px' : '14px', bg:CC[c.st], sh:sel ? '0 0 0 3px #fff,0 0 0 6px ' + CC[c.st] : '0 0 0 2.5px #fff,var(--shadow-sm)' }; });
   const hasRoute = !!(selOrder && p.live && ACTIVE.includes(selOrder.st));
   const rm = selOrder ? MBY[selOrder.m] : s.merchants[0], rc = selOrder && CBY[selOrder.courier];
   const route = selOrder ? { mx:rm.x, my:rm.y, ux:selOrder.ux, uy:selOrder.uy, uxp:selOrder.ux + '%', uyp:selOrder.uy + '%', cx:rc ? rc.x : rm.x, cy:rc ? rc.y : rm.y, cust:selOrder.c.split(' ')[0] } : {};
