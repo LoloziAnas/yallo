@@ -193,7 +193,9 @@ import` and [`docs/BACKUP.md`](docs/BACKUP.md) cover backups. The file stays the
   Production also: the clock is real (`CLOCK=real`, `TIME_ZONE`); the stand-in merchant and stand-in courier offers are
   off (`STAND_IN_MERCHANT`, `STAND_IN_COURIERS`); one-time codes are random and go through `SMS_DRIVER` (only `log`
   so far, i.e. the server log; `OTP_MODE=dev`, always 123456, is refused in production); push goes through
-  `PUSH_DRIVER` (`log` or `expo`); the live feed takes the session token in its first message (`?auth=1`, then
+  `PUSH_DRIVER` (`log` or `expo`); data retention deletes order chat 90 days and customers' GPS 30 days after an
+  order ends and clears offline couriers' last fix (`RETENTION_CHAT_DAYS`, `RETENTION_LOCATION_DAYS`; the draft privacy
+  policy is `deploy/pages/privacy/`); the live feed takes the session token in its first message (`?auth=1`, then
   `{ type: 'auth', token }`), and still accepts `?token=` from older apps; `/api/reset` is off unless `ALLOW_RESET=1`; public endpoints are
   rate-limited per client address (`TRUST_PROXY=1` behind a reverse proxy; `RATE_LIMITS=on` locally); sessions last
   30 days.

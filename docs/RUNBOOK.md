@@ -102,6 +102,7 @@ apps drop anything they remembered about the old data.
 | `SMS_DRIVER` | log | how sign-in codes are sent; only `log` exists so far (`api/src/sms.ts` explains adding a provider) |
 | `CLOCK` / `TIME_ZONE` | demo (real in production) / Africa/Casablanca | `real` follows the wall clock in `TIME_ZONE` (an IANA name or `+00:00`); `demo` is the fixed evening from 18:34 |
 | `STAND_IN_COURIERS` | on (off in production) | couriers without the app accept offers by themselves |
+| `RETENTION_CHAT_DAYS` / `RETENTION_LOCATION_DAYS` | off (90 / 30 in production and the demo) | delete order chat / customers' GPS fixes that many days after the order ends; offline couriers' last fix is cleared; `off` disables |
 | `STAND_IN_MERCHANT` | on (off in production) | stores without the merchant app accept orders after 20 s and have them ready 40 s later (or at the prep time the store chose) |
 | `YALLO_VERSION` | dev (or the Render commit) | shown by `GET /api/health` |
 | `DEPLOY_PROFILE` | (none) | `demo`: the public demo server (see [`DEMO.md`](DEMO.md)) |
