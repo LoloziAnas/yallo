@@ -2,6 +2,7 @@
 import {
   KM_PER_MAP_PCT,
   clockAt,
+  mapToGeo,
   tripKm,
   type ApiOrder,
   type GeoPoint,
@@ -32,7 +33,9 @@ export interface OrderView {
   /** Customer's phone, when the customer app sent one; calls and texts are simulated without it. */
   phone?: string;
   /** Where navigation apps should take the courier: a GPS fix, else an address to search. */
-  navTo: { store: string; customer: GeoPoint | string };
+  navTo: { store: GeoPoint | string; customer: GeoPoint | string };
+  /** Live: where the store, the customer and the courier are, for the street map. */
+  geo?: { store: GeoPoint; customer: GeoPoint; courier: GeoPoint };
   /** Delivery slot the customer picked, "HH:MM"; absent means as soon as possible. */
   scheduledFor?: string;
   /** When the order left the store, "HH:MM" (live). */
@@ -121,10 +124,12 @@ export function fromApi(o: ApiOrder, m: Merchant, courierPos: MapPoint): OrderVi
     dropLine: a ? `${a.street}, ${a.city}` : design ? DEMO_ORDER.dropLine : area,
     note: o.instructions ?? (design ? O.note : ''),
     phone: o.customerPhone,
+    // The store's position on the shared map, so the route goes where the map's pin is.
     navTo: {
-      store: `${m.address}, Marrakech`,
+      store: mapToGeo(m.pos),
       customer: o.location ?? (a ? `${a.street}, ${a.district}, ${a.city}` : area),
     },
+    geo: { store: mapToGeo(m.pos), customer: o.location ?? mapToGeo(o.dropoff), courier: mapToGeo(courierPos) },
     scheduledFor: o.scheduledFor,
     pickedAt: o.statusAt?.delivering !== undefined ? clockAt(o.statusAt.delivering) : undefined,
     chat: o.chat ?? [],

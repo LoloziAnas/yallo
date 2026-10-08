@@ -94,7 +94,8 @@ describe('places and people', () => {
     expect(v.note).toBe('');
     expect(v.phone).toBeUndefined();
     expect(v.navTo.customer).toBe('Hivernage, Marrakech');
-    expect(v.navTo.store).toBe('12 Av. Mohammed V, Guéliz, Marrakech');
+    expect(v.navTo.store).toEqual(v.geo!.store);
+    expect(v.geo!.store.lat).toBeCloseTo(31.63, 1);
   });
 
   it('names the kind of store', () => {

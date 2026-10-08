@@ -8,6 +8,7 @@ import Svg, { G, Path, Polyline, Rect, Text as SvgText } from 'react-native-svg'
 import { errorText } from '@/api/client';
 import { BackButton, Btn, RoundButton, Spacer } from '@/components/button';
 import { Icon } from '@/components/icon';
+import { LiveMap, fromGeo, type LngLat, type MapPin } from '@/components/live-map';
 import { Screen, useBottomPad } from '@/components/screen';
 import { SectionLabel, Txt } from '@/components/txt';
 import {
@@ -94,6 +95,8 @@ function MapView() {
   const demo = useCourier((s) => s.source === 'demo');
   const set = useCourier((s) => s.set);
   const showToast = useCourier((s) => s.showToast);
+  const gps = useCourier((s) => s.gps);
+  const [sheetH, setSheetH] = useState(360);
   const { width: W, height: H } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const bottom = useBottomPad(-2);
@@ -157,8 +160,24 @@ function MapView() {
     if (phone) openUrl(telUrl(phone));
   };
 
-  return (
-    <Screen edgeToEdge bg={colors.neutral200}>
+  // Live jobs: the street map with the courier (this phone's GPS when it has a fix), the store and the
+  // customer, and the way still to go.
+  const streetMap = (() => {
+    if (demo || !order.geo) return null;
+    const me: LngLat = gps ? [gps.lon, gps.lat] : fromGeo(order.geo.courier);
+    const store = fromGeo(order.geo.store);
+    const home = fromGeo(order.geo.customer);
+    const pins: MapPin[] = [
+      { id: 'store', kind: 'store', lngLat: store },
+      { id: 'home', kind: 'home', lngLat: home },
+      { id: 'me', kind: 'courier', lngLat: me },
+    ];
+    return { pins, route: isPick ? [me, store, home] : [me, home] };
+  })();
+
+  // The design's drawn map: the demo's scene, and the fallback where a street map can't render (Expo Go).
+  const art = (
+    <>
       {/* Decorative map art: hidden from screen readers; the sheet below carries the information. */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none" aria-hidden>
         <Svg
@@ -250,8 +269,28 @@ function MapView() {
           <Icon name="nav" size={16} color={colors.neutral100} />
         </Circle>
       </View>
+    </>
+  );
 
-      {!nav ? (
+  return (
+    <Screen edgeToEdge bg={colors.neutral200}>
+      {streetMap ? (
+        <View style={StyleSheet.absoluteFill}>
+          <LiveMap
+            pins={streetMap.pins}
+            route={streetMap.route}
+            topInset={insets.top + 64}
+            bottomInset={sheetH}
+            interactive
+            fallback={art}
+          />
+        </View>
+      ) : (
+        art
+      )}
+
+      {/* Live jobs navigate in Google Maps or Waze; the turn-by-turn banner is the design's demo. */}
+      {!nav || !demo ? (
         <View style={[styles.topBar, { top: insets.top + 8 }]}>
           <RoundButton
             icon="chevD"
@@ -299,7 +338,9 @@ function MapView() {
         </View>
       )}
 
-      <View style={[styles.sheet, { paddingBottom: bottom }]}>
+      <View
+        style={[styles.sheet, { paddingBottom: bottom }]}
+        onLayout={(e) => setSheetH(e.nativeEvent.layout.height)}>
         <View style={styles.grabber} />
         {!nav ? (
           <View style={{ gap: 14 }}>
@@ -403,6 +444,17 @@ function MapView() {
                 {navKm} {t('km')} · {t('to')} {sheet.name}
               </Txt>
             </View>
+            {/* Turn-by-turn directions come from the phone's navigation app. */}
+            {!demo && (
+              <Btn
+                icon="nav"
+                iconSize={20}
+                label={t('Open in Google Maps')}
+                height={56}
+                fontSize={17}
+                onPress={openExternal('google')}
+              />
+            )}
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <Btn
                 variant="secondary"

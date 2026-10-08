@@ -42,3 +42,6 @@ example
 # generated native folders
 /ios
 /android
+
+# maplibre-gl worker, copied on install (scripts/copy-maplibre-worker.mjs)
+/public/maplibre

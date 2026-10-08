@@ -4,9 +4,10 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { useEffect } from 'react';
-import { Linking, Platform } from 'react-native';
+import { Alert, Linking, Platform } from 'react-native';
 
 import { api } from '@/api/client';
+import { makeT } from '@/data/i18n';
 import { inDelivery, useCourier, type Data } from '@/store/courier-store';
 
 const BG_TASK = 'yallo-courier-location';
@@ -59,11 +60,36 @@ export async function goOnlineWithLocation() {
   else useCourier.getState().set({ edge: 'location', edgeT: 0 });
 }
 
+/**
+ * Android shows no explanation with "Allow all the time", so the app says first, in its own words, what
+ * it collects in the background and why (Google Play's prominent-disclosure rule). iOS shows the purpose
+ * string from app.json in its own prompt.
+ */
+async function discloseBackground(): Promise<boolean> {
+  if (Platform.OS !== 'android') return true;
+  if ((await Location.getBackgroundPermissionsAsync()).granted) return true;
+  const t = makeT(useCourier.getState().lang);
+  return new Promise((resolve) =>
+    Alert.alert(
+      t('Share your location during deliveries'),
+      t(
+        'Yallo collects your location while a delivery is in progress, even when the app is closed or not in use, so the customer and the Yallo team can follow the order. It stops when the delivery ends or you go offline. On the next screen, choose “Allow all the time”.',
+      ),
+      [
+        { text: t('Not now'), style: 'cancel', onPress: () => resolve(false) },
+        { text: t('Continue'), onPress: () => resolve(true) },
+      ],
+      { cancelable: false },
+    ),
+  );
+}
+
 async function startBackground(): Promise<Tracking> {
   try {
     // A job can start without "Go online" (already assigned at sign-in); Android only grants
     // background location on top of foreground location, so ask for that first.
     if (!(await requestForegroundLocation())) return 'off';
+    if (!(await discloseBackground())) return 'foreground-only';
     if (!(await Location.requestBackgroundPermissionsAsync()).granted) return 'foreground-only';
     // Always (re)start: after the app is killed, the task registry can still report the task as
     // started while Android has stopped its service; starting again just replaces the options.

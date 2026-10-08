@@ -260,6 +260,18 @@ const PHR: [string, string, string][] = [
   ['Problem', 'Problème', 'مشكلة'],
   ["I'm already here", 'Je suis déjà sur place', 'أنا هنا بالفعل'],
   ['Open in Waze', 'Ouvrir dans Waze', 'افتح في Waze'],
+  ['Open in Google Maps', 'Ouvrir dans Google Maps', 'افتح في Google Maps'],
+  [
+    'Share your location during deliveries',
+    'Partager votre position pendant les livraisons',
+    'شارك موقعك أثناء التوصيل',
+  ],
+  [
+    'Yallo collects your location while a delivery is in progress, even when the app is closed or not in use, so the customer and the Yallo team can follow the order. It stops when the delivery ends or you go offline. On the next screen, choose “Allow all the time”.',
+    "Yallo collecte votre position pendant une livraison, même lorsque l'application est fermée ou non utilisée, pour que le client et l'équipe Yallo puissent suivre la commande. Cela s'arrête à la fin de la livraison ou quand vous passez hors ligne. Sur l'écran suivant, choisissez « Toujours autoriser ».",
+    'يجمع يالو موقعك أثناء التوصيل، حتى عندما يكون التطبيق مغلقاً أو غير مستخدم، ليتمكن الزبون وفريق يالو من تتبع الطلب. يتوقف ذلك عند انتهاء التوصيل أو عند خروجك من الاتصال. في الشاشة التالية اختر «السماح طوال الوقت».',
+  ],
+  ['Not now', 'Plus tard', 'ليس الآن'],
   ['Stop', 'Arrêter', 'إيقاف'],
   ['to', 'vers', 'إلى'],
   [
