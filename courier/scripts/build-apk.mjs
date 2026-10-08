@@ -7,7 +7,7 @@
 // Bakes the API URL and the commit into the bundle, signs with the release key in ~/yallo-keys
 // (plugins/with-release-signing.js) and writes dist/yallo-courier-<version>-<sha>.apk.
 import { execFileSync, spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -81,6 +81,12 @@ const run = (cmd, a, cwd = root) => {
 };
 
 console.log(`build-apk: Yallo Courier ${version} · ${sha} → ${config ? `API from ${config}` : api}`);
+// Metro keeps transformed files between builds and doesn't notice the inlined API address or label
+// changing: start from an empty cache every time (see metro.config.js).
+rmSync(join(root, '.expo', 'metro-cache-release'), { recursive: true, force: true });
+// …and Gradle mustn't reuse the last bundle either (its up-to-date check ignores those values too).
+for (const dir of ['android/app/build/generated/assets', 'android/app/build/generated/sourcemaps', 'android/app/build/intermediates/assets'])
+  rmSync(join(root, dir), { recursive: true, force: true });
 run('npx', ['expo', 'prebuild', '--platform', 'android', '--no-install', ...(args.includes('--clean') ? ['--clean'] : [])]);
 // Modern Android phones are arm64; x86_64 runs on the emulator. `--all-abis` adds 32-bit devices.
 const abis = args.includes('--all-abis') ? 'armeabi-v7a,arm64-v8a,x86,x86_64' : 'arm64-v8a,x86_64';
@@ -88,6 +94,12 @@ const abis = args.includes('--all-abis') ? 'armeabi-v7a,arm64-v8a,x86,x86_64' : 
 run('./gradlew', ['assembleRelease', '--no-daemon', '--console=plain', `-PreactNativeArchitectures=${abis}`], join(root, 'android'));
 
 const apk = join(root, 'android/app/build/outputs/apk/release/app-release.apk');
+
+// Refuse to hand out an APK whose bundle doesn't carry this build's commit and API address.
+const bundle = spawnSync('unzip', ['-p', apk, 'assets/index.android.bundle'], { encoding: 'latin1', maxBuffer: 1 << 30 }).stdout ?? '';
+for (const expected of [sha, target]) {
+  if (!bundle.includes(expected)) fail(`the bundle in ${apk} doesn't contain "${expected}" (stale Metro cache?)`);
+}
 const outDir = resolve(root, opt('out') ?? 'dist');
 mkdirSync(outDir, { recursive: true });
 const dest = join(outDir, `yallo-courier-${version}-${sha}.apk`);

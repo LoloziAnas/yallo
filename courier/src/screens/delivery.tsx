@@ -167,8 +167,9 @@ function MapView() {
     const me: LngLat = gps ? [gps.lon, gps.lat] : fromGeo(order.geo.courier);
     const store = fromGeo(order.geo.store);
     const home = fromGeo(order.geo.customer);
+    // After pickup the store is behind the courier: only the customer is left to show.
     const pins: MapPin[] = [
-      { id: 'store', kind: 'store', lngLat: store },
+      ...(isPick ? [{ id: 'store', kind: 'store' as const, lngLat: store }] : []),
       { id: 'home', kind: 'home', lngLat: home },
       { id: 'me', kind: 'courier', lngLat: me },
     ];

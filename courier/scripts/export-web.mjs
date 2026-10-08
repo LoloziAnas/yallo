@@ -8,7 +8,7 @@
 // YALLO_API_CONFIG_URL (or EXPO_PUBLIC_API_URL) and YALLO_BASE_PATH in the environment.
 // The API must be https (the page is served over https, so its live feed becomes wss://).
 import { execFileSync, spawnSync } from 'node:child_process';
-import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -49,6 +49,7 @@ const env = {
   YALLO_RELEASE_BUILD: 'web', // a fresh Metro cache (metro.config.js)
   CI: '1',
 };
+rmSync(join(root, '.expo', 'metro-cache-release'), { recursive: true, force: true });
 const r = spawnSync('npx', ['expo', 'export', '--platform', 'web', '--clear', '--output-dir', out], {
   cwd: root,
   env,

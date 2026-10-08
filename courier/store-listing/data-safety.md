@@ -10,7 +10,7 @@ and keep it in step with the privacy policy.
 |---|---|---|
 | Does your app collect or share any of the required user data types? | **Yes** | |
 | Is all of the user data collected by your app encrypted in transit? | **Yes** | The production API is HTTPS/WSS only (release builds against an `https://` API keep Android's cleartext block; see app.config.ts). |
-| Do you provide a way for users to request that their data is deleted? | **Yes** | By request to Yallo support (in-app "Help & support" or the support email). Accounts are created and removed by Yallo ops; a deletion URL is required by Play — **to be set up** (web form or email). |
+| Do you provide a way for users to request that their data is deleted? | **Yes** | In the app: Profile → "Delete account" (with a confirmation; refused, with the reason, while on a delivery, with an offer waiting or holding cash). On the web: https://lolozianas.github.io/yallo/delete-account/ (the Play "delete account URL"), and by request to Yallo support. Deletion removes or anonymises the name, phone and vehicle details, ends sessions and push tokens; order and earnings records are kept for accounting without the name. |
 
 ## Data types
 
@@ -38,7 +38,7 @@ files, audio, health, web history, crash logs or analytics (no analytics/crash S
 
 - Data encrypted in transit: yes (HTTPS/WSS).
 - The session token is stored in Android's encrypted storage (expo-secure-store).
-- Users can ask for deletion: yes (see above).
+- Users can delete their account: yes, in the app and on the web page (see above).
 - Independent security review: no.
 
 ## Location in the background — declaration (App content → Sensitive permissions)

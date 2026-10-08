@@ -59,4 +59,5 @@ delivery driver, courier, livreur, Marrakech, food delivery, earnings
 
 - Email: _to be set (support address)_
 - Website: _to be set_
-- Privacy policy URL: _required — must cover location in the background (see data-safety.md)_
+- Privacy policy URL: https://lolozianas.github.io/yallo/privacy/ (DRAFT for legal review; must cover location in the background, see data-safety.md)
+- Delete account URL: https://lolozianas.github.io/yallo/delete-account/

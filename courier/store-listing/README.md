@@ -19,9 +19,10 @@ create.
    Play generate one and keep ours as the upload key), so the testers' sideloaded APKs and Play builds can be
    told apart. Back the key up first (see `~/yallo-keys/README.txt`).
 4. **Version code**: `android.versionCode` in `app.json` (currently 1) must go up for every upload.
-5. **Privacy policy URL** (required): must describe location collected in the background during deliveries,
-   phone number and name, chat messages, and how to ask for deletion. A **data deletion** URL or email is
-   required too.
+5. **Privacy policy URL** (required): https://lolozianas.github.io/yallo/privacy/ is a DRAFT for legal review
+   (location in the background during deliveries, phone number and name, chat messages, retention, deletion).
+   **Delete account URL**: https://lolozianas.github.io/yallo/delete-account/; in the app, Profile → "Delete
+   account".
 6. **Background location**: fill in the sensitive-permission declaration from `data-safety.md` and record the
    short video it describes. Review takes longer for this permission; plan for it.
 7. **Content rating** questionnaire and **target audience** (18+).
