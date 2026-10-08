@@ -41,6 +41,7 @@ prepare() {
   (cd "$dir/shared" && npm ci --silent --no-audit --no-fund)
   (cd "$dir/api" && npm ci --silent --no-audit --no-fund && npm run build --silent)
   ln -sfn "$dir" "$REPO/.deploy/demo/current"
+  "$REPO/deploy/prune.sh" "$REPO/.deploy/demo" 2   # keep this build and the previous one
   log "built $rev in $dir. Run '$0 restart' (or install) to serve it."
 }
 
