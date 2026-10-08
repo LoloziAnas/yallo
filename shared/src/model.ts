@@ -69,6 +69,8 @@ export type Merchant = {
   zone: ZoneName;
   /** Neighbourhood shown to customers, e.g. "Jemaa el-Fna". */
   area: string;
+  /** The city (v1). The API fills "Marrakech" for the seed stores; absent from older servers. */
+  city?: string;
   address: string;
   phone: string;
   pos: MapPoint;

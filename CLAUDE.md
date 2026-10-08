@@ -80,7 +80,7 @@ One server holds the orders, couriers, merchants and tickets every app shares. S
 `STATE_FILE=off` keeps it in memory, and `PORT`/`STATE_FILE` run a private copy for testing (e.g. 5198).
 `LiveState.epoch` changes whenever the data is reseeded.
 
-Ports 5190 (API), 5191 (back office), 8090 (customer web) and 8091 (courier web) are the shared integration
+Ports 5190 (API), 5191 (back office), 8090 (customer web), 8091 (courier web) and 8092 (merchant web) are the shared integration
 environment: test changes on private ports, and restart a shared server only to deploy a commit. Never serve them
 from a dev server watching the working tree: an edit in progress reloads the page under a running e2e. The API and
 back office deploy with `deploy/prepare.sh` (builds the commit into `.deploy/<sha>`, git-ignored), then run from
@@ -154,9 +154,11 @@ back office deploy with `deploy/prepare.sh` (builds the commit into `.deploy/<sh
 
 ## Joint end-to-end run
 
-`cd e2e && npm install && npm test` drives the customer app (:8090), back office (:5191) and courier
-app (:8091) together against the API (:5190). A customer orders from Dar Zitoun (0.7 km from Karim), ops offers it to
-Karim, Karim accepts, picks it up and delivers, and the customer's tracking follows. Every step is
+`cd e2e && npm install && npm test` drives the customer app (:8090), back office (:5191), courier
+app (:8091) and, when it's served, the merchant app (:8092) together against the API (:5190). A customer orders from Dar Zitoun (0.7 km from Karim), ops offers it to
+Karim, Karim accepts, picks it up and delivers, and the customer's tracking follows. With the merchant app up, Dar
+Zitoun's staff (+212 600 00 11 01) signs in, the stand-in leaves the store alone, and the store accepts the order
+(10 min) and marks it ready itself. Every step is
 checked from each side, with screenshots in `e2e/out/`. It takes about 2 minutes, mostly simulated
 driving. It resets the API first. `CUSTOMER=api` skips the customer app; `HEADED=1` shows the browsers.
 Tell the app owners before changing their screen text, because the run asserts on it.

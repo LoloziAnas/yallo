@@ -98,7 +98,7 @@ function seed(o: SeedOptions): LiveState {
   const s: LiveState = {
     epoch: Date.now().toString(36) + '-' + randomBytes(3).toString('hex'),
     t: 0,
-    merchants: clone(MERCHANTS),
+    merchants: clone(MERCHANTS).map(m => ({ ...m, city: m.city ?? 'Marrakech' })),
     catalog: { version: 1, products: clone(PRODUCTS), optionGroups: clone(OPTION_GROUPS) },
     merchantStaff: clone(MERCHANT_STAFF),
     couriers: couriers.map(c => ({ ...clone(c), suspended: false, app: false })),
@@ -337,7 +337,7 @@ export class Store {
     this.auth = saved.auth ?? emptyAuth();
     // No courier app is connected yet; they re-attach when their sockets reconnect.
     saved.state.couriers.forEach(c => { c.app = false; });
-    saved.state.merchants.forEach(m => { delete m.app; });
+    saved.state.merchants.forEach(m => { delete m.app; m.city ??= 'Marrakech'; });
     // Added in v1 without a format change: older saves get the seed staff.
     saved.state.merchantStaff ??= clone(MERCHANT_STAFF);
     const clock = saved.state.clock;

@@ -5,7 +5,7 @@ import { ZONES, mapToGeo } from '@yallo/shared';
 // `v.run` sends the request, and the API's answer (or its refusal, shown by the form) comes back.
 
 const KINDS = [['restaurants', 'Restaurant'], ['groceries', 'Groceries'], ['pharmacy', 'Pharmacy'], ['shops', 'Shop'], ['bakery', 'Bakery'], ['drinks', 'Drinks']];
-const blankStore = { name: '', category: '', cuisine: '', kind: 'restaurants', zone: 'Guéliz', area: '', address: '', phone: '',
+const blankStore = { name: '', category: '', cuisine: '', kind: 'restaurants', zone: 'Guéliz', area: '', city: 'Marrakech', address: '', phone: '',
   pos: { ...ZONES['Guéliz'] }, hours: { open: '09:00', close: '23:00' }, prepMin: 15, deliveryMin: [25, 40], fee: 10, minOrder: 0, priceLevel: 2 };
 const blankProduct = { name: '', section: '', description: '', price: '', options: '', photoUrl: '', popular: false, available: true };
 
@@ -61,7 +61,7 @@ export function StoreForm({ v, store, onDone, onCancel }) {
     e.preventDefault();
     setBusy(true); setError(null);
     const body = {
-      name: f.name, category: f.category, cuisine: f.cuisine || undefined, kind: f.kind, zone: f.zone, area: f.area || undefined,
+      name: f.name, category: f.category, cuisine: f.cuisine || undefined, kind: f.kind, zone: f.zone, area: f.area || undefined, city: f.city || undefined,
       address: f.address, phone: f.phone, pos: f.pos, hours: f.hours, prepMin: asNum(f.prepMin),
       deliveryMin: [asNum(f.deliveryMin[0]), asNum(f.deliveryMin[1])], fee: asNum(f.fee), minOrder: asNum(f.minOrder), priceLevel: asNum(f.priceLevel),
     };
@@ -91,6 +91,7 @@ export function StoreForm({ v, store, onDone, onCancel }) {
           </select>
         </Field>
         <Field label="Neighbourhood"><input className="input" value={f.area} onChange={e => set('area', e.target.value)} placeholder={f.zone} maxLength={60} /></Field>
+        <Field label="City"><input className="input" value={f.city ?? ''} onChange={e => set('city', e.target.value)} placeholder="Marrakech" maxLength={60} /></Field>
         <Field label="Opens"><input className="input" type="time" value={f.hours.open} onChange={e => set('hours', { ...f.hours, open: e.target.value })} required /></Field>
         <Field label="Closes" hint="Earlier than opening = past midnight"><input className="input" type="time" value={f.hours.close} onChange={e => set('hours', { ...f.hours, close: e.target.value })} required /></Field>
         <Field label="Prep time (min)"><input className="input" type="number" min={1} max={180} value={f.prepMin} onChange={e => set('prepMin', e.target.value)} /></Field>

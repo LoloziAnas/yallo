@@ -9,7 +9,7 @@
   // route) lands here. Send it to that app's index with the path inside the app in ?p= (e.g. /yallo/courier/chat →
   // /yallo/courier/?p=%2Fchat), which the app restores. Anything else goes to the landing page.
   (function () {
-    var base = '/yallo/', apps = ['ops', 'app', 'courier'], l = location;
+    var base = '/yallo/', apps = ['ops', 'app', 'courier', 'merchant'], l = location;
     var rest = l.pathname.indexOf(base) === 0 ? l.pathname.slice(base.length) : '';
     var app = rest.split('/')[0], inner = rest.slice(app.length);
     if (apps.indexOf(app) < 0) { l.replace(base); return; }

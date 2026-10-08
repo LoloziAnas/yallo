@@ -3,6 +3,7 @@
 #   https://lolozianas.github.io/yallo/ops/    back office
 #   https://lolozianas.github.io/yallo/app/    customer app
 #   https://lolozianas.github.io/yallo/courier/ courier app
+#   https://lolozianas.github.io/yallo/merchant/ merchant app (store tablets)
 # Pages serves the gh-pages branch. This workflow only replaces the app folders and the landing files; api.json
 # (the API's current address) is written by the laptop hosting the API (deploy/demo-host.sh) and is never touched here.
 # An app that fails to build keeps its previous version online.
@@ -11,7 +12,7 @@ name: Demo sites
 on:
   push:
     branches: [main]
-    paths: [back-office/**, mobile/**, courier/**, shared/**, deploy/pages/**, .github/workflows/demo-pages.yml]
+    paths: [back-office/**, mobile/**, courier/**, merchant/**, shared/**, deploy/pages/**, .github/workflows/demo-pages.yml]
   workflow_dispatch:
 
 permissions:
@@ -61,10 +62,18 @@ jobs:
           YALLO_API_CONFIG_URL: ${{ env.CONFIG_URL }}
           YALLO_BASE_PATH: /yallo/courier
 
+      - name: Merchant app
+        id: merchant
+        continue-on-error: true
+        run: cd merchant && npm ci --no-audit --no-fund && npm run web:build
+        env:
+          YALLO_API_CONFIG_URL: ${{ env.CONFIG_URL }}
+          YALLO_BASE_PATH: /yallo/merchant
+
       - name: Publish to gh-pages
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BUILT: ${{ steps.ops.outcome == 'success' && 'ops=back-office/dist' || '' }} ${{ steps.app.outcome == 'success' && 'app=mobile/web-dist' || '' }} ${{ steps.courier.outcome == 'success' && 'courier=courier/web-dist' || '' }}
+          BUILT: ${{ steps.ops.outcome == 'success' && 'ops=back-office/dist' || '' }} ${{ steps.app.outcome == 'success' && 'app=mobile/web-dist' || '' }} ${{ steps.courier.outcome == 'success' && 'courier=courier/web-dist' || '' }} ${{ steps.merchant.outcome == 'success' && 'merchant=merchant/web-dist' || '' }}
         run: |
           set -euo pipefail
           remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
@@ -97,4 +106,5 @@ jobs:
           echo "- back office: ${{ steps.ops.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- customer app: ${{ steps.app.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- courier app: ${{ steps.courier.outcome }}" >> "$GITHUB_STEP_SUMMARY"
-          [ "${{ steps.ops.outcome }}${{ steps.app.outcome }}${{ steps.courier.outcome }}" = successsuccesssuccess ] || { echo "::warning::some apps failed to build; their previous versions stay online"; }
+          echo "- merchant app: ${{ steps.merchant.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          [ "${{ steps.ops.outcome }}${{ steps.app.outcome }}${{ steps.courier.outcome }}${{ steps.merchant.outcome }}" = successsuccesssuccesssuccess ] || { echo "::warning::some apps failed to build; their previous versions stay online"; }

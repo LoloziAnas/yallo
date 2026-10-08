@@ -11,6 +11,7 @@ a free Cloudflare tunnel. It's a demo: no real money, no real SMS, no real store
 | Start page (links to everything, shows whether the server is up) | https://lolozianas.github.io/yallo/ |
 | Customer app (web, works on iPhone in Safari) | https://lolozianas.github.io/yallo/app/ |
 | Courier app (web) | https://lolozianas.github.io/yallo/courier/ |
+| Merchant app (store tablet) | https://lolozianas.github.io/yallo/merchant/ |
 | Back office (ops, use a computer) | https://lolozianas.github.io/yallo/ops/ |
 | Android apps (APK) | shared separately by the team |
 
@@ -31,6 +32,7 @@ There's no SMS on the demo: **every code is 123456**, and the apps say so on the
 | Courier tester 4 | 0600 00 00 04 | Lina Cherkaoui, motorcycle |
 | Courier tester 5 | 0600 00 00 05 | Ilyas Mernissi, car |
 | Courier tester 6 | 0600 00 00 06 | Yasmine Lahlou, motorcycle |
+| Store (merchant app) | +212 600 00 11 01 … +212 600 00 11 10 | one per store: 01 is Dar Zitoun, 02 Burger Atlas, and so on in the store list's order |
 | Ops (back office) | +212 661 00 10 01 | Leila Amrani, ops lead |
 | Ops (back office) | +212 661 00 10 02 | Youssef Tahiri, ops agent |
 
@@ -49,6 +51,11 @@ cancelling, do it within the first 20 seconds or so, before the store accepts. Y
 customer orders nearby you get a job offer: you have 15 seconds to accept. Then ride to the store, confirm pickup,
 ride to the customer, and enter their PIN to finish. Your earnings update after each job. To get a job straight
 away, pair up with someone ordering as a customer (or order from your own phone).
+
+**As a store.** Sign in to the merchant app with a store's number (Dar Zitoun: +212 600 00 11 01). New orders ring
+and flash; accept with a prep time or reject with a reason, then mark the order ready when the food is done. You can
+pause the store and mark dishes out of stock. While a store's app is open, the simulation stops playing that store:
+orders wait for you. Close the app (or sign out) and the simulation takes over again.
 
 **As ops.** Sign in on a computer. Live operations shows every order, courier and store on the map. Open an order to
 offer it to a courier, follow its timeline, read the customer–courier chat, cancel or refund. Also: pause a store,
@@ -70,7 +77,7 @@ number and code 123456.
   not enforced.
 - **Shared.** Everyone sees the same world. Customers see only their own orders; couriers see only their own jobs;
   ops see everything.
-- **Things move by themselves.** Stores accept and prepare orders automatically. An order nobody has taken 30 seconds
+- **Things move by themselves.** Stores accept and prepare orders automatically (unless the store's merchant app is open). An order nobody has taken 30 seconds
   after the store accepts it is offered automatically. Couriers without the app open are simulated, as are couriers'
   positions when a phone shares no GPS.
 - **Cleanup.** Delivered and cancelled orders disappear two days after they end. Ops can restart the demo from

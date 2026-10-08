@@ -5,11 +5,12 @@
 //   back office  http://localhost:5191   (cd back-office && npm run dev)
 //   courier app  http://localhost:8091   (Expo web, courier session)
 //   customer app http://localhost:8090   (Expo web, customer session)
+//   merchant app http://localhost:8092   (optional; store tablet, courier session; without it the stand-in plays the store)
 //
 // CUSTOMER=api skips the customer app and places the same order with the POST the app sends.
 // Screenshots of every step land in e2e/out/.
 //
-// Usage: node run.mjs        Env: CHROME (browser path), HEADED=1 to watch, CUSTOMER=api|ui.
+// Usage: node run.mjs        Env: CHROME (browser path), HEADED=1 to watch, CUSTOMER=api|ui, MERCHANT_URL.
 import { chromium } from 'playwright-core';
 import { mkdirSync, rmSync } from 'node:fs';
 
@@ -17,6 +18,10 @@ const API = process.env.API_URL || 'http://localhost:5190/api';
 const BACK_OFFICE = process.env.BACK_OFFICE_URL || 'http://localhost:5191';
 const COURIER_APP = process.env.COURIER_URL || 'http://localhost:8091';
 const CUSTOMER_APP = process.env.CUSTOMER_URL || 'http://localhost:8090';
+// The merchant app (store tablet). Optional: when it isn't served, the stand-in merchant plays Dar Zitoun as before.
+const MERCHANT_APP = process.env.MERCHANT_URL || 'http://localhost:8092';
+/** Dar Zitoun's staff account (MERCHANT_STAFF ms1), typed as local digits. */
+const MERCHANT = { phone: '600001101', prepMin: 10 };
 const CUSTOMER_MODE = process.env.CUSTOMER || 'ui';
 const OUT = new URL('./out/', import.meta.url).pathname;
 
@@ -117,11 +122,16 @@ async function customerPlacesOrder() {
   const p = pages.customer;
   const click = name => p.getByRole('button', { name, exact: typeof name === 'string' }).first().click();
   await click('Skip');
+  // "Use my location" reverse-geocodes through Photon (an outside service) on newer builds and skips the address form;
+  // when Photon is slow or down the app falls back to the form. Wait for whichever comes (up to 45 s), so the run
+  // never fails because of Photon. PHOTON=block forces the fallback.
+  if (process.env.PHOTON === 'block') await p.route(/photon\.komoot\.io/, r => r.abort());
   await click('Use my location');
-  // On web there's no reverse geocoding: newer builds ask for the street in the "Add new address" form.
   const street = p.getByPlaceholder('12 Rue de la Liberté');
   const guest = p.getByRole('button', { name: 'Continue as guest', exact: true });
-  await Promise.race([street.waitFor({ timeout: 15_000 }), guest.first().waitFor({ timeout: 15_000 })]).catch(() => {});
+  for (const end = Date.now() + 45_000; Date.now() < end; await p.waitForTimeout(250)) {
+    if (await street.isVisible().catch(() => false) || await guest.first().isVisible().catch(() => false)) break;
+  }
   if (await street.isVisible()) {
     await street.fill(CUSTOMER.street);
     await click('Save address');
@@ -165,6 +175,27 @@ try {
     const s = await getState();
     const c = s.couriers.find(c => c.id === COURIER.id);
     if (c.status !== 'idle') throw new Error(`Karim should be idle, is ${c.status}`);
+  });
+
+  await step('Dar Zitoun signs in to the merchant app (when it is served); the stand-in leaves the store to it', async () => {
+    const up = await fetch(MERCHANT_APP, { signal: AbortSignal.timeout(3000) }).then(r => r.ok, () => false);
+    if (!up) return skip(`no merchant app at ${MERCHANT_APP}: the stand-in merchant plays ${STORE.name}`);
+    const tablet = await browser.newContext({ viewport: { width: 1024, height: 768 }, hasTouch: true });
+    const p = pages.merchant = await tablet.newPage();
+    p.on('pageerror', e => errors.push(`merchant: ${e.message}`));
+    await p.goto(MERCHANT_APP, { timeout: 90_000 });
+    // It starts in French; the language choice is remembered.
+    await p.getByRole('button', { name: 'English', exact: true }).click();
+    await p.locator('#phone').fill(MERCHANT.phone);
+    await p.getByRole('button', { name: 'Send code', exact: true }).click();
+    await seen(p, 'Demo code: 123456');
+    await p.locator('.code-input').fill('123456');
+    const signIn = p.getByRole('button', { name: 'Sign in', exact: true });
+    if (await signIn.isVisible().catch(() => false)) await signIn.click();
+    await seen(p, STORE.name, 20_000);
+    for (const end = Date.now() + 10_000; !(await getState()).merchants.find(m => m.id === STORE.id)?.app; await new Promise(r => setTimeout(r, 300))) {
+      if (Date.now() > end) throw new Error('The API does not see the merchant app attached for ' + STORE.name);
+    }
   });
 
   await step('Open the back office (ops signs in), the courier app and the customer app', async () => {
@@ -234,6 +265,22 @@ try {
     }
   });
 
+  await step(`${STORE.name} accepts the order on the merchant app with a ${MERCHANT.prepMin}-minute prep time`, async () => {
+    const p = pages.merchant;
+    if (!p) return skip('no merchant app in this run: the stand-in accepts');
+    // With the app attached the stand-in (which accepts after 20 s) leaves the order to the store.
+    await waitForOrder(orderId, o => o.elapsedSec >= 23, 'older than the stand-in delay', 30_000);
+    const waiting = await getOrder(orderId);
+    if (waiting.status !== 'pending') throw new Error(`The stand-in moved ${orderId} to ${waiting.status} although the merchant app is attached`);
+    await p.getByRole('alert').filter({ hasText: orderId }).first().click();
+    await p.getByRole('button', { name: `${MERCHANT.prepMin} min`, exact: true }).click();
+    await p.getByRole('button', { name: `Accept · ${MERCHANT.prepMin} min`, exact: true }).click();
+    await seen(p, `Order accepted · ready in ${MERCHANT.prepMin} min`);
+    const o = await waitForOrder(orderId, o => o.status === 'preparing', 'accepted', 5000);
+    if (o.prepMin !== MERCHANT.prepMin || o.readyBy !== o.statusAt.preparing + MERCHANT.prepMin * 60) throw new Error(`prepMin ${o.prepMin}, readyBy ${o.readyBy}`);
+    if (pages.customer) await seen(pages.customer, 'The kitchen is on it');
+  });
+
   await step(`Ops opens ${'the order'} and offers it to Karim`, async () => {
     const p = pages.ops;
     await p.locator('.bo-scroll button', { hasText: orderId }).click();
@@ -296,7 +343,14 @@ try {
 
   await step('Karim drives to the store while the food is prepared', async () => {
     await tap(pages.courier, 'Start navigation');
-    // The stand-in merchant has the food ready 60 s after the order was placed. Karim gets there
+    if (pages.merchant) {
+      // The store marks it ready (the stand-in would wait for readyBy, 10 minutes). Reopen the order if needed.
+      const ready = pages.merchant.getByRole('button', { name: 'Mark as ready', exact: true });
+      if (!(await ready.isVisible().catch(() => false))) await pages.merchant.getByRole('button', { name: new RegExp('^Order ' + orderId) }).first().click();
+      await ready.first().tap();
+      await seen(pages.merchant, 'Marked as ready');
+    }
+    // The store (or the stand-in merchant, 60 s after the order) has the food ready. Karim gets there
     // sooner, but the courier app only registers arrival once the order is "Courier to store".
     await waitForOrder(orderId, o => o.status === 'picking', 'picking', 75_000);
     await seen(pages.ops.locator('.drawer'), 'Courier to store');

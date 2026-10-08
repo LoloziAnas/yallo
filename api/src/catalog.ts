@@ -61,6 +61,7 @@ export function cleanMerchant(body: unknown, existing?: Merchant, id?: string): 
     base.zone = b.zone as ZoneName;
   }
   if (b.area !== undefined || !existing) base.area = text(b.area, 'area', 60, { required: false }) ?? base.zone;
+  if (b.city !== undefined || !existing) base.city = text(b.city, 'city', 60, { required: false }) ?? 'Marrakech';
   if (has('address')) base.address = text(b.address, 'address', 160)!;
   if (has('phone')) base.phone = phone(b.phone);
   if (b.pos !== undefined || !existing) {

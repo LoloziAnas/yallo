@@ -213,7 +213,7 @@ export type YalloClient = ReturnType<typeof createYalloClient>;
 
 /** The editable fields of a store (rating, reviews, the open switch and the id are the server's). */
 export type MerchantInput = Pick<Merchant, 'name' | 'category' | 'address' | 'phone'> &
-  Partial<Pick<Merchant, 'cuisine' | 'kind' | 'zone' | 'area' | 'pos' | 'hours' | 'prepMin' | 'deliveryMin' | 'fee' | 'minOrder' | 'priceLevel' | 'cover'>>;
+  Partial<Pick<Merchant, 'cuisine' | 'kind' | 'zone' | 'area' | 'city' | 'pos' | 'hours' | 'prepMin' | 'deliveryMin' | 'fee' | 'minOrder' | 'priceLevel' | 'cover'>>;
 /** The editable fields of a product. */
 export type ProductInput = Pick<Product, 'merchantId' | 'name' | 'section' | 'price'> &
   Partial<Pick<Product, 'description' | 'image' | 'options' | 'popular' | 'available' | 'photoUrl'>>;
