@@ -9,6 +9,7 @@ import { Segmented } from '@/components/segmented';
 import { Txt } from '@/components/txt';
 import type { Lang } from '@/data/strings';
 import { useApp, useRtl, useT } from '@/store/app-store';
+import { confirm } from '@/utils/confirm';
 import { appVersion } from '@/utils/version';
 import { colors, radius, shadow } from '@/theme';
 
@@ -21,6 +22,8 @@ export function Profile() {
   const setNotif = useApp((s) => s.setNotif);
   const showToast = useApp((s) => s.showToast);
   const logout = useApp((s) => s.logout);
+  const deleteAccount = useApp((s) => s.deleteAccount);
+  const signedInUser = useApp((s) => !!s.token);
   const addresses = useApp((s) => s.addresses);
   const orders = useApp((s) => s.orders);
   const favStores = useApp((s) => s.favStores);
@@ -179,6 +182,27 @@ export function Profile() {
             {t.logout}
           </Txt>
         </Pressable>
+        {signedInUser && (
+          <Pressable
+            onPress={async () => {
+              if (await confirm(t.deleteQ, t.deleteQB, t.deleteOk, t.cancel)) deleteAccount();
+            }}
+            accessibilityRole="button"
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 14,
+              minHeight: 50,
+              paddingVertical: 6,
+              paddingHorizontal: 16,
+              backgroundColor: pressed ? colors.neutral100 : 'transparent',
+            })}>
+            <Icon name="trash" color={colors.neutral600} />
+            <Txt size={14} color={colors.neutral700}>
+              {t.deleteAcc}
+            </Txt>
+          </Pressable>
+        )}
         <Txt
           mono
           size={11}

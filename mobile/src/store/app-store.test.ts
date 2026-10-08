@@ -24,6 +24,7 @@ jest.mock('@/api/client', () => ({
   api: {
     setToken: jest.fn(),
     signOut: jest.fn(() => Promise.resolve()),
+    deleteAccount: jest.fn(),
     myHistory: jest.fn(),
     placeOrder: jest.fn(),
     cancelOrderAsCustomer: jest.fn(),
@@ -270,5 +271,25 @@ describe('live feed resubscription', () => {
     oldStatus(false); // the old socket's close event arrives late
     expect(s().connected).toBe(true);
     await expect(s().awaitApi()).resolves.toBe(true);
+  });
+});
+
+describe('account deletion', () => {
+  it('forgets the session and local history once the API has deleted the account', async () => {
+    useApp.setState({ token: 'tok', phone: '+212612345678', userName: 'Salma', tickets: ['T-1'] });
+    mocked.deleteAccount.mockResolvedValue({ deleted: true } as never);
+    expect(await s().deleteAccount()).toBe(true);
+    expect(s()).toMatchObject({ token: null, phone: null, userName: null, tickets: [] });
+    expect(router.replace).toHaveBeenCalledWith('/sign-in');
+  });
+
+  it('keeps everything and shows why when the API refuses (an order in progress)', async () => {
+    useApp.setState({ token: 'tok', phone: '+212612345678' });
+    const msg =
+      'Your order #48221 is still in progress. You can delete your account once it is delivered or cancelled';
+    mocked.deleteAccount.mockRejectedValue(new Error(msg));
+    expect(await s().deleteAccount()).toBe(false);
+    expect(s().token).toBe('tok');
+    expect(s().toast).toBe(msg);
   });
 });

@@ -19,7 +19,7 @@ import { useLiveOrder, withName } from '@/hooks/use-live-order';
 import { demoClock, fmt, stepTime } from '@/store/derive';
 import { colors, photoPlaceholder, radius, shadow } from '@/theme';
 
-import { arriveAtText, payLabel, statusLabels } from './order-text';
+import { arriveAtText, cancelledText, payLabel, statusLabels } from './order-text';
 import { ProgressSegments } from './progress-segments';
 import { TrackingLiveMap } from './tracking-live-map';
 import { useCatalog } from '@/hooks/use-catalog';
@@ -158,7 +158,7 @@ export function Tracking() {
               </Txt>
             </View>
             {step < 0 ? (
-              <Txt color={colors.neutral700}>{t.cancelledB}</Txt>
+              <Txt color={colors.neutral700}>{cancelledText(t, order, store.name)}</Txt>
             ) : (
               <Txt style={{ marginTop: 6 }}>{t.rate}</Txt>
             )}

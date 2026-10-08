@@ -9,7 +9,7 @@ listing) actually does. Review with whoever owns the privacy policy before submi
 |---|---|
 | Does the app collect or share any of the required user data types? | **Yes** |
 | Is all user data encrypted in transit? | **Yes** for release builds: the API is HTTPS, and `app.config.ts` only allows plain HTTP when the build's API isn't HTTPS (dev/test builds). |
-| Do you provide a way for users to request that their data be deleted? | **Not yet — must be added before submission** (see "Gaps"). |
+| Do you provide a way for users to request that their data be deleted? | **Yes.** In the app: Profile → "Delete account" (with a confirmation). On the web: https://lolozianas.github.io/yallo/delete-account/ . The account, sessions and push tokens are deleted; past orders stay for accounting under "Deleted user", without phone, address, location, instructions or rating comment. Refused (with the reason) while an order is in progress. |
 
 ## Data collected
 
@@ -46,9 +46,7 @@ taps "Use my location"); `POST_NOTIFICATIONS`, `VIBRATE`, `WAKE_LOCK`, `RECEIVE_
 
 ## Gaps to close before submitting
 
-1. **Account deletion** — Play requires an in-app way *and* a web link to request deletion of an account and its
-   data. Today "Log out" only clears the device. Needs: an API endpoint (yallo-ea) and a "Delete my account" row in
-   Profile, plus a web page or form for the link.
+1. ~~Account deletion~~ — done: Profile → "Delete account" and the public page above.
 2. **Privacy policy URL** — the in-app Privacy page is draft text. Play needs a public URL (e.g. on GitHub Pages
    next to the demo) with the final policy covering the table above.
 3. **Retention** — say how long orders, chats and tickets are kept (the demo deletes finished orders after 2 days;

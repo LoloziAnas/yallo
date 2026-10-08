@@ -21,6 +21,7 @@ import { api, getApiUrl, onApiUrlChange } from '@/api/client';
 import { zoneForDistrict } from '@/location/zones';
 import { type HelpTopic, helpTopics } from '@/data/help';
 import { DEMO_ADDRESS, isServed } from '@/location/area';
+import { cancelledText } from '@/screens/tracking/order-text';
 import { locate } from '@/location/locate';
 import { getPushToken, notifyLocally, setUpNotifications } from '@/notifications';
 
@@ -106,7 +107,9 @@ function alertStatus(s: State, o: ApiOrder) {
   const was = s.live?.orders.find((x) => x.id === o.id);
   if (was && customerStep(was.status) === step) return;
   if (step < 0) {
-    if (o.cancelledBy !== 'customer') notifyLocally(tx.cancelledT, tx.cancelledB);
+    if (o.cancelledBy !== 'customer') {
+      notifyLocally(tx.cancelledT, cancelledText(tx, o, storeById[o.merchantId]?.name));
+    }
     return;
   }
   const courier = s.live?.couriers.find((c) => c.id === o.courierId);
@@ -218,6 +221,8 @@ type Actions = {
   /** Stores an OTP sign-in (the API client already holds the token). */
   signIn: (session: AuthSession) => void;
   logout: () => void;
+  /** Deletes the account on the API, then forgets the session and local history. False (toast) when refused. */
+  deleteAccount: () => Promise<boolean>;
   retryHome: () => void;
   /**
    * Resolves true once the API is reachable (now, or after it wakes up), false if it still isn't after
@@ -464,6 +469,22 @@ export const useApp = create<State & Actions>()(
         set({ ...userDefaults(), pushToken: null });
         router.dismissAll();
         router.replace('/sign-in');
+      },
+
+      deleteAccount: async () => {
+        try {
+          await api.deleteAccount();
+        } catch (e) {
+          // 409 while an order is in progress: the API's message says so.
+          get().showToast(e instanceof Error && e.message ? e.message : t().deleteFailed);
+          return false;
+        }
+        // The client has dropped its token; forget everything personal here too (language stays).
+        set({ ...userDefaults(), pushToken: null });
+        router.dismissAll();
+        router.replace('/sign-in');
+        get().showToast(t().deleted);
+        return true;
       },
 
       retryHome: () => {
