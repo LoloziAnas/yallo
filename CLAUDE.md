@@ -145,6 +145,11 @@ back office deploy with `deploy/prepare.sh` (builds the commit into `.deploy/<sh
     `/api/products/:id/available {available}` for its own store. A merchant app subscribes with `{ merchantId }`
     (`?merchant=`), which sets `merchant.app`; the stand-in merchant only plays stores without one, and keeps to
     `readyBy`. Orders may carry `kitchenNote` (≤ 300) for the kitchen.
+  - Account deletion (Play Store): `/api/me/delete` (`deleteAccount()`) for the signed-in customer or courier, and
+    `/api/accounts/delete {role, phone}` (ops, on request). Names become "Deleted user"/"Deleted courier"; phone,
+    addresses, GPS, notes and rating comments go; orders stay without them; sessions end; the number is free again.
+    409 with the reason during an order in progress, or for a courier with a pending offer or cash held. Public page:
+    `deploy/pages/delete-account/` (https://lolozianas.github.io/yallo/delete-account/).
   - Order chat: `/api/orders/:n/messages {text}` from the order's customer, assigned courier or ops, while the order is
     active. Messages are on `order.chat` ({ from, author, text, at }) and push to the other side.
   - `/api/merchants/:id/open {open}`, `/api/couriers/:id/suspend {suspended}`,

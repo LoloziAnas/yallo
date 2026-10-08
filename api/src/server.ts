@@ -106,6 +106,9 @@ const ROUTES: [string, RegExp, Rule, Handler][] = [
   ['POST', /^\/api\/orders\/(\d+)\/refund$/, ops, (s, [id], b) => (s.refundOrder(id, b?.amount, b?.reason), s.state)],
   ['POST', /^\/api\/merchants\/([\w-]+)\/open$/, selfStore, (s, [id], b) => (s.setMerchantOpen(id, b?.open), s.state)],
   // The catalogue (v1): stores, products and option sets, edited by ops. Creates return the new record; edits the state.
+  // Account deletion (Play Store): the signed-in customer or courier deletes their own account.
+  ['POST', /^\/api\/me\/delete$/, signedIn, (s, _, __, ctx) => s.deleteAccount(ctx.user)],
+  ['POST', /^\/api\/accounts\/delete$/, ops, (s, _, b) => s.deleteAccountByPhone(b?.role, b?.phone)],
   ['GET', /^\/api\/catalog$/, anyone, s => s.catalog],
   ['POST', /^\/api\/merchants$/, ops, (s, _, b) => s.createMerchant(b)],
   ['POST', /^\/api\/merchants\/([\w-]+)$/, ops, (s, [id], b) => (s.updateMerchant(id, b), s.state)],

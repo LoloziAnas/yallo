@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import WsClient from 'ws';
 import type { AddressInfo } from 'node:net';
 import { createYalloClient, type LiveState, type YalloClient } from '@yallo/shared';
-import { COURIERS, PRODUCTS, OPTION_GROUPS, ZONES, catalogOf, DEMO_TESTER_COURIERS, clockAt, dateAt, DEV_OTP_CODE, DEV_TOKENS, DISPATCH_RADIUS_KM, GEO_ANCHOR, GPS_STALE_SEC, geoToMap, mapToGeo, OFFER_SEC, courierPayFor, normalizePhone, pickupKm, tripKm } from '@yallo/shared';
+import { ACTIVE_STATUSES, courierEarnings, COURIERS, PRODUCTS, OPTION_GROUPS, ZONES, catalogOf, DEMO_TESTER_COURIERS, clockAt, dateAt, DEV_OTP_CODE, DEV_TOKENS, DISPATCH_RADIUS_KM, GEO_ANCHOR, GPS_STALE_SEC, geoToMap, mapToGeo, OFFER_SEC, courierPayFor, normalizePhone, pickupKm, tripKm } from '@yallo/shared';
 import { ActionError, AUTO_ACCEPT_SEC, AUTO_READY_SEC, PRUNE_FINISHED_SEC, STAND_IN_ACCEPT_SEC, STATE_VERSION, Store, type SavedState } from '../src/store';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -1679,6 +1679,84 @@ describe('Production profile (v1)', () => {
       assert.equal((await ws('?auth=1', 'hello')).closed, 4400);
       const legacy = await ws('?token=dev-ops');
       assert.equal(legacy.state!.orders.length, 16, 'the ops view through ?token=');
+    } finally {
+      a.http.closeAllConnections();
+      await new Promise<void>(r => a.http.close(() => r()));
+    }
+  });
+});
+
+describe('Account deletion (v1)', () => {
+  const salma = { merchantId: 'm1', customerName: 'Salma Bennani', zone: 'Guéliz' as const, pay: 'cash' as const, items: [{ productId: 'p1-6', qty: 2 }],
+    customerPhone: '0612345678', instructions: 'Blue door', address: { label: 'Home', street: '10 Rue Sourya', district: 'Guéliz', city: 'Marrakech' } };
+
+  test('a customer: refused during an order, then personal data goes, orders stay, sessions end, the number is free', () => {
+    const s = new Store();
+    s.requestOtp('0612345678', 'customer');
+    const { token, user } = s.verifyOtp('0612345678', DEV_OTP_CODE, 'Salma');
+    const o = s.placeOrder(salma, user);
+    s.sendOrderMessage(o.id, 'Third floor please', user);
+    assert.throws(() => s.deleteAccount(user), (e: ActionError) => e.status === 409 && /in progress/.test(e.message));
+    s.cancelOrderAsCustomer(o.id, user);
+    s.openTicket({ source: 'customer', requesterName: 'Salma', subject: 'Refund?', text: 'Call me on 0612345678', orderId: o.id } as never, user);
+    assert.deepEqual(s.deleteAccount(user), { deleted: true });
+    const kept = order(s, o.id);
+    assert.equal(kept.total > 0 && kept.status === 'cancelled', true, 'the order record stays');
+    assert.deepEqual([kept.customerName, kept.customerId, kept.customerPhone, kept.address, kept.instructions], ['Deleted user', undefined, undefined, undefined, undefined]);
+    assert.equal(kept.chat!.find(m => m.from === 'customer')!.author, 'Deleted user');
+    const tk = s.state.tickets[0];
+    assert.deepEqual([tk.requesterName, tk.requesterId, tk.messages[0].author], ['Deleted user', undefined, 'Deleted user']);
+    assert.equal(s.userForToken(token), undefined, 'signed out everywhere');
+    s.requestOtp('0612345678', 'customer');
+    assert.notEqual(s.verifyOtp('0612345678', DEV_OTP_CODE).user.id, user.id, 'the number starts a new account');
+  });
+
+  test('a courier: refused with a job, an offer or cash held; then anonymised and unable to sign in', () => {
+    const s = new Store();
+    const karim = { id: 'c1', role: 'courier' as const, phone: '+212661234578', courierId: 'c1' };
+    assert.throws(() => s.deleteAccount(karim), /on a delivery/);
+    s.unassignCourier('#48213');
+    s.offerOrder('#48214', 'c1');
+    assert.throws(() => s.deleteAccount(karim), /offer/);
+    s.declineOffer('#48214', 'c1');
+    const cash = courierEarnings(s.state.orders, 'c1').cashHeld;
+    if (cash > 0) assert.throws(() => s.deleteAccount(karim), /cash/);
+    else {
+      s.deleteAccount(karim);
+      const c = courier(s, 'c1');
+      assert.deepEqual([c.name, c.phone, c.suspended, c.status], ['Deleted courier', '', true, 'off']);
+      assert.throws(() => s.requestOtp('0661234578', 'courier'), /No courier account/);
+    }
+  });
+
+  test('a courier holding cash is refused with the amount', () => {
+    const s = new Store();
+    const held = s.state.couriers.map(c => [c.id, courierEarnings(s.state.orders, c.id).cashHeld] as const).find(([, cash]) => cash > 0);
+    assert.ok(held, 'the seed has a courier holding cash');
+    const [id, cash] = held!;
+    s.state.orders.filter(o => o.courierId === id && ACTIVE_STATUSES.includes(o.status)).forEach(o => { o.status = 'delivered'; });
+    assert.throws(() => s.deleteAccount({ id, role: 'courier', phone: '', courierId: id }), new RegExp(`${cash} DH in cash`));
+  });
+
+  test('over HTTP: only for yourself, and ops/store accounts are refused', async () => {
+    const a = createApi({ tickMs: 0, authMode: 'enforce' });
+    await new Promise<void>(r => a.http.listen(0, '127.0.0.1', r));
+    const base = `http://127.0.0.1:${(a.http.address() as AddressInfo).port}`;
+    try {
+      await assert.rejects(createYalloClient(base).deleteAccount(), /Sign in first/);
+      await assert.rejects(createYalloClient(base, { token: 'dev-ops' }).deleteAccount(), /removed by Yallo ops/);
+      const c = createYalloClient(base);
+      await c.requestOtp('0612000999', 'customer');
+      await c.verifyOtp('0612000999', DEV_OTP_CODE);
+      assert.deepEqual(await c.deleteAccount(), { deleted: true });
+      assert.equal(c.token, undefined);
+      // Ops, on a request by phone or email.
+      const d = createYalloClient(base);
+      await d.requestOtp('0612000888', 'customer');
+      await d.verifyOtp('0612000888', DEV_OTP_CODE);
+      await assert.rejects(d.deleteAccountFor('customer', '0612000888'), /ops/);
+      assert.deepEqual(await createYalloClient(base, { token: 'dev-ops' }).deleteAccountFor('customer', '0612000888'), { deleted: true });
+      await assert.rejects(d.me(), /Sign in first/);
     } finally {
       a.http.closeAllConnections();
       await new Promise<void>(r => a.http.close(() => r()));

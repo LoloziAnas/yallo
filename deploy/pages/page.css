@@ -1,0 +1,22 @@
+/* Shared look for the demo's static pages (landing, account deletion, privacy). */
+:root { --bg: #faf6f0; --card: #fff; --text: #2b1f1a; --muted: #6d5f57; --accent: #d0451b; --line: #eadfd3; --warn-bg: #fff4e5; --warn-line: #f0b46a; }
+@media (prefers-color-scheme: dark) { :root { --bg: #1d1714; --card: #2a221e; --text: #f6efe8; --muted: #b9aaa0; --accent: #f06a3c; --line: #3b302a; --warn-bg: #3a2a17; --warn-line: #a86a1f; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 32px 16px 56px; }
+a { color: var(--accent); }
+h1 { font-size: 32px; line-height: 1.2; margin: 8px 0 8px; letter-spacing: -.01em; }
+h2 { font-size: 20px; margin: 32px 0 8px; }
+h3 { font-size: 16px; margin: 20px 0 4px; }
+.lead { color: var(--muted); margin: 0 0 20px; }
+.brand { font-weight: 700; letter-spacing: .06em; text-decoration: none; color: var(--text); }
+.brand span { color: var(--accent); }
+.card { padding: 16px 18px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); margin: 12px 0; }
+.draft { padding: 14px 16px; border-radius: 14px; background: var(--warn-bg); border: 1px solid var(--warn-line); font-weight: 600; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: start; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.scroll { overflow-x: auto; }
+ol, ul { padding-inline-start: 22px; }
+.todo { background: var(--warn-bg); border-radius: 4px; padding: 0 4px; }
+footer { margin-top: 40px; font-size: 13px; color: var(--muted); }

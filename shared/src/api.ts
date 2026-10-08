@@ -419,6 +419,18 @@ export function createYalloClient(baseUrl: string, opts: { token?: string; confi
     myHistory: () => call<CustomerHistory>('GET', '/me/history'),
     refundOrder: (orderId: string, amount: number, reason: string) => post(`/orders/${orderPath(orderId)}/refund`, { amount, reason }),
     setMerchantOpen: (merchantId: string, open: boolean) => post(`/merchants/${merchantId}/open`, { open }),
+    /**
+     * Deletes the signed-in customer's or courier's account: personal data removed or anonymised, order records kept
+     * without it, all sessions ended, the phone number free again. Refused (409, with the reason) during an order in
+     * progress, or for a courier with a pending offer or cash to hand in. The client forgets its token.
+     */
+    deleteAccount: async () => {
+      const r = await post<{ deleted: true }>('/me/delete');
+      token = undefined;
+      return r;
+    },
+    /** Ops: delete a customer's or courier's account on their request (same rules as deleteAccount). */
+    deleteAccountFor: (role: 'customer' | 'courier', phone: string) => post<{ deleted: true }>('/accounts/delete', { role, phone }),
     /** The catalogue (also in LiveState.catalog). */
     getCatalog: () => call<Catalog>('GET', '/catalog'),
     /** Ops: add a store (name, category, address, phone required; see api/src/catalog.ts for the fields). */

@@ -1384,6 +1384,80 @@ export class Store {
   // ---------- customers ----------
 
   /** A customer cancels their own order, only while it's new. Nothing is owed to anyone at that point. */
+  /**
+   * Deletes the signed-in customer's or courier's account (Play Store requirement). Personal data goes: the account,
+   * its sessions and push tokens; names become "Deleted user"/"Deleted courier"; phone numbers, addresses, GPS fixes,
+   * notes and rating comments are removed. Order records stay for accounting, without the personal data. The phone
+   * number is free again: signing in with it later starts a new account (couriers re-apply).
+   * Refused while the account has an order in progress, and for a courier still holding cash or a pending offer.
+   */
+  deleteAccount(by: AuthUser | undefined) {
+    if (!by) throw new ActionError('Sign in first', 401);
+    if (by.role !== 'customer' && by.role !== 'courier') throw new ActionError('Ops and store accounts are removed by Yallo ops', 403);
+    const DELETED = 'Deleted user';
+    const anonymiseChat = (o: ApiOrder, from: 'customer' | 'courier') => o.chat?.forEach(m => { if (m.from === from) m.author = DELETED; });
+    const anonymiseTickets = (requesterId: string) => this.s.tickets.filter(tk => tk.requesterId === requesterId).forEach(tk => {
+      tk.requesterName = DELETED;
+      tk.requesterMeta = tk.source === 'courier' ? 'Courier · deleted account' : 'Customer · deleted account';
+      delete tk.requesterId;
+      tk.messages.forEach(m => { if (m.from === 'requester') m.author = DELETED; });
+    });
+    if (by.role === 'customer') {
+      const mine = this.s.orders.filter(o => o.customerId === by.id);
+      const active = mine.find(o => isActive(o.status));
+      if (active) throw new ActionError(`Your order ${active.id} is still in progress. You can delete your account once it's delivered or cancelled`, 409);
+      for (const o of mine) {
+        o.customerName = DELETED;
+        delete o.customerId; delete o.customerPhone; delete o.address; delete o.location; delete o.instructions; delete o.kitchenNote;
+        if (o.rating) delete o.rating.comment;
+        anonymiseChat(o, 'customer');
+      }
+      anonymiseTickets(by.id);
+      delete this.auth.pushTokens?.['customer:' + by.id];
+    } else {
+      const c = this.courier(by.courierId!);
+      const active = this.s.orders.find(o => o.courierId === c.id && isActive(o.status));
+      if (active) throw new ActionError(`You're on a delivery (${active.id}). Finish it before deleting your account`, 409);
+      if (this.pendingOfferFor(c.id)) throw new ActionError('You have a job offer waiting. Answer it before deleting your account', 409);
+      const cash = courierEarnings(this.s.orders, c.id).cashHeld;
+      if (cash > 0) throw new ActionError(`You still hold ${cash} DH in cash. Hand it in to Yallo before deleting your account`, 409);
+      const phone = normalizePhone(c.phone);
+      Object.assign(c, { name: 'Deleted courier', phone: '', status: 'off', suspended: true, docsNote: 'Account deleted' });
+      delete c.onlineSince; delete c.lastFixAt;
+      this.s.orders.filter(o => o.courierId === c.id).forEach(o => anonymiseChat(o, 'courier'));
+      this.s.payouts.lines.filter(l => l.kind === 'courier' && l.partyId === c.id).forEach(l => { l.name = 'Deleted courier'; });
+      for (const a of this.s.applications) {
+        if (a.courierId === c.id || (phone && normalizePhone(a.phone) === phone)) Object.assign(a, { name: DELETED, phone: '', plate: undefined });
+      }
+      anonymiseTickets(c.id);
+      delete this.auth.pushTokens?.['courier:' + c.id];
+    }
+    const ids = new Set(this.auth.users.filter(u => u.id === by.id && u.role === by.role).map(u => u.id));
+    this.auth.users = this.auth.users.filter(u => !(u.id === by.id && u.role === by.role));
+    this.auth.sessions = this.auth.sessions.filter(x => !ids.has(x.userId) && x.userId !== by.id);
+    this.otps.delete(by.phone);
+    this.changed();
+    this.flush();
+    return { deleted: true as const };
+  }
+
+  /** Ops deleting an account on the person's request (the deletion web page's "without the app" route). */
+  deleteAccountByPhone(role: unknown, rawPhone: unknown) {
+    const phone = normalizePhone(String(rawPhone ?? ''));
+    if (!phone) throw new ActionError('Enter a valid phone number');
+    if (role === 'customer') {
+      const u = this.auth.users.find(u => u.role === 'customer' && u.phone === phone);
+      if (!u) throw new ActionError('No customer account for this number', 404);
+      return this.deleteAccount(u);
+    }
+    if (role === 'courier') {
+      const c = this.courierByPhone(phone);
+      if (!c) throw new ActionError('No courier account for this number', 404);
+      return this.deleteAccount({ id: c.id, role: 'courier', phone, courierId: c.id });
+    }
+    throw new ActionError("role must be 'customer' or 'courier'");
+  }
+
   cancelOrderAsCustomer(orderId: string, by?: AuthUser) {
     const o = this.order(orderId);
     if (by?.role === 'customer' && o.customerId !== by.id) throw new ActionError('This is not your order', 403);

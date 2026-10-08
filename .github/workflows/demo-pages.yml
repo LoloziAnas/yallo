@@ -88,7 +88,7 @@ jobs:
               [ -f "$dir/index.html" ] || { echo "::warning::$name built no index.html; keeping the published one"; continue; }
               rm -rf "site/$name" && cp -r "$dir" "site/$name"
             done
-            cp deploy/pages/index.html deploy/pages/404.html site/
+            cp -r deploy/pages/. site/   # landing, 404, page.css, delete-account/, privacy/
             touch site/.nojekyll
             git -C site add -A
             if git -C site diff --cached --quiet; then echo "nothing changed"; exit 0; fi
