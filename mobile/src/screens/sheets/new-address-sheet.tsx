@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Button } from '@/components/button';
@@ -10,14 +10,13 @@ import { Segmented } from '@/components/segmented';
 import { Sheet } from '@/components/sheet';
 import { TextField } from '@/components/text-field';
 import { Txt } from '@/components/txt';
+import { isServed, servedCities } from '@/location/area';
 import { nearestZone } from '@/location/locate';
 import { zoneForDistrict } from '@/location/zones';
 import { useApp, useT } from '@/store/app-store';
 import { colors, radius } from '@/theme';
 
 import { useAddressSearch } from './use-address-search';
-
-const cities = ['Marrakech', 'Casablanca', 'Rabat'] as const;
 
 const empty = {
   label: '',
@@ -33,7 +32,13 @@ export function NewAddressSheet() {
   const t = useT();
   // Set when "Use my location" opened this form: it couldn't locate the device, or found the
   // place but no street (then the fields start from the GPS fix and the pin is kept).
-  const { reason } = useLocalSearchParams<{ reason?: 'denied' | 'unavailable' | 'needsStreet' }>();
+  const { reason } = useLocalSearchParams<{
+    reason?: 'denied' | 'unavailable' | 'needsStreet' | 'outside';
+  }>();
+  // Only cities that have stores (from the live data; Marrakech today).
+  const merchants = useApp((s) => s.live?.merchants);
+  const cities = useMemo(() => servedCities(merchants), [merchants]);
+  const pickDemoAddress = useApp((s) => s.pickDemoAddress);
   const saveAddress = useApp((s) => s.saveAddress);
   const saveLocated = useApp((s) => s.saveLocated);
   const draft = useApp((s) => (reason === 'needsStreet' ? s.locDraft : null));
@@ -51,7 +56,6 @@ export function NewAddressSheet() {
     value: na[k],
     onChangeText: (v: string) => setNa((x) => ({ ...x, [k]: v })),
   });
-  const invalid = !na.district.trim() || !na.street.trim();
   // Where the address is: the GPS fix, a search result, or a tap on the map.
   const [pin, setPin] = useState<LngLat | null>(() =>
     draft?.lat !== undefined && draft?.lon !== undefined ? [draft.lon, draft.lat] : null,
@@ -60,6 +64,10 @@ export function NewAddressSheet() {
   const [notFound, setNotFound] = useState(false);
   const near = pin ? { lat: pin[1], lon: pin[0] } : { lat: MARRAKECH[1], lon: MARRAKECH[0] };
   const search = useAddressSearch(near);
+  // A point outside the delivery area can't be saved: the banner offers the demo address instead.
+  const pinOutside = pin ? !isServed(pin[1], pin[0]) : false;
+  const outside = reason === 'outside' || pinOutside;
+  const invalid = !na.district.trim() || !na.street.trim() || pinOutside;
 
   /** Fills the fields from a found place (street, neighbourhood, city when served). */
   const fill = (p: { street: string; district: string; city: string }) =>
@@ -96,26 +104,56 @@ export function NewAddressSheet() {
 
   return (
     <Sheet scroll>
-      {reason && (
+      {outside ? (
         <View
+          accessibilityRole="alert"
           style={{
-            flexDirection: 'row',
-            alignItems: 'center',
             gap: 10,
             padding: 12,
             marginBottom: 12,
             borderRadius: 14,
             backgroundColor: colors.accent100,
           }}>
-          <Icon name="nav" size={15} color={colors.accent700} />
-          <Txt size={13} color={colors.accent800} style={{ flex: 1 }}>
-            {reason === 'needsStreet'
-              ? t.locNeedStreet.replace('%s', draft?.district || draft?.city || '…')
-              : reason === 'denied'
-                ? t.locDenied
-                : t.locFailed}
-          </Txt>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Icon name="pin" size={15} color={colors.accent700} />
+            <Txt size={13} color={colors.accent800} style={{ flex: 1 }}>
+              {t.outsideArea.replace('%s', cities.join(', '))}
+            </Txt>
+          </View>
+          <Button
+            variant="secondary"
+            label={t.useDemoAddr}
+            fontSize={15}
+            onPress={() => {
+              pickDemoAddress();
+              router.back();
+              if (!useApp.getState().signedIn) router.push('/sign-in');
+            }}
+            style={{ height: 44 }}
+          />
         </View>
+      ) : (
+        reason && (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              padding: 12,
+              marginBottom: 12,
+              borderRadius: 14,
+              backgroundColor: colors.accent100,
+            }}>
+            <Icon name="nav" size={15} color={colors.accent700} />
+            <Txt size={13} color={colors.accent800} style={{ flex: 1 }}>
+              {reason === 'needsStreet'
+                ? t.locNeedStreet.replace('%s', draft?.district || draft?.city || '…')
+                : reason === 'denied'
+                  ? t.locDenied
+                  : t.locFailed}
+            </Txt>
+          </View>
+        )
       )}
       <Txt heading size={27} style={{ marginBottom: 12 }}>
         {t.addNew}
@@ -192,7 +230,7 @@ export function NewAddressSheet() {
           </Txt>
           <Segmented
             options={cities.map((c) => ({ value: c, label: c }))}
-            value={na.city as (typeof cities)[number]}
+            value={na.city}
             onChange={(city) => setNa((x) => ({ ...x, city }))}
             padV={8}
             padH={14}

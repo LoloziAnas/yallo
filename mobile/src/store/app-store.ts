@@ -19,6 +19,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { api, getApiUrl, onApiUrlChange } from '@/api/client';
 import { zoneForDistrict } from '@/location/zones';
 import { type HelpTopic, helpTopics } from '@/data/help';
+import { DEMO_ADDRESS, isServed } from '@/location/area';
 import { locate } from '@/location/locate';
 import { getPushToken, notifyLocally, setUpNotifications } from '@/notifications';
 
@@ -251,7 +252,9 @@ type Actions = {
    * Locates the device and selects that as the delivery address ("Current location").
    * Otherwise resolves with why not, for the address form to explain.
    */
-  locateMe: () => Promise<'ok' | 'needsStreet' | 'denied' | 'unavailable'>;
+  locateMe: () => Promise<'ok' | 'needsStreet' | 'outside' | 'denied' | 'unavailable'>;
+  /** Selects the demo address in Marrakech (for someone outside the delivery area). */
+  pickDemoAddress: () => void;
   /** Saves the located address once the customer has added the street (see `locDraft`). */
   saveLocated: (
     fields: Pick<Address, 'label' | 'street' | 'building' | 'landmark'> &
@@ -796,6 +799,14 @@ export const useApp = create<State & Actions>()(
         }));
       },
 
+      pickDemoAddress: () => {
+        const demo: Address = { ...DEMO_ADDRESS, id: 'demo', label: t().demoAddr };
+        set((s) => ({
+          addresses: [...s.addresses.filter((a) => a.id !== 'demo'), demo],
+          addrId: 'demo',
+        }));
+      },
+
       saveLocated: (fields) => {
         const draft = get().locDraft;
         if (!draft) return;
@@ -815,6 +826,14 @@ export const useApp = create<State & Actions>()(
       locateMe: async () => {
         const r = await locate();
         if (!r.ok) return r.reason;
+        // Abroad or far from Marrakech: don't make an address there (the form offers the demo address).
+        if (
+          r.address.lat !== undefined &&
+          r.address.lon !== undefined &&
+          !isServed(r.address.lat, r.address.lon)
+        ) {
+          return 'outside';
+        }
         // Never use raw coordinates as the street: ask for it, keeping the pin and zone.
         if (!r.address.street) {
           set({ locDraft: r.address });
