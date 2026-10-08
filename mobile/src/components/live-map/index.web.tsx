@@ -66,7 +66,13 @@ function WebMap({
       interactive,
       attributionControl: { compact: true },
     });
-    m.on('load', () => setLoaded(true));
+    m.on('load', () => {
+      setLoaded(true);
+      // Compact attribution starts expanded; fold it to its ⓘ button so it doesn't cover a small map.
+      box.current
+        ?.querySelector('.maplibregl-ctrl-attrib.maplibregl-compact-show')
+        ?.classList.remove('maplibregl-compact-show');
+    });
     m.on('click', (e: maplibregl.MapMouseEvent) =>
       onPressRef.current?.([e.lngLat.lng, e.lngLat.lat]),
     );

@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Icon } from '@/components/icon';
@@ -10,8 +10,12 @@ import { Segmented } from '@/components/segmented';
 import { Sheet } from '@/components/sheet';
 import { TextField } from '@/components/text-field';
 import { Txt } from '@/components/txt';
+import { nearestZone } from '@/location/locate';
+import { zoneForDistrict } from '@/location/zones';
 import { useApp, useT } from '@/store/app-store';
-import { colors } from '@/theme';
+import { colors, radius } from '@/theme';
+
+import { useAddressSearch } from './use-address-search';
 
 const cities = ['Marrakech', 'Casablanca', 'Rabat'] as const;
 
@@ -48,12 +52,44 @@ export function NewAddressSheet() {
     onChangeText: (v: string) => setNa((x) => ({ ...x, [k]: v })),
   });
   const invalid = !na.district.trim() || !na.street.trim();
-  const pin: LngLat | null =
-    draft?.lat !== undefined && draft?.lon !== undefined ? [draft.lon, draft.lat] : null;
+  // Where the address is: the GPS fix, a search result, or a tap on the map.
+  const [pin, setPin] = useState<LngLat | null>(() =>
+    draft?.lat !== undefined && draft?.lon !== undefined ? [draft.lon, draft.lat] : null,
+  );
+  const [lookingUp, setLookingUp] = useState(false);
+  const [notFound, setNotFound] = useState(false);
+  const near = pin ? { lat: pin[1], lon: pin[0] } : { lat: MARRAKECH[1], lon: MARRAKECH[0] };
+  const search = useAddressSearch(near);
+
+  /** Fills the fields from a found place (street, neighbourhood, city when served). */
+  const fill = (p: { street: string; district: string; city: string }) =>
+    setNa((x) => ({
+      ...x,
+      street: p.street || x.street,
+      district: p.district || x.district,
+      city: cities.find((c) => c === p.city) ?? x.city,
+    }));
+
+  const dropPin = async (at: LngLat) => {
+    setPin(at);
+    setNotFound(false);
+    setLookingUp(true);
+    const place = await search.reverse(at[1], at[0]);
+    setLookingUp(false);
+    if (place?.street) fill(place);
+    else setNotFound(true);
+  };
 
   const save = () => {
-    if (draft) saveLocated(na);
-    else saveAddress(na);
+    const where = pin
+      ? {
+          lat: pin[1],
+          lon: pin[0],
+          zone: nearestZone(pin[1], pin[0]) ?? zoneForDistrict(na.district),
+        }
+      : {};
+    if (draft) saveLocated({ ...na, ...where });
+    else saveAddress({ ...na, ...where });
     router.back();
     if (!useApp.getState().signedIn) router.push('/sign-in');
   };
@@ -84,14 +120,71 @@ export function NewAddressSheet() {
       <Txt heading size={27} style={{ marginBottom: 12 }}>
         {t.addNew}
       </Txt>
-      {/* Where the address is: the GPS fix when "Use my location" found one, else the city. */}
-      <View style={{ height: 170, marginBottom: 14, borderRadius: 14, overflow: 'hidden' }}>
+      <TextField
+        value={search.query}
+        onChangeText={search.setQuery}
+        placeholder={t.searchAddr}
+        accessibilityLabel={t.searchAddr}
+        autoCorrect={false}
+      />
+      {search.searching && (
+        <Txt size={12} color={colors.neutral600} style={{ marginTop: 6 }}>
+          {t.searching}
+        </Txt>
+      )}
+      {search.results.length > 0 && (
+        <View
+          style={{
+            marginTop: 6,
+            borderRadius: radius.md,
+            borderWidth: 1,
+            borderColor: colors.divider,
+            backgroundColor: colors.card,
+            overflow: 'hidden',
+          }}>
+          {search.results.map((p, i) => (
+            <Pressable
+              key={`${p.lat},${p.lon},${i}`}
+              accessibilityRole="button"
+              onPress={() => {
+                setPin([p.lon, p.lat]);
+                setNotFound(false);
+                fill(p);
+                search.clear();
+              }}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+                paddingVertical: 11,
+                paddingHorizontal: 12,
+                borderTopWidth: i ? 1 : 0,
+                borderTopColor: colors.divider,
+                backgroundColor: pressed ? colors.neutral100 : 'transparent',
+              })}>
+              <Icon name="pin" size={15} color={colors.accent} />
+              <Txt size={14} style={{ flex: 1 }} numberOfLines={2}>
+                {p.label}
+              </Txt>
+            </Pressable>
+          ))}
+        </View>
+      )}
+      {/* Where the address is. Tap the map to move the pin; the street fills in from it. */}
+      <View style={{ height: 180, marginTop: 10, borderRadius: 14, overflow: 'hidden' }}>
         <LiveMap
           pins={pin ? [{ id: 'home', kind: 'home', lngLat: pin }] : []}
           center={pin ?? MARRAKECH}
           zoom={pin ? 16 : 12}
+          onPress={dropPin}
         />
       </View>
+      <Txt
+        size={12}
+        color={notFound ? colors.accent700 : colors.neutral600}
+        style={{ marginTop: 6, marginBottom: 14 }}>
+        {lookingUp ? t.searching : notFound ? t.noPlace : t.pinHint}
+      </Txt>
       <View style={{ gap: 12 }}>
         <View style={{ gap: 6 }}>
           <Txt size={12} w={600} color={colors.neutral700}>

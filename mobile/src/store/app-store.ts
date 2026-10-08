@@ -253,7 +253,10 @@ type Actions = {
    */
   locateMe: () => Promise<'ok' | 'needsStreet' | 'denied' | 'unavailable'>;
   /** Saves the located address once the customer has added the street (see `locDraft`). */
-  saveLocated: (fields: Pick<Address, 'label' | 'street' | 'building' | 'landmark'>) => void;
+  saveLocated: (
+    fields: Pick<Address, 'label' | 'street' | 'building' | 'landmark'> &
+      Partial<Pick<Address, 'district' | 'city' | 'lat' | 'lon' | 'zone'>>,
+  ) => void;
 };
 
 /**

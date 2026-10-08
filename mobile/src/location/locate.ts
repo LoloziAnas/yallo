@@ -4,6 +4,7 @@ import * as Location from 'expo-location';
 import { Platform } from 'react-native';
 
 import type { Address } from '@/data/catalog';
+import { photon } from '@/location/geocoder';
 
 /**
  * Approximate real-world centres of the shared delivery zones, used to pick the zone for a GPS fix.
@@ -57,13 +58,13 @@ async function currentFix() {
 }
 
 export type LocateResult =
-  | { ok: true; address: Omit<Address, 'id' | 'label'> }
+  | { ok: true; address: Omit<Address, 'id' | 'label'>; countryCode?: string }
   | { ok: false; reason: 'denied' | 'unavailable' };
 
 /**
- * Asks for location permission, reads a GPS fix and reverse-geocodes it into an address.
- * Reverse geocoding isn't available on web (or may fail offline); the address then names the
- * nearest delivery zone and the street is left for the rider's instructions.
+ * Asks for location permission, reads a GPS fix and reverse-geocodes it into an address: with the platform's
+ * geocoder on Android/iOS, and with the address-search provider (Photon) on web or when the platform finds no
+ * street. Offline, the address names the nearest delivery zone and the street is left for the customer.
  */
 export async function locate(): Promise<LocateResult> {
   const perm = await Location.requestForegroundPermissionsAsync().catch(() => null);
@@ -81,16 +82,32 @@ export async function locate(): Promise<LocateResult> {
           .then((r) => r[0] ?? null)
           .catch(() => null);
   const zone = nearestZone(latitude, longitude);
-
-  // No street name (web, or the geocoder had none): left empty for the customer to type in.
-  const street =
+  let street =
     (place && ([place.streetNumber, place.street].filter(Boolean).join(' ') || place.name)) || '';
+  let district = place?.district ?? '';
+  let city = place?.city ?? place?.region ?? '';
+  let countryCode = place?.isoCountryCode ?? undefined;
+  // Web, or no street from the platform: ask the address-search provider.
+  if (!street) {
+    const p = await photon()
+      .reverse(latitude, longitude)
+      .catch(() => null);
+    if (p) {
+      street = p.street;
+      district ||= p.district;
+      city ||= p.city;
+      countryCode ??= p.countryCode;
+    }
+  }
+
+  // Still no street name: left empty for the customer to type in (never the raw coordinates).
   return {
     ok: true,
+    ...(countryCode ? { countryCode } : {}),
     address: {
-      city: place?.city ?? place?.region ?? (zone ? 'Marrakech' : ''),
+      city: city || (zone ? 'Marrakech' : ''),
       // A named neighbourhood, else the matched delivery zone, else the wider area.
-      district: place?.district ?? zone ?? place?.subregion ?? '',
+      district: district || zone || place?.subregion || '',
       street,
       building: '',
       landmark: '',
