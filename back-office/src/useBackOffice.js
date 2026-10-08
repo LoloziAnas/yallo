@@ -59,6 +59,19 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
       if (/^Sign in first/.test(err.message)) onSignOut?.();
       else toast(err.message);
     });
+  // For the store and menu editors, which keep their own form state: sends a request, applies a returned snapshot,
+  // and resolves with the response (a create returns the new record), or rejects with the reason to show by the form.
+  const run = (request, done) => {
+    if (!s.connected) return Promise.reject(new Error("Offline: can't reach the Yallo API. Try again when LIVE is back."));
+    return request().then(r => {
+      if (r && r.epoch) setState(fromLive(r));
+      if (done) toast(done);
+      return r;
+    }, err => {
+      if (/^Sign in first/.test(err.message)) onSignOut?.();
+      throw err;
+    });
+  };
   const el = o => o.el;
   const lateInfo = o => {
     const e = el(o);
@@ -288,7 +301,7 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
     oFilters, oq:s.oq, onOq:e => setState({ oq:e.target.value }), orderRows, orderRowsCount:orderRows.length, ordersEmpty:!orderRows.length,
     cTabs, cFleet:s.cTab === 'fleet', cApps:s.cTab === 'apps' && !!appCur, fleetRows, appList, app,
     approveApp:() => act(() => api.approveApplication(appCur.id), appCur.name + ' activated · they can sign in with their phone number'), rejectApp:set({ modal:'reject', reason:null }),
-    merchantRows,
+    merchantRows, rawMerchants:s.rawMerchants, catalog:s.catalog, run, api, notify:toast,
     tFilters, ticketList, tkt, macros, resolveLabel:T.resolved ? 'Resolved' : 'Resolve',
     resolveTicket:() => act(() => api.resolveTicket(T.id), T.id + ' resolved'),
     escalate:() => act(() => api.escalateTicket(T.id), T.id + ' escalated'), escalateLabel:T.escalated ? 'Escalated' : 'Escalate',

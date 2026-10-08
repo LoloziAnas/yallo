@@ -1,20 +1,47 @@
+import { useState } from 'react';
 import { Stars } from '../components/ui.jsx';
+import { MenuEditor, StoreForm } from '../components/StoreEditor.jsx';
 
 const COLS = { minWidth: 960, gridTemplateColumns: 'minmax(170px,1.5fr) 110px 100px 80px 90px 90px 80px 190px' };
 
 export default function Merchants({ v }) {
+  // The list, a new-store form ('new'), or one store's details and menu (its id).
+  const [sel, setSel] = useState(null);
+  const store = sel && sel !== 'new' ? v.rawMerchants.find(m => m.id === sel) : null;
+
+  if (sel === 'new') {
+    return (
+      <div className="page">
+        <BackLink onClick={() => setSel(null)} />
+        <StoreForm v={v} onDone={id => setSel(id)} onCancel={() => setSel(null)} />
+      </div>
+    );
+  }
+  if (store) {
+    return (
+      <div className="page">
+        <BackLink onClick={() => setSel(null)} />
+        <h2 style={{ margin: 0, fontSize: 22 }}>{store.name}</h2>
+        <StoreForm key={store.id} v={v} store={store} />
+        <MenuEditor v={v} merchantId={store.id} />
+      </div>
+    );
+  }
   return (
     <div className="page">
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button className="btn btn-primary" onClick={() => setSel('new')} style={{ height: 40 }}>Add store</button>
+      </div>
       <div className="card card-scroll">
         <div className="th" style={COLS}>
           <span>Merchant</span><span>Category</span><span>Zone</span><span>Today</span><span>Avg prep</span><span>Accept.</span><span>Rating</span><span>Status</span>
         </div>
         {v.merchantRows.map(m => (
           <div key={m.id} className="tr" style={{ ...COLS, height: 50 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <button className="btn-reset" onClick={() => setSel(m.id)} title="Edit store and menu" style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, textAlign: 'start', cursor: 'pointer' }}>
               <span className="store-ico">{v.ic.store}</span>
               <span style={{ minWidth: 0 }}><strong className="ellip" style={{ display: 'block' }}>{m.name}</strong><span className="faint" style={{ fontSize: 11 }}>{m.hoursLabel}</span></span>
-            </span>
+            </button>
             <span className="muted">{m.cat}</span><span className="muted">{m.zone}</span><span>{m.orders}</span>
             <span style={{ fontWeight: 600, color: m.prepFg }}>{m.prep} min</span><span>{m.acc === null ? '—' : m.acc + '%'}</span>
             <Stars ic={v.ic} value={m.rating} />
@@ -29,4 +56,8 @@ export default function Merchants({ v }) {
       </div>
     </div>
   );
+}
+
+function BackLink({ onClick }) {
+  return <button className="btn btn-ghost" onClick={onClick} style={{ alignSelf: 'flex-start', height: 32 }}>← All stores</button>;
 }

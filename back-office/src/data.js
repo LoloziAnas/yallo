@@ -1,6 +1,6 @@
 // Demo data for the Marrakech back office (Tuesday 6 October 2026, ~18:34, or real time on the public demo).
 
-import { ZONES as Z, MERCHANTS, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, courierEarnings } from '@yallo/shared';
+import { ZONES as Z, MERCHANTS, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, catalogOf, courierEarnings } from '@yallo/shared';
 import { acceptanceRate, merchantStats, onlineFor, todayOrders } from './metrics.js';
 
 // The shared seed holds identities, positions and orders. The ops-only figures below (volumes,
@@ -31,7 +31,7 @@ export const toBoOrder = (o, t = 0, names = SEED_NAMES) => ({ id:o.id, m:names[o
 export const fromLive = live => ({
   t:live.t,
   merchants:live.merchants.map(m => toBoMerchant(m, todayOrders(live.orders, live.t))),
-  rawOrders:live.orders, rawCouriers:live.couriers, rawTickets:live.tickets,
+  rawOrders:live.orders, rawCouriers:live.couriers, rawTickets:live.tickets, rawMerchants:live.merchants, catalog:catalogOf(live),
   couriers:live.couriers.map(c => toBoCourier(c, live.orders, live.t)),
   apps:live.applications,
   payouts:live.payouts,
