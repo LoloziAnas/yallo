@@ -43,6 +43,11 @@ const realClock = demo || (process.env.CLOCK ?? (production ? 'real' : 'demo')) 
 const timeZone = process.env.TIME_ZONE || process.env.DEMO_TIME_ZONE || 'Africa/Casablanca';
 // SMS_DRIVER: how sign-in codes are sent. Only 'log' exists so far (see src/sms.ts to add a provider).
 const sms = createSms(process.env.SMS_DRIVER || 'log');
+// Data retention (privacy policy): RETENTION_CHAT_DAYS (order chat, after the order ends) and RETENTION_LOCATION_DAYS
+// (customers' GPS on orders, after they end; offline couriers' last fix at once). Default 90 / 30 in production and
+// the demo, off otherwise; 'off' disables one.
+const days = (v: string | undefined, dflt: number | undefined) => v === 'off' ? undefined : v ? Math.max(0, Number(v)) : dflt;
+const retention = { chatDays: days(process.env.RETENTION_CHAT_DAYS, production || demo ? 90 : undefined), locationDays: days(process.env.RETENTION_LOCATION_DAYS, production || demo ? 30 : undefined) };
 // OTP_MODE=dev makes every one-time code 123456; never in production, where codes are random (logged until SMS
 // exists). The demo profile always uses 123456: there's no SMS provider and testers need a code they can type.
 const otpMode = demo || (!production && process.env.OTP_MODE !== 'random') ? 'dev' : 'random';
@@ -50,6 +55,7 @@ const otpMode = demo || (!production && process.env.OTP_MODE !== 'random') ? 'de
 const allowReset = demo || !production || process.env.ALLOW_RESET === '1';
 const store = new Store({
   file, devTokens, standInMerchant, standInOffers, otpMode, sms,
+  ...(retention.chatDays !== undefined || retention.locationDays !== undefined ? { retention } : {}),
   ...(pg ? { persist: { saved: pg.saved, save: pg.save } } : {}),
   ...(realClock ? { clock: 'real' as const, timeZone } : {}),
   ...(demo ? { enforceHours: false, standInCourier: true, autoDispatchSec: 30, testerCouriers: true } : {}),
@@ -75,6 +81,7 @@ http.listen(port, host, () => {
   console.log(`Rate limits: ${Object.keys(rateLimits).length ? 'on' : 'off'}${trustProxy ? ' (X-Forwarded-For)' : ''}`);
   console.log(`OTP codes: ${otpMode === 'dev' ? 'always 123456' : 'random, logged'}${allowReset ? '' : ' · reset disabled'}`);
   console.log(`Auth: ${authMode}${devTokens ? ', dev tokens on' : ''} · Push: ${pushMode} · SMS: ${process.env.SMS_DRIVER || 'log'}`);
+  console.log(`Retention: chat ${retention.chatDays ?? 'kept'}${retention.chatDays !== undefined ? ' days' : ''}, GPS ${retention.locationDays ?? 'kept'}${retention.locationDays !== undefined ? ' days' : ''}`);
   console.log(`Stand-ins: merchant ${standInMerchant ? 'on' : 'off'}, courier offers ${standInOffers ? 'on' : 'off'}${demo ? ', couriers and auto-dispatch on' : ''}`);
 });
 

@@ -205,6 +205,12 @@ export type StoreOptions = {
    * an offer waits for the courier's answer or expires.
    */
   standInOffers?: boolean;
+  /**
+   * Data retention (privacy policy): order chat is removed `chatDays` after the order ends; the customer's GPS fix on
+   * an order `locationDays` after it ends; an offline courier's last GPS fix is cleared (location is only kept while
+   * working). Off by default; on in production.
+   */
+  retention?: { chatDays?: number; locationDays?: number };
   /** Sends sign-in codes. Default: write them to the log. */
   sms?: SmsSender;
   /** Also seed DEMO_TESTER_COURIERS (public demo). */
@@ -260,6 +266,7 @@ export class Store {
   private readonly seedOptions: SeedOptions;
   private readonly standInCourier: boolean;
   private readonly standInOffers: boolean;
+  private readonly retention?: StoreOptions['retention'];
   private readonly sms?: SmsSender;
   private readonly autoDispatchSec?: number;
   private readonly persist?: StoreOptions['persist'];
@@ -289,6 +296,7 @@ export class Store {
     this.standIn = opts.standInMerchant ?? true;
     this.standInCourier = opts.standInCourier ?? false;
     this.standInOffers = opts.standInOffers ?? true;
+    this.retention = opts.retention;
     this.sms = opts.sms;
     this.autoDispatchSec = opts.autoDispatchSec;
     this.persist = opts.persist;
@@ -496,6 +504,7 @@ export class Store {
     if (this.standInCourier) this.playCouriers(dt);
     if (this.autoDispatchSec !== undefined) this.autoDispatch(this.autoDispatchSec);
     if (startMs !== undefined && s.t % 60 < dt) this.prune();
+    if (this.retention && s.t % 60 < dt) this.applyRetention();
     this.changed(startMs === undefined || this.signature() !== before);
   }
 
@@ -567,6 +576,29 @@ export class Store {
       o.offer = { courierId: c.id, offeredAt: s.t, expiresAt: s.t + OFFER_SEC };
       this.emit({ type: 'offer', order: o, courierId: c.id });
     }
+  }
+
+  /** The retention rules (see StoreOptions.retention). Returns what it removed, for logs and tests. */
+  applyRetention() {
+    const s = this.s, r = this.retention ?? {};
+    const endedBefore = (days: number | undefined) => (o: ApiOrder) =>
+      days !== undefined && !isActive(o.status) && (o.statusAt?.[o.status] ?? -Infinity) < s.t - days * 86400;
+    let chats = 0, fixes = 0, couriers = 0;
+    for (const o of s.orders.filter(endedBefore(r.chatDays))) if (o.chat?.length) { delete o.chat; chats++; }
+    for (const o of s.orders.filter(endedBefore(r.locationDays))) if (o.location) { delete o.location; fixes++; }
+    if (r.locationDays !== undefined) {
+      for (const c of s.couriers) {
+        if (c.status !== 'off' || c.lastFixAt === undefined) continue;
+        delete c.lastFixAt;
+        c.pos = { ...this.home(c) };
+        couriers++;
+      }
+    }
+    if (chats + fixes + couriers) {
+      console.log(`[retention] removed chat on ${chats} orders, GPS on ${fixes} orders and ${couriers} offline couriers`);
+      this.scheduleSave();
+    }
+    return { chats, fixes, couriers };
   }
 
   /** Drops finished orders PRUNE_FINISHED_SEC after they ended (real time only). */

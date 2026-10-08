@@ -1763,3 +1763,32 @@ describe('Account deletion (v1)', () => {
     }
   });
 });
+
+describe('Data retention (v1)', () => {
+  test('chat and customer GPS go N days after the order ends; offline couriers lose their last fix', () => {
+    const s = new Store({ retention: { chatDays: 90, locationDays: 30 } });
+    const o = s.placeOrder({ merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz', pay: 'cash', items: [{ productId: 'p1-6', qty: 2 }], location: { lat: 31.63, lon: -8.01 } });
+    s.sendOrderMessage(o.id, 'Blue door', { id: 'u1', role: 'customer', phone: '' }, 'customer');
+    s.cancelOrder(o.id, 'Test', false);
+    s.setCourierLocation('c2', 31.64, -8.0);
+    s.setCourierAvailability('c2', 'off');
+    assert.deepEqual(s.applyRetention(), { chats: 0, fixes: 0, couriers: 1 }, "nothing old yet; the offline courier's fix goes at once");
+    assert.equal(courier(s, 'c2').lastFixAt, undefined);
+    s.state.t += 31 * 86400;
+    assert.deepEqual(s.applyRetention(), { chats: 0, fixes: 1, couriers: 0 });
+    assert.equal(order(s, o.id).location, undefined);
+    assert.ok(order(s, o.id).chat?.length, 'chat kept until 90 days');
+    s.state.t += 60 * 86400;
+    assert.deepEqual(s.applyRetention(), { chats: 1, fixes: 0, couriers: 0 });
+    assert.equal(order(s, o.id).chat, undefined);
+    assert.equal(order(s, o.id).total > 0, true, 'the order record stays');
+  });
+
+  test('off by default', () => {
+    const s = new Store();
+    s.setCourierLocation('c2', 31.64, -8.0);
+    s.setCourierAvailability('c2', 'off');
+    tick(s, 120);
+    assert.notEqual(courier(s, 'c2').lastFixAt, undefined);
+  });
+});
