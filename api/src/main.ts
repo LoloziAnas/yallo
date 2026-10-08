@@ -21,7 +21,7 @@ const demo = process.env.DEPLOY_PROFILE === 'demo';
 const databaseUrl = process.env.DATABASE_URL;
 const file = databaseUrl || process.env.STATE_FILE === 'off' ? undefined
   : process.env.STATE_FILE || fileURLToPath(new URL(`../data/state-${port}.json`, import.meta.url));
-const pg: PgState | undefined = databaseUrl ? await openPgState(databaseUrl, process.env.STATE_KEY || 'main') : undefined;
+const pg: PgState | undefined = databaseUrl ? await openPgState(databaseUrl) : undefined;
 
 // AUTH_MODE=enforce refuses unauthorised calls and filters the live state per viewer; warn only logs.
 // Default: enforce in production, warn otherwise. Always enforced in the demo profile.
@@ -68,7 +68,7 @@ const { http } = createApi({ store, authMode, corsOrigins, allowReset, demo, lim
 
 http.listen(port, host, () => {
   console.log(`Yallo mock API on http://localhost:${port}  (live feed: ws://localhost:${port}/api/live)${demo ? '  · DEMO profile' : ''}`);
-  const where = pg ? `Postgres (row "${process.env.STATE_KEY || 'main'}")` : file;
+  const where = pg ? 'Postgres (tables, api/migrations)' : file;
   console.log(where ? `State: ${where} (epoch ${store.state.epoch}, t=${store.state.t}s)` : 'State: in memory only');
   console.log(`Clock: ${store.state.clock?.realTime ? `real time, ${store.state.clock.timeZone}` : 'demo evening from 18:34'}${store.state.clock?.enforceHours === false ? ', store hours not enforced' : ''}`);
   console.log(`CORS: ${corsOrigins ? corsOrigins.join(', ') : 'any origin'}`);

@@ -171,7 +171,10 @@ the API with `createYalloClient(lastGood, { configUrl: DEMO_API_CONFIG_URL, onBa
 the API stops answering. Everything (links, tester phones, setup, limits) is in [`docs/DEMO.md`](docs/DEMO.md). The
 demo profile: auth enforced, no dev tokens, every code 123456 (`/api/auth/otp` answers `fixedCode`; `/api/health` has
 `demo: true`), real time with every store open, stand-in merchants and couriers, auto-dispatch. `DATABASE_URL` keeps
-the state in Postgres instead of a file.
+the state in Postgres instead of a file: real tables
+(orders, couriers, merchants, products, accounts…, schema in `api/migrations/NNN_*.sql`, applied at start, never edit
+an applied one) written behind the in-memory state, only the rows that changed. `npm run db -- migrate | export |
+import` and [`docs/BACKUP.md`](docs/BACKUP.md) cover backups. The file stays the store for development and the e2e.
 
 ## Production
 

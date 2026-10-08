@@ -106,7 +106,7 @@ apps drop anything they remembered about the old data.
 | `YALLO_VERSION` | dev (or the Render commit) | shown by `GET /api/health` |
 | `DEPLOY_PROFILE` | (none) | `demo`: the public demo server (see [`DEMO.md`](DEMO.md)) |
 | `DEMO_TIME_ZONE` | Africa/Casablanca | demo profile: the clock's time zone, or a fixed offset like `+00:00` |
-| `DATABASE_URL` / `STATE_KEY` | (none) / main | keep the state in Postgres (table `yallo_state`, one row per key) instead of `STATE_FILE` |
+| `DATABASE_URL` | (none) | keep the state in Postgres tables (schema in `api/migrations/`, applied at start) instead of `STATE_FILE`; one API process per database. Backups: [`BACKUP.md`](BACKUP.md) |
 
 ### Back office (`back-office/`)
 
