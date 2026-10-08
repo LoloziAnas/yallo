@@ -61,22 +61,25 @@ function NativeMap({
         touchPitch={false}
         onPress={onPress ? (e) => onPress(e.nativeEvent.lngLat) : undefined}>
         <Camera {...camera} duration={800} easing="ease" />
-        {route && route.length > 1 && (
-          <GeoJSONSource
-            id="route"
-            data={{
-              type: 'Feature',
-              properties: {},
-              geometry: { type: 'LineString', coordinates: route },
-            }}>
-            <Layer
-              id="route-line"
-              type="line"
-              layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-              paint={{ 'line-color': colors.accent, 'line-width': 3, 'line-dasharray': [1.5, 1.5] }}
-            />
-          </GeoJSONSource>
-        )}
+        {/* Mounted from the start (empty until there's a route): a source added later didn't draw on Android. */}
+        <GeoJSONSource
+          id="route"
+          data={
+            route && route.length > 1
+              ? {
+                  type: 'Feature',
+                  properties: {},
+                  geometry: { type: 'LineString', coordinates: route },
+                }
+              : { type: 'FeatureCollection', features: [] }
+          }>
+          <Layer
+            id="route-line"
+            type="line"
+            layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+            paint={{ 'line-color': colors.accent, 'line-width': 3, 'line-dasharray': [1.5, 1.5] }}
+          />
+        </GeoJSONSource>
         {pins.map((p) => (
           <Marker key={p.id} id={p.id} lngLat={p.lngLat} anchor="center">
             <PinView kind={p.kind} />
