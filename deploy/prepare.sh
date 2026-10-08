@@ -14,5 +14,4 @@ git -C "$root" archive "$rev" shared api back-office | tar -x -C "$dir"
 (cd "$dir/back-office" && npm ci --silent --no-audit --no-fund && npx vite build --logLevel warn)
 ln -sfn "$dir" "$root/.deploy/current"
 echo "Built $rev in $dir"
-echo "Run:  (cd $root/.deploy/current/api && STATE_FILE=$root/api/data/state-5190.json npm start)"
-echo "      (cd $root/.deploy/current/back-office && npx vite preview --port 5191 --strictPort)"
+echo "Serve it on :5190/:5191: deploy/integration.sh restart   (first time: deploy/integration.sh install)"

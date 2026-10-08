@@ -36,9 +36,9 @@ Integration ports must never be served by a dev server that watches the working 
 the page under a running test. Build a commit and run from the copy:
 
 ```sh
-deploy/prepare.sh                                     # builds HEAD into .deploy/<sha>, links .deploy/current
-(cd .deploy/current/api && STATE_FILE=$PWD/../../../api/data/state-5190.json npm start)
-(cd .deploy/current/back-office && npx vite preview --port 5191 --strictPort)
+deploy/prepare.sh                 # builds HEAD into .deploy/<sha>, links .deploy/current
+deploy/integration.sh install     # once: systemd --user services yallo-int-api (:5190) and yallo-int-bo (:5191)
+deploy/integration.sh restart     # after each prepare: serve the new build (status | logs | uninstall too)
 ```
 
 The customer and courier web builds on 8090/8091 are deployed by their owners (see their READMEs).

@@ -83,9 +83,10 @@ One server holds the orders, couriers, merchants and tickets every app shares. S
 Ports 5190 (API), 5191 (back office), 8090 (customer web), 8091 (courier web) and 8092 (merchant web) are the shared integration
 environment: test changes on private ports, and restart a shared server only to deploy a commit. Never serve them
 from a dev server watching the working tree: an edit in progress reloads the page under a running e2e. The API and
-back office deploy with `deploy/prepare.sh` (builds the commit into `.deploy/<sha>`, git-ignored), then run from
-`.deploy/current`: the API with `STATE_FILE=<repo>/api/data/state-5190.json npm start`, the back office with
-`npx vite preview --port 5191`.
+back office deploy with `deploy/prepare.sh` (builds the commit into `.deploy/<sha>`, git-ignored, and points
+`.deploy/current` at it), then `deploy/integration.sh restart`. They run as systemd --user services from
+`.deploy/current` (`yallo-int-api`: enforce, state in `api/data/state-5190.json`; `yallo-int-bo`: vite preview), which
+restart by themselves after a crash or a stray kill. Don't `pkill` by pattern on this machine: kill by PID.
 
 - The live feed is `ws://HOST:5190/api/live`. Each message is `{ type: 'state', state: LiveState }`, pushed on
   every change and every second (the demo clock: timers and courier movement run on the server).
