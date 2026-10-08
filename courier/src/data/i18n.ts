@@ -272,6 +272,29 @@ const PHR: [string, string, string][] = [
     'يجمع يالو موقعك أثناء التوصيل، حتى عندما يكون التطبيق مغلقاً أو غير مستخدم، ليتمكن الزبون وفريق يالو من تتبع الطلب. يتوقف ذلك عند انتهاء التوصيل أو عند خروجك من الاتصال. في الشاشة التالية اختر «السماح طوال الوقت».',
   ],
   ['Not now', 'Plus tard', 'ليس الآن'],
+  ['Delete account', 'Supprimer le compte', 'حذف الحساب'],
+  ['Delete your account?', 'Supprimer votre compte ?', 'حذف حسابك؟'],
+  [
+    'Your name, phone number and vehicle details are deleted and you are signed out everywhere. Your past deliveries and earnings stay in our records for accounting, without your name. This can’t be undone; to deliver again you would apply again.',
+    'Votre nom, votre numéro et les informations de votre véhicule sont supprimés et vous êtes déconnecté partout. Vos livraisons et gains passés restent dans nos registres pour la comptabilité, sans votre nom. C’est définitif ; pour livrer à nouveau, il faudra postuler de nouveau.',
+    'يُحذف اسمك ورقم هاتفك ومعلومات مركبتك ويتم تسجيل خروجك من كل الأجهزة. تبقى توصيلاتك وأرباحك السابقة في سجلاتنا للمحاسبة دون اسمك. لا يمكن التراجع عن ذلك؛ للتوصيل مجدداً عليك التقديم من جديد.',
+  ],
+  ['Your account was deleted', 'Votre compte a été supprimé', 'تم حذف حسابك'],
+  [
+    "You're on a delivery ({0}). Finish it before deleting your account",
+    'Vous êtes en livraison ({0}). Terminez-la avant de supprimer votre compte',
+    'لديك توصيل جارٍ ({0}). أنهِه قبل حذف حسابك',
+  ],
+  [
+    'You have a job offer waiting. Answer it before deleting your account',
+    'Une course vous attend. Répondez avant de supprimer votre compte',
+    'لديك عرض توصيل ينتظر. أجب عليه قبل حذف حسابك',
+  ],
+  [
+    'You still hold {0} DH in cash. Hand it in to Yallo before deleting your account',
+    'Vous détenez encore {0} DH en espèces. Remettez-les à Yallo avant de supprimer votre compte',
+    'ما زلت تحمل {0} درهم نقداً. سلّمها ليالو قبل حذف حسابك',
+  ],
   ['Stop', 'Arrêter', 'إيقاف'],
   ['to', 'vers', 'إلى'],
   [

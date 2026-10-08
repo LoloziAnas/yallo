@@ -141,6 +141,20 @@ export async function registerPush() {
   if (pushToken && api) await api.registerPushToken(pushToken).catch(() => {});
 }
 
+/**
+ * Deletes the courier's account on the server (refused with the reason while on a delivery, with an offer
+ * waiting, or holding cash), then forgets the session on this phone.
+ */
+export async function deleteAccount() {
+  if (!api) throw new Error('Cannot reach the Yallo API');
+  await api.deleteAccount();
+  // The server has ended every session and forgotten the push tokens.
+  pushToken = null;
+  await storage.clear().catch(() => {});
+  useCourier.getState().logout();
+  useCourier.getState().showToast('Your account was deleted');
+}
+
 /** Ends the session on the server and on the phone; this device stops receiving the courier's pushes. */
 export async function signOut() {
   // Go offline first: a courier left online without the app would be handed jobs (the demo's

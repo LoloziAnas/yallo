@@ -1,8 +1,9 @@
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { CONFIG_URL, api, apiUrl } from '@/api/client';
-import { signOut } from '@/api/session';
+import { CONFIG_URL, api, apiUrl, errorText } from '@/api/client';
+import { deleteAccount, signOut } from '@/api/session';
 import { Btn } from '@/components/button';
 import { Icon, type IconName } from '@/components/icon';
 import { Screen, Scroll } from '@/components/screen';
@@ -255,11 +256,78 @@ export function Profile() {
           fontSize={17}
           style={{ marginTop: 6 }}
         />
+        {live && <DeleteAccount />}
         <Txt size={12} color={colors.neutral600} style={{ textAlign: 'center' }}>
           Yallo Courier {BUILD_LABEL}
         </Txt>
       </Scroll>
     </Screen>
+  );
+}
+
+/** Profile → "Delete account", with a confirmation (the public page describes exactly this path). */
+function DeleteAccount() {
+  const t = useT();
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!asking)
+    return (
+      <Btn
+        variant="ghost"
+        label={t('Delete account')}
+        color={colors.accent800}
+        fontSize={15}
+        height={44}
+        style={{ alignSelf: 'center' }}
+        onPress={() => {
+          setError(null);
+          setAsking(true);
+        }}
+      />
+    );
+  return (
+    <View style={[card, { padding: 18, gap: 12, borderWidth: 1.5, borderColor: colors.accent300 }]}>
+      <Txt size={18} weight={700}>
+        {t('Delete your account?')}
+      </Txt>
+      <Txt size={15} color={colors.neutral800}>
+        {t(
+          'Your name, phone number and vehicle details are deleted and you are signed out everywhere. Your past deliveries and earnings stay in our records for accounting, without your name. This can’t be undone; to deliver again you would apply again.',
+        )}
+      </Txt>
+      {error && (
+        <Txt size={14} weight={600} color={colors.accent700} accessibilityLiveRegion="polite">
+          {t(error)}
+        </Txt>
+      )}
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <Btn
+          variant="secondary"
+          label={t('Cancel')}
+          onPress={() => setAsking(false)}
+          height={52}
+          style={{ flex: 1 }}
+        />
+        <Btn
+          label={t('Delete account')}
+          disabled={busy}
+          height={52}
+          style={{ flex: 1.4, backgroundColor: colors.accent800 }}
+          onPress={async () => {
+            setBusy(true);
+            setError(null);
+            try {
+              await deleteAccount();
+            } catch (e) {
+              setError(errorText(e));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+      </View>
+    </View>
   );
 }
 

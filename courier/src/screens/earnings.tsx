@@ -29,8 +29,10 @@ function LiveEarnings() {
           {t('Earnings')}
         </Txt>
         <View style={styles.summary}>
+          {/* The server's finished orders are today's (it drops them after the day); the weekly
+              settlement is the payout card below, with its own date. */}
           <Txt size={14} color={colors.mint300}>
-            {payout ? t(`This week · ${payout.period}`) : t('This week')}
+            {t('Today')}
           </Txt>
           <Txt h size={48} lh={1.1} color={colors.mint100}>
             {fmt(sum.total)}{' '}
@@ -39,7 +41,7 @@ function LiveEarnings() {
             </Txt>
           </Txt>
           <Txt size={15} color={colors.mint200}>
-            {sum.jobs} {t('deliveries')}
+            {sum.jobs} {t(sum.jobs === 1 ? 'delivery' : 'deliveries')}
           </Txt>
         </View>
         <View style={[card, { paddingVertical: 8, paddingHorizontal: 20 }]}>
