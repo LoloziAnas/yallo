@@ -55,6 +55,18 @@ const statusChange: Rule = (c, params, b, s) => {
   if (assigned !== true) return assigned;
   return b?.status === 'delivering' || b?.status === 'delivered' || 'Couriers can only mark an order picked up or delivered';
 };
+const isMerchantOf = (c: Ctx, merchantId: string | undefined) => c.user?.role === 'merchant' && !!merchantId && c.user.merchantId === merchantId;
+/** The store the order belongs to (its merchant staff), or ops. */
+const orderStore: Rule = (c, [n], _, s) => {
+  if (isOps(c)) return true;
+  const o = s.state.orders.find(o => o.id === '#' + n);
+  return (!!o && isMerchantOf(c, o.merchantId)) || 'Only this store or ops can do this';
+};
+/** The store in the path (its merchant staff), or ops. */
+const selfStore: Rule = (c, [id]) => isOps(c) || isMerchantOf(c, id) || 'Only this store or ops can do this';
+/** The store selling the product in the path, or ops. */
+const productStore: Rule = (c, [id], _, s) => isOps(c) || isMerchantOf(c, s.catalog.products.find(p => p.id === id)?.merchantId) || 'Only this store or ops can do this';
+
 /** The courier in the path, acting on themself. */
 const selfCourier: Rule = (c, [id]) => isOps(c) || isCourier(c, id) || 'Couriers can only do this for themselves';
 /** Ops, or the ticket's requester writing as the requester. */
@@ -92,15 +104,21 @@ const ROUTES: [string, RegExp, Rule, Handler][] = [
   ['POST', /^\/api\/orders\/(\d+)\/messages$/, orderParty, (s, [id], b, ctx) => (s.sendOrderMessage(id, b?.text, ctx.user, ctx.enforce ? undefined : b?.from), s.state)],
   ['GET', /^\/api\/me\/history$/, signedIn, (s, _, __, ctx) => s.customerHistory(ctx.user)],
   ['POST', /^\/api\/orders\/(\d+)\/refund$/, ops, (s, [id], b) => (s.refundOrder(id, b?.amount, b?.reason), s.state)],
-  ['POST', /^\/api\/merchants\/([\w-]+)\/open$/, ops, (s, [id], b) => (s.setMerchantOpen(id, b?.open), s.state)],
+  ['POST', /^\/api\/merchants\/([\w-]+)\/open$/, selfStore, (s, [id], b) => (s.setMerchantOpen(id, b?.open), s.state)],
   // The catalogue (v1): stores, products and option sets, edited by ops. Creates return the new record; edits the state.
   ['GET', /^\/api\/catalog$/, anyone, s => s.catalog],
   ['POST', /^\/api\/merchants$/, ops, (s, _, b) => s.createMerchant(b)],
   ['POST', /^\/api\/merchants\/([\w-]+)$/, ops, (s, [id], b) => (s.updateMerchant(id, b), s.state)],
   ['POST', /^\/api\/products$/, ops, (s, _, b) => s.createProduct(b)],
   ['POST', /^\/api\/products\/([\w-]+)$/, ops, (s, [id], b) => (s.updateProduct(id, b), s.state)],
-  ['POST', /^\/api\/products\/([\w-]+)\/available$/, ops, (s, [id], b) => (s.setProductAvailable(id, b?.available), s.state)],
+  ['POST', /^\/api\/products\/([\w-]+)\/available$/, productStore, (s, [id], b) => (s.setProductAvailable(id, b?.available), s.state)],
   ['POST', /^\/api\/option-sets\/([\w-]+)$/, ops, (s, [key], b) => (s.setOptionSet(key, b?.groups), s.state)],
+  // Merchant app (v1): the store accepts, rejects and marks ready; ops manage its staff accounts.
+  ['POST', /^\/api\/orders\/(\d+)\/accept$/, orderStore, (s, [n], b) => (s.acceptOrder(n, b?.prepMin), s.state)],
+  ['POST', /^\/api\/orders\/(\d+)\/reject$/, orderStore, (s, [n], b) => (s.rejectOrder(n, b?.reason), s.state)],
+  ['POST', /^\/api\/orders\/(\d+)\/ready$/, orderStore, (s, [n]) => (s.markReady(n), s.state)],
+  ['POST', /^\/api\/merchants\/([\w-]+)\/staff$/, ops, (s, [id], b) => s.addMerchantStaff(id, b)],
+  ['POST', /^\/api\/merchant-staff\/([\w-]+)\/remove$/, ops, (s, [id]) => (s.removeMerchantStaff(id), s.state)],
   ['POST', /^\/api\/couriers\/([\w-]+)\/suspend$/, ops, (s, [id], b) => (s.setCourierSuspended(id, b?.suspended), s.state)],
   ['POST', /^\/api\/couriers\/([\w-]+)\/location$/, selfCourier, (s, [id], b) => (s.setCourierLocation(id, b?.lat, b?.lon), s.state)],
   ['POST', /^\/api\/couriers\/([\w-]+)\/availability$/, selfCourier, (s, [id], b) => (s.setCourierAvailability(id, b?.status), s.state)],
@@ -259,6 +277,13 @@ export function createApi({ tickMs = 1000, store = new Store(), authMode = 'warn
       // A courier app subscribes with ?courier=<id>, so the server knows that courier answers its own offers.
       const courierId = url.searchParams.get('courier');
       if (courierId) ws.once('close', store.attachApp(courierId));
+      // A merchant app subscribes with ?merchant=<store id>; the stand-in merchant then leaves that store alone.
+      // Enforced: only that store's staff (or ops) can claim it.
+      const merchantId = url.searchParams.get('merchant');
+      const viewer = store.userForToken(url.searchParams.get('token') ?? undefined);
+      if (merchantId && (!enforce || viewer?.role === 'ops' || (viewer?.role === 'merchant' && viewer.merchantId === merchantId))) {
+        ws.once('close', store.attachMerchantApp(merchantId));
+      }
       wss.emit('connection', ws, req);
     });
   });

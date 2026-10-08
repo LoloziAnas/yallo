@@ -33,12 +33,12 @@ function OrderDetail({ v }) {
           <Stop marker={{ borderRadius: 3, background: 'var(--color-accent)' }} name={od.m} addr={od.maddr} onCall={v.callMerchant} ic={ic} />
           <Stop marker={{ borderRadius: '50%', background: 'var(--color-accent-2)' }} name={od.c} addr={od.caddr} note={od.clandmark} onCall={v.callCustomer} ic={ic} />
         </div>
-        {od.instructions && (
-          <div style={{ display: 'flex', gap: 10, padding: '10px 12px', borderRadius: 12, border: '1px solid var(--color-divider)', fontSize: 13 }}>
+        {[['Instructions', od.instructions], ['Kitchen note', od.kitchenNote]].filter(([, text]) => text).map(([label, text]) => (
+          <div key={label} style={{ display: 'flex', gap: 10, padding: '10px 12px', borderRadius: 12, border: '1px solid var(--color-divider)', fontSize: 13 }}>
             <span className="ico muted" style={{ fontSize: 15, marginTop: 2 }}>{ic.msg}</span>
-            <span><strong style={{ display: 'block', fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--color-neutral-700)' }}>Instructions</strong>{od.instructions}</span>
+            <span><strong style={{ display: 'block', fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--color-neutral-700)' }}>{label}</strong>{text}</span>
           </div>
-        )}
+        ))}
 
         {od.storeAction && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>

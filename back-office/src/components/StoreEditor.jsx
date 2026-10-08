@@ -201,3 +201,44 @@ export function MenuEditor({ v, merchantId }) {
     </div>
   );
 }
+
+/** A store's merchant-app accounts: who can sign in to the merchant app for this store. */
+export function StaffCard({ v, merchantId }) {
+  const staff = v.merchantStaff.filter(x => x.merchantId === merchantId);
+  const store = v.rawMerchants.find(m => m.id === merchantId);
+  const [f, setF] = useState({ name: '', phone: '' });
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const add = e => {
+    e.preventDefault();
+    setBusy(true); setError(null);
+    v.run(() => v.api.addMerchantStaff(merchantId, f), f.name + ' can now sign in to the merchant app')
+      .then(() => setF({ name: '', phone: '' }), err => setError(err.message))
+      .finally(() => setBusy(false));
+  };
+  const remove = x => {
+    if (!confirm(`Remove ${x.name}? They are signed out of the merchant app at once.`)) return;
+    v.run(() => v.api.removeMerchantStaff(x.id), x.name + ' removed').catch(err => v.notify(err.message));
+  };
+  return (
+    <div className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <h3 className="card-title" style={{ margin: 0 }}>Merchant app accounts</h3>
+        <span className="faint" style={{ fontSize: 12 }}>{store?.app ? 'Merchant app connected' : 'No merchant app connected: Yallo accepts and prepares orders automatically'}</span>
+      </div>
+      {staff.length ? staff.map(x => (
+        <div key={x.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 10px', borderRadius: 12, border: '1px solid var(--color-divider)' }}>
+          <span style={{ flex: 1, minWidth: 0 }}><strong style={{ fontSize: 14 }}>{x.name}</strong> <span className="muted" style={{ fontSize: 13 }}>· {x.phone}</span></span>
+          <button className="btn btn-ghost" onClick={() => remove(x)} style={{ height: 30, fontSize: 12 }}>Remove</button>
+        </div>
+      )) : <div className="muted" style={{ fontSize: 13 }}>Nobody can sign in to the merchant app for this store yet.</div>}
+      <form onSubmit={add} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) auto', gap: 10, alignItems: 'end' }}>
+        <Field label="Name"><input className="input" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} required maxLength={60} /></Field>
+        <Field label="Phone"><input className="input" type="tel" value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} required maxLength={20} /></Field>
+        <button className="btn btn-primary" type="submit" disabled={busy} style={{ height: 44 }}>{busy ? 'Adding…' : 'Add account'}</button>
+      </form>
+      <ErrorNote error={error} />
+      <div className="faint" style={{ fontSize: 12 }}>They sign in with this number and a one-time code.</div>
+    </div>
+  );
+}

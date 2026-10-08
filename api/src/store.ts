@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { dirname } from 'node:path';
 // In-memory state for the mock API: the shared demo seed plus the rules every app's actions go through.
 import {
-  ACTIVE_STATUSES, PRODUCTS, OPTION_GROUPS, type Catalog, type Merchant, type OptionGroup, type Product, DEMO_START_MIN, DEMO_START_DATE, DEMO_TESTER_COURIERS, applyClock, minuteOfDayAt, zonedNow, type ClockSettings, APPLICATIONS, OPS_STAFF, DEV_TOKENS, GPS_STALE_SEC, geoToMap, PAYOUTS, COURIERS, courierEarnings, normalizePhone as normPhone, requiredDocs, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, MERCHANTS, clockAt, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
+  ACTIVE_STATUSES, MERCHANT_STAFF, dayAt, type MerchantStaff, PRODUCTS, OPTION_GROUPS, type Catalog, type Merchant, type OptionGroup, type Product, DEMO_START_MIN, DEMO_START_DATE, DEMO_TESTER_COURIERS, applyClock, minuteOfDayAt, zonedNow, type ClockSettings, APPLICATIONS, OPS_STAFF, DEV_TOKENS, GPS_STALE_SEC, geoToMap, PAYOUTS, COURIERS, courierEarnings, normalizePhone as normPhone, requiredDocs, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, MERCHANTS, clockAt, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
   type ApiCourier, type ApiOrder, type LiveState, type OpenTicketBody, type OrderStatus, type PlaceOrderBody, type Ticket, type TicketPriority,
   type TicketSource, type ZoneName, type OrderMessage, type ApplyBody, type ApplicationStatus, type CourierApplication, type DocKey, type Vehicle, type AuthRole, type AuthSession, type AuthUser, DEV_OTP_CODE, normalizePhone, type OrderItem, type OrderLineInput, type Quote, PricingError, quoteOrder, storeAvailability,
 } from '@yallo/shared';
@@ -44,7 +44,7 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 
 /** Validates the optional delivery details of a new order. */
 function deliveryDetails(body: PlaceOrderBody) {
-  const out: Pick<ApiOrder, 'address' | 'location' | 'instructions' | 'scheduledFor' | 'customerPhone'> = {};
+  const out: Pick<ApiOrder, 'address' | 'location' | 'instructions' | 'scheduledFor' | 'customerPhone' | 'kitchenNote'> = {};
   if (body.address !== undefined && body.address !== null) {
     if (!isObject(body.address)) throw new ActionError('address must be an object');
     const a = body.address;
@@ -72,6 +72,8 @@ function deliveryDetails(body: PlaceOrderBody) {
     if (!/^\+?[0-9][0-9 ]{5,18}$/.test(customerPhone)) throw new ActionError('customerPhone must be digits, optionally starting with +');
     out.customerPhone = customerPhone;
   }
+  const kitchenNote = optText(body.kitchenNote, 'kitchenNote', 300);
+  if (kitchenNote) out.kitchenNote = kitchenNote;
   return out;
 }
 
@@ -97,6 +99,7 @@ function seed(o: SeedOptions): LiveState {
     t: 0,
     merchants: clone(MERCHANTS),
     catalog: { version: 1, products: clone(PRODUCTS), optionGroups: clone(OPTION_GROUPS) },
+    merchantStaff: clone(MERCHANT_STAFF),
     couriers: couriers.map(c => ({ ...clone(c), suspended: false, app: false })),
     orders: ORDERS.map(o => ({ ...clone(o), elapsedSec: DEMO_ELAPSED_SEC[o.id] ?? 0, statusAt: { ...DEMO_STATUS_AT[o.id] }, deliveryPin: newPin() })),
     tickets: clone(TICKETS),
@@ -221,6 +224,12 @@ function forCourier(o: ApiOrder, me: string): ApiOrder {
   return noContact;
 }
 
+/** A store's view of its order: what to cook and who collects it; no PIN, customer contact or courier pay. */
+function forMerchant(o: ApiOrder): ApiOrder {
+  const { deliveryPin: _pin, customerPhone: _phone, location: _loc, address: _addr, courierPay: _pay, courierKm: _km, offer: _offer, lastOffer: _last, courierCompensation: _comp, chat: _chat, ...rest } = o;
+  return rest;
+}
+
 /** A customer's view of their order: no courier pay, offers or compensation. */
 function forCustomer(o: ApiOrder): ApiOrder {
   const { courierPay: _pay, courierKm: _km, offer: _offer, lastOffer: _last, courierCompensation: _comp, ...rest } = o;
@@ -255,6 +264,8 @@ export class Store {
   private eventListeners = new Set<(e: StoreEvent) => void>();
   /** Open courier-app connections per courier id. */
   private apps = new Map<string, number>();
+  /** Open merchant-app connections per store id. */
+  private merchantApps = new Map<string, number>();
   private auth: AuthData = emptyAuth();
   /** Pending one-time codes by phone. Kept in memory only. */
   private otps = new Map<string, { role: AuthRole; code: string; sentAt: number; attempts: number }>();
@@ -314,6 +325,9 @@ export class Store {
     this.auth = saved.auth ?? emptyAuth();
     // No courier app is connected yet; they re-attach when their sockets reconnect.
     saved.state.couriers.forEach(c => { c.app = false; });
+    saved.state.merchants.forEach(m => { delete m.app; });
+    // Added in v1 without a format change: older saves get the seed staff.
+    saved.state.merchantStaff ??= clone(MERCHANT_STAFF);
     const clock = saved.state.clock;
     if (clock) clock.enforceHours = this.seedOptions.enforceHours;
     if (clock?.realTime && clock.startMs !== undefined && clock.timeZone !== this.seedOptions.timeZone) {
@@ -422,6 +436,7 @@ export class Store {
     this.auth = emptyAuth();
     this.otps.clear();
     for (const c of this.s.couriers) c.app = (this.apps.get(c.id) ?? 0) > 0;
+    for (const m of this.s.merchants) if (this.merchantApps.has(m.id)) m.app = true;
     this.changed();
     this.flush();
   }
@@ -441,9 +456,10 @@ export class Store {
     for (const o of s.orders) {
       if (!isActive(o.status)) continue;
       o.elapsedSec += dt;
-      if (this.standIn && this.auto.has(o.id)) {
+      // The stand-in plays only stores with no merchant app connected. It keeps to the prep time the store chose.
+      if (this.standIn && this.auto.has(o.id) && !this.merchantApps.has(o.merchantId)) {
         if (o.status === 'pending' && o.elapsedSec >= AUTO_ACCEPT_SEC && this.timeToCook(o)) this.setStatus(o, 'preparing');
-        else if (o.status === 'preparing' && s.t - (o.statusAt?.preparing ?? s.t) >= AUTO_READY_SEC - AUTO_ACCEPT_SEC) this.setStatus(o, readyStatus(o));
+        else if (o.status === 'preparing' && s.t >= (o.readyBy ?? (o.statusAt?.preparing ?? s.t) + AUTO_READY_SEC - AUTO_ACCEPT_SEC)) this.setStatus(o, readyStatus(o));
       }
     }
     for (const o of s.orders) {
@@ -622,6 +638,87 @@ export class Store {
       if (c) c.app = n > 0;
       this.changed();
     };
+  }
+
+  /** Marks a merchant app as attached for a store (its live-feed socket). Returns a detach function. */
+  attachMerchantApp(merchantId: string) {
+    const m = this.s.merchants.find(m => m.id === merchantId);
+    if (!m) return () => {};
+    this.merchantApps.set(merchantId, (this.merchantApps.get(merchantId) ?? 0) + 1);
+    m.app = true;
+    this.changed();
+    return () => {
+      const n = (this.merchantApps.get(merchantId) ?? 1) - 1;
+      if (n > 0) this.merchantApps.set(merchantId, n);
+      else this.merchantApps.delete(merchantId);
+      const store = this.s.merchants.find(x => x.id === merchantId);
+      if (store) { if (n > 0) store.app = true; else delete store.app; }
+      this.changed();
+    };
+  }
+
+  /** The store accepts a new order and says how long it will take. */
+  acceptOrder(orderId: string, prepMin: number) {
+    const o = this.order(orderId);
+    if (o.status !== 'pending') throw new ActionError(`${o.id} is ${o.status}, not waiting to be accepted`, 409);
+    if (!Number.isInteger(prepMin) || prepMin < 1 || prepMin > 120) throw new ActionError('prepMin must be a whole number of minutes, 1–120');
+    o.prepMin = prepMin;
+    o.readyBy = this.s.t + prepMin * 60;
+    this.setStatus(o, 'preparing');
+    this.changed();
+  }
+
+  /** The store turns a new order down (only while it's waiting to be accepted). */
+  rejectOrder(orderId: string, reason: string) {
+    const o = this.order(orderId);
+    if (o.status !== 'pending') throw new ActionError(`${o.id} is ${o.status}: only new orders can be rejected. Ask ops to cancel it`, 409);
+    const why = typeof reason === 'string' ? reason.trim().slice(0, 200) : '';
+    if (!why) throw new ActionError('Say why the order is rejected');
+    this.endOffer(o, 'withdrawn');
+    o.rejectReason = why;
+    o.cancelReason = 'Rejected by the store: ' + why;
+    o.cancelledBy = 'merchant';
+    this.auto.delete(o.id);
+    this.release(o.courierId);
+    this.setStatus(o, 'cancelled');
+    this.changed();
+  }
+
+  /** The store says the food is ready (to `picking` if a courier is already assigned). */
+  markReady(orderId: string) {
+    const o = this.order(orderId);
+    if (o.status !== 'preparing') throw new ActionError(`${o.id} is ${o.status}, not being prepared`, 409);
+    this.setStatus(o, readyStatus(o));
+    this.changed();
+  }
+
+  /** Ops add a staff account for a store: that phone can then sign in to the merchant app. */
+  addMerchantStaff(merchantId: string, body: { name?: unknown; phone?: unknown }) {
+    this.merchant(merchantId);
+    const name = typeof body?.name === 'string' ? body.name.trim().slice(0, 60) : '';
+    if (!name) throw new ActionError('name is required');
+    const phone = normalizePhone(String(body?.phone ?? ''));
+    if (!phone) throw new ActionError('Enter a valid phone number');
+    if (this.staff.some(x => normalizePhone(x.phone) === phone)) throw new ActionError('This number already has a store account', 409);
+    const n = Math.max(0, ...this.staff.map(x => Number(x.id.slice(2)) || 0)) + 1;
+    const member: MerchantStaff = { id: 'ms' + n, merchantId, name, phone: String(body.phone).trim() };
+    this.staff.push(member);
+    this.changed();
+    return member;
+  }
+
+  /** Ops remove a staff account; its sessions stop working at once. */
+  removeMerchantStaff(staffId: string) {
+    const i = this.staff.findIndex(x => x.id === staffId);
+    if (i < 0) throw new ActionError('No staff account ' + staffId, 404);
+    this.staff.splice(i, 1);
+    this.changed();
+  }
+
+  private get staff(): MerchantStaff[] { return this.s.merchantStaff ??= []; }
+
+  private merchantStaffByPhone(phone: string) {
+    return this.staff.find(x => normalizePhone(x.phone) === phone);
   }
 
   /** Checks a courier can take this order now, whether offered or assigned directly. */
@@ -969,8 +1066,9 @@ export class Store {
   requestOtp(rawPhone: string, role: AuthRole) {
     const phone = normalizePhone(rawPhone);
     if (!phone) throw new ActionError('Enter a valid phone number');
-    if (role !== 'customer' && role !== 'courier' && role !== 'ops') throw new ActionError("role must be 'customer', 'courier' or 'ops'");
+    if (role !== 'customer' && role !== 'courier' && role !== 'ops' && role !== 'merchant') throw new ActionError("role must be 'customer', 'courier', 'ops' or 'merchant'");
     if (role === 'ops' && !this.staffByPhone(phone)) throw new ActionError('This number is not on the ops staff list', 403);
+    if (role === 'merchant' && !this.merchantStaffByPhone(phone)) throw new ActionError('No store account for this number. Ask Yallo ops to add you', 404);
     if (role === 'courier') {
       const c = this.courierByPhone(phone);
       if (!c) throw new ActionError('No courier account for this number', 404);
@@ -1005,6 +1103,11 @@ export class Store {
       if (!o) throw new ActionError('This number is not on the ops staff list', 403);
       user = this.auth.users.find(u => u.role === 'ops' && u.id === o.id)
         ?? this.addUser({ id: o.id, role: 'ops', phone, name: o.name, title: o.title });
+    } else if (otp.role === 'merchant') {
+      const m = this.merchantStaffByPhone(phone);
+      if (!m) throw new ActionError('No store account for this number. Ask Yallo ops to add you', 404);
+      user = this.auth.users.find(u => u.role === 'merchant' && u.id === m.id)
+        ?? this.addUser({ id: m.id, role: 'merchant', phone, name: m.name, merchantId: m.merchantId });
     } else if (otp.role === 'courier') {
       const c = this.courierByPhone(phone);
       if (!c) throw new ActionError('No courier account for this number', 404);
@@ -1041,6 +1144,11 @@ export class Store {
     }
     const user = this.sessionUser(token);
     if (user?.role === 'courier' && this.s.couriers.find(c => c.id === user.courierId)?.suspended) return undefined;
+    if (user?.role === 'merchant') {
+      // Removed staff lose access at once; the store comes from the staff record.
+      const m = this.staff.find(x => x.id === user.id);
+      return m ? { ...user, merchantId: m.merchantId, name: m.name } : undefined;
+    }
     return user;
   }
 
@@ -1050,6 +1158,8 @@ export class Store {
       return { id: o.id, role: 'ops', phone: normPhone(o.phone)!, name: o.name, title: o.title };
     }
     if (token === DEV_TOKENS.customer) return { id: 'u-dev', role: 'customer', phone: '+212600000000', name: 'Test customer' };
+    const m = token.startsWith('dev-merchant-') && this.s.merchants.find(m => DEV_TOKENS.merchant(m.id) === token);
+    if (m) return { id: 'ms-dev-' + m.id, role: 'merchant', phone: normPhone(m.phone) ?? '+212600000000', name: m.name + ' (dev)', merchantId: m.id };
     const c = token.startsWith('dev-courier-') && this.s.couriers.find(c => DEV_TOKENS.courier(c.id) === token);
     return c ? { id: c.id, role: 'courier', phone: normPhone(c.phone)!, name: c.name, courierId: c.id } : undefined;
   }
@@ -1199,6 +1309,14 @@ export class Store {
         orders: s.orders.filter(o => o.courierId === me || o.offer?.courierId === me).map(o => forCourier(o, me)),
         tickets: s.tickets.filter(tk => tk.requesterId === me),
         payouts: { ...s.payouts, lines: s.payouts.lines.filter(l => l.kind === 'courier' && l.partyId === me) } };
+    }
+    if (user?.role === 'merchant') {
+      const me = user.merchantId!, today = dayAt(s.t);
+      const orders = s.orders.filter(o => o.merchantId === me && (isActive(o.status) || dayAt(o.statusAt?.pending ?? s.t) === today));
+      const riders = new Set(orders.map(o => o.courierId));
+      return { ...base, orders: orders.map(forMerchant), couriers: s.couriers.filter(c => riders.has(c.id)).map(publicCourier), tickets: [],
+        merchantStaff: this.staff.filter(x => x.merchantId === me),
+        payouts: { ...s.payouts, lines: s.payouts.lines.filter(l => l.kind === 'merchant' && l.partyId === me) } };
     }
     if (user?.role === 'customer') {
       const orders = s.orders.filter(o => o.customerId === user.id);

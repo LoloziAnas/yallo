@@ -1,5 +1,6 @@
 // Marrakech demo seed: Tuesday 6 October 2026, about 18:34. The apps' shared starting state.
 import type { Courier, CourierApplication, MapPoint, Order, OrderStatus, PayoutLine, PayoutRun, Ticket, ZoneName } from './model';
+import type { MerchantStaff } from './api';
 import { quoteOrder, type OrderLineInput } from './pricing';
 import { DEMO_START_MIN } from './clock';
 import { merchantById } from './catalog';
@@ -188,6 +189,14 @@ export const DEMO_TESTER_COURIERS: Courier[] = [
   { id: 'c25', name: 'Ilyas Mernissi', phone: '+212 600 00 00 05', vehicle: 'Car', zone: 'Guéliz', status: 'off', pos: { x: 30, y: 34 }, rating: 4.6, ratingCount: 52, docsNote: 'Valid', offerStats: { accepted: 0, declined: 0, expired: 0 } },
   { id: 'c26', name: 'Yasmine Lahlou', phone: '+212 600 00 00 06', vehicle: 'Motorcycle', zone: 'Guéliz', status: 'off', pos: { x: 33, y: 23 }, rating: 4.9, ratingCount: 98, docsNote: 'Valid', offerStats: { accepted: 0, declined: 0, expired: 0 } },
 ];
+
+/**
+ * One staff account per demo store, for the merchant app (v1): +212 600 00 11 01 for m1 … 11 10 for m10. Seeded into
+ * the API's state; ops add and remove staff from the back office.
+ */
+export const MERCHANT_STAFF: MerchantStaff[] = Array.from({ length: 10 }, (_, i) => ({
+  id: 'ms' + (i + 1), merchantId: 'm' + (i + 1), name: merchantById['m' + (i + 1)].name + ' manager', phone: '+212 600 00 11 ' + String(i + 1).padStart(2, '0'),
+}));
 
 /** Ops staff allowed to sign in to the back office. */
 export const OPS_STAFF: { id: string; name: string; phone: string; title: string }[] = [

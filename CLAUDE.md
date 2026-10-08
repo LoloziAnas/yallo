@@ -9,6 +9,7 @@ How to run it all, the demo accounts and every setting: [`docs/RUNBOOK.md`](docs
 | `app/` | Customer web prototype | React + Vite | customer |
 | `mobile/` | Customer mobile app | Expo SDK 57 | customer |
 | `courier/` | Courier mobile app | Expo SDK 57 | courier |
+| `merchant/` | Merchant tablet app (PWA) | React + Vite | courier (yallo-5d) |
 | `shared/` | `@yallo/shared`: domain model, order lifecycle, design tokens, demo seed, API client | plain TypeScript | back office |
 | `api/` | Mock API: the shared live state for all apps | Node + `ws`, run with `tsx` | back office |
 | `e2e/` | Joint end-to-end run across all three apps | Playwright (system Chrome) | back office |
@@ -135,6 +136,15 @@ back office deploy with `deploy/prepare.sh` (builds the commit into `.deploy/<sh
     and `GET /api/me/history` → `{ orders, tickets }` for the signed-in customer (survives a reinstall).
   - Ratings: `/api/orders/:n/rating {stars 1–5, comment?}` by the order's customer, once, after delivery. It folds into
     the store's (`rating`/`reviewCount`) and courier's (`rating`/`ratingCount`) averages; the order keeps `rating`.
+  - Merchant app (v1): store staff (`MerchantStaff`, seeded one per store: +212 600 00 11 01 for m1 … 11 10 for m10;
+    ops add/remove them, `/api/merchants/:id/staff {name, phone}`, `/api/merchant-staff/:id/remove`) sign in with
+    role 'merchant' and get `user.merchantId` (dev token `dev-merchant-<storeId>`). A merchant sees its store's orders
+    (active and today's, without PIN or customer contact), their couriers, and its staff. It can
+    `/api/orders/:n/accept {prepMin}` (→ preparing, `prepMin`, `readyBy`), `/reject {reason}` (only pending →
+    cancelled, `cancelledBy: 'merchant'`, `rejectReason`), `/ready`, `/api/merchants/:id/open {open}` and
+    `/api/products/:id/available {available}` for its own store. A merchant app subscribes with `{ merchantId }`
+    (`?merchant=`), which sets `merchant.app`; the stand-in merchant only plays stores without one, and keeps to
+    `readyBy`. Orders may carry `kitchenNote` (≤ 300) for the kitchen.
   - Order chat: `/api/orders/:n/messages {text}` from the order's customer, assigned courier or ops, while the order is
     active. Messages are on `order.chat` ({ from, author, text, at }) and push to the other side.
   - `/api/merchants/:id/open {open}`, `/api/couriers/:id/suspend {suspended}`,

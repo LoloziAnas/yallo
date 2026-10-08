@@ -13,8 +13,16 @@ export type ApiOrder = Order & {
   refund?: number;
   refundReason?: string;
   cancelReason?: string;
-  /** Who cancelled: ops from the back office, or the customer while the order was still new. */
-  cancelledBy?: 'ops' | 'customer';
+  /** Who cancelled: ops from the back office, the customer while the order was still new, or the store rejecting it. */
+  cancelledBy?: 'ops' | 'customer' | 'merchant';
+  /** Why the store rejected the order (also in cancelReason). */
+  rejectReason?: string;
+  /** Prep minutes the store chose when accepting. */
+  prepMin?: number;
+  /** When the food should be ready (t seconds): accepted at + prepMin. */
+  readyBy?: number;
+  /** A note for the kitchen from the customer ("no onions"). `instructions` is the courier's. */
+  kitchenNote?: string;
   /** Trip fee in DH paid to the courier when ops cancels with compensation. */
   courierCompensation?: number;
   /**
@@ -74,6 +82,11 @@ export type LiveState = {
   orders: ApiOrder[];
   /** Support tickets, in display order (newest opened first). */
   tickets: Ticket[];
+  /**
+   * Merchant staff accounts (v1). Ops see all; a merchant sees their store's. Absent on older servers and for other
+   * viewers.
+   */
+  merchantStaff?: MerchantStaff[];
   /** Courier applications, newest first. */
   applications: CourierApplication[];
   /** The weekly settlement waiting for approval. */
@@ -94,6 +107,8 @@ export type PlaceOrderBody = {
   location?: GeoPoint;
   /** Up to 500 characters. */
   instructions?: string;
+  /** A note for the kitchen (≤ 300), e.g. "no onions". `instructions` is for the courier. */
+  kitchenNote?: string;
   /** "HH:MM". */
   scheduledFor?: string;
   customerPhone?: string;
@@ -114,7 +129,10 @@ export type OpenTicketBody = {
 };
 
 /** Who can sign in. Ops staff sign in from an allowlisted number (OPS_STAFF). */
-export type AuthRole = 'customer' | 'courier' | 'ops';
+export type AuthRole = 'customer' | 'courier' | 'ops' | 'merchant';
+
+/** A store's staff account: signs in to the merchant app for that one store. Ops create and remove them. */
+export type MerchantStaff = { id: string; merchantId: string; name: string; phone: string };
 
 export type AuthUser = {
   /** "u1", "u2", … for customers; the courier id ("c1") for couriers. */
@@ -127,13 +145,15 @@ export type AuthUser = {
   courierId?: string;
   /** For ops staff, e.g. "Ops lead". */
   title?: string;
+  /** For merchant staff, the store they work for. */
+  merchantId?: string;
 };
 
 /**
  * Tokens the API accepts outside production, so tests and private APIs needn't sign in: "dev-ops" (Leila, ops),
  * "dev-courier-<courierId>" (e.g. "dev-courier-c1") and "dev-customer" (a fixed test customer).
  */
-export const DEV_TOKENS = { ops: 'dev-ops', courier: (courierId: string) => 'dev-courier-' + courierId, customer: 'dev-customer' } as const;
+export const DEV_TOKENS = { ops: 'dev-ops', courier: (courierId: string) => 'dev-courier-' + courierId, customer: 'dev-customer', merchant: (merchantId: string) => 'dev-merchant-' + merchantId } as const;
 
 export type AuthSession = { token: string; user: AuthUser };
 
@@ -315,9 +335,10 @@ export function createYalloClient(baseUrl: string, opts: { token?: string; confi
     /**
      * Streams live snapshots. Reconnects after a drop. Returns a function that stops listening.
      * `onStatus` reports whether the socket is currently connected. A courier app passes
-     * `{ courierId }` so the server knows a real app is answering that courier's offers.
+     * `{ courierId }` so the server knows a real app is answering that courier's offers; a merchant app passes
+     * `{ merchantId }` so the stand-in merchant leaves that store to it.
      */
-    subscribe(onState: (s: LiveState) => void, onStatus?: (connected: boolean) => void, opts: { courierId?: string } = {}) {
+    subscribe(onState: (s: LiveState) => void, onStatus?: (connected: boolean) => void, opts: { courierId?: string; merchantId?: string } = {}) {
       let ws: WebSocket | null = null;
       let stopped = false;
       let retry: ReturnType<typeof setTimeout> | undefined;
@@ -328,7 +349,7 @@ export function createYalloClient(baseUrl: string, opts: { token?: string; confi
         // After a few failed connections, look the address up again (it may have moved).
         await ready(failures >= 2);
         if (stopped) return;
-        const params = [opts.courierId && 'courier=' + encodeURIComponent(opts.courierId), token && 'token=' + encodeURIComponent(token)].filter(Boolean);
+        const params = [opts.courierId && 'courier=' + encodeURIComponent(opts.courierId), opts.merchantId && 'merchant=' + encodeURIComponent(opts.merchantId), token && 'token=' + encodeURIComponent(token)].filter(Boolean);
         const query = params.length ? '?' + params.join('&') : '';
         const wsUrl = (base || (typeof location !== 'undefined' ? location.origin : '')).replace(/^http/, 'ws') + '/api/live' + query;
         let opened = false;
@@ -406,6 +427,16 @@ export function createYalloClient(baseUrl: string, opts: { token?: string; confi
     setProductAvailable: (productId: string, available: boolean) => post(`/products/${productId}/available`, { available }),
     /** Ops: create or replace an option set that products refer to by key. */
     setOptionSet: (key: string, groups: OptionGroup[]) => post(`/option-sets/${key}`, { groups }),
+    /** The store accepts a new order, with its prep time (sets prepMin and readyBy). Store staff or ops. */
+    acceptOrder: (orderId: string, prepMin: number) => post(`/orders/${orderPath(orderId)}/accept`, { prepMin }),
+    /** The store turns a new order down (only while pending): cancelled, cancelledBy 'merchant', rejectReason. */
+    rejectOrder: (orderId: string, reason: string) => post(`/orders/${orderPath(orderId)}/reject`, { reason }),
+    /** The food is ready: `ready`, or `picking` when a courier is already assigned. */
+    markReady: (orderId: string) => post(`/orders/${orderPath(orderId)}/ready`),
+    /** Ops: give a phone number a merchant-app account for a store. */
+    addMerchantStaff: (merchantId: string, body: { name: string; phone: string }) => post<MerchantStaff>(`/merchants/${merchantId}/staff`, body),
+    /** Ops: remove a merchant-app account (its sessions end at once). */
+    removeMerchantStaff: (staffId: string) => post(`/merchant-staff/${staffId}/remove`),
     setCourierSuspended: (courierId: string, suspended: boolean) => post(`/couriers/${courierId}/suspend`, { suspended }),
     /** The courier app reports where the courier is (real GPS); the API places them on the demo map. */
     setCourierLocation: (courierId: string, lat: number, lon: number) => post(`/couriers/${courierId}/location`, { lat, lon }),

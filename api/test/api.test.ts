@@ -1528,3 +1528,112 @@ describe('Catalogue in the state (v1)', () => {
     }
   });
 });
+
+describe('Merchant app (v1)', () => {
+  const order = { merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz' as const, pay: 'cash' as const, items: [{ productId: 'p1-6', qty: 2 }], kitchenNote: 'No onions' };
+
+  test('store staff sign in with their number; unknown numbers are refused', () => {
+    const s = new Store();
+    s.requestOtp('+212 600 00 11 01', 'merchant');
+    const { user } = s.verifyOtp('+212 600 00 11 01', DEV_OTP_CODE);
+    assert.deepEqual([user.role, user.merchantId, user.id], ['merchant', 'm1', 'ms1']);
+    assert.throws(() => s.requestOtp('0612345678', 'merchant'), /No store account/);
+  });
+
+  test('accept with a prep time, mark ready; the stand-in keeps to readyBy', () => {
+    const s = new Store();
+    const o = s.placeOrder(order);
+    assert.equal(o.kitchenNote, 'No onions');
+    s.acceptOrder(o.id, 10);
+    assert.deepEqual([o.status, o.prepMin, o.readyBy], ['preparing', 10, s.state.t + 600]);
+    assert.throws(() => s.acceptOrder(o.id, 10), /not waiting/);
+    tick(s, 100);
+    assert.equal(o.status, 'preparing', 'not before readyBy');
+    tick(s, 500);
+    assert.equal(o.status, 'ready', 'the stand-in marks it ready at readyBy (no merchant app connected)');
+    const o2 = s.placeOrder(order);
+    s.acceptOrder(o2.id, 30);
+    s.markReady(o2.id);
+    assert.equal(o2.status, 'ready');
+    assert.throws(() => s.markReady(o2.id), /not being prepared/);
+  });
+
+  test('reject only while new, with a reason', () => {
+    const s = new Store();
+    const o = s.placeOrder(order);
+    assert.throws(() => s.rejectOrder(o.id, ' '), /why/);
+    s.rejectOrder(o.id, 'Out of chicken');
+    assert.deepEqual([o.status, o.cancelledBy, o.rejectReason], ['cancelled', 'merchant', 'Out of chicken']);
+    const o2 = s.placeOrder(order);
+    s.acceptOrder(o2.id, 15);
+    assert.throws(() => s.rejectOrder(o2.id, 'Too busy'), /only new orders/);
+  });
+
+  test('a connected merchant app takes over from the stand-in', () => {
+    const s = new Store();
+    const detach = s.attachMerchantApp('m1');
+    assert.equal(s.state.merchants.find(m => m.id === 'm1')!.app, true);
+    const o = s.placeOrder(order);
+    tick(s, AUTO_READY_SEC + 30);
+    assert.equal(o.status, 'pending', 'nobody accepted it for the store');
+    detach();
+    assert.equal('app' in s.state.merchants.find(m => m.id === 'm1')!, false);
+    tick(s, 1);
+    assert.equal(o.status, 'preparing', 'the stand-in resumes once the app is gone');
+  });
+
+  test('the merchant view: own orders without PIN or customer contact, own staff', () => {
+    const s = new Store();
+    s.placeOrder({ ...order, customerPhone: '0612345678' });
+    s.placeOrder({ ...order, merchantId: 'm2', items: [{ productId: 'p2-4', qty: 2 }] });
+    const v = s.viewFor({ id: 'ms1', role: 'merchant', phone: '+212600001101', merchantId: 'm1' });
+    assert.ok(v.orders.length > 0 && v.orders.every(o => o.merchantId === 'm1'));
+    assert.ok(v.orders.every(o => o.deliveryPin === undefined && o.customerPhone === undefined && o.courierPay === undefined));
+    assert.deepEqual(v.merchantStaff!.map(x => x.id), ['ms1']);
+    assert.equal(s.viewFor({ id: 'c1', role: 'courier', phone: '', courierId: 'c1' }).merchantStaff, undefined);
+  });
+
+  test('staff accounts: ops add and remove; a removed account loses access', () => {
+    const s = new Store();
+    const m = s.addMerchantStaff('m3', { name: 'Hicham', phone: '0655 11 22 33' });
+    s.requestOtp('0655112233', 'merchant');
+    const { token } = s.verifyOtp('0655112233', DEV_OTP_CODE);
+    assert.equal(s.userForToken(token)!.merchantId, 'm3');
+    assert.throws(() => s.addMerchantStaff('m4', { name: 'X', phone: '+212 655 11 22 33' }), /already/);
+    s.removeMerchantStaff(m.id);
+    assert.equal(s.userForToken(token), undefined);
+  });
+
+  test('over HTTP (enforced): a store acts only on its own orders, menu and switch; ops on any', async () => {
+    const a = createApi({ tickMs: 0, authMode: 'enforce' });
+    await new Promise<void>(r => a.http.listen(0, '127.0.0.1', r));
+    const base = `http://127.0.0.1:${(a.http.address() as AddressInfo).port}`;
+    try {
+      const m1 = createYalloClient(base, { token: 'dev-merchant-m1' }), m2 = createYalloClient(base, { token: 'dev-merchant-m2' });
+      const cust = createYalloClient(base, { token: 'dev-customer' });
+      const o = await cust.placeOrder(order);
+      await assert.rejects(m2.acceptOrder(o.id, 10), /Only this store/);
+      await assert.rejects(cust.acceptOrder(o.id, 10), /Only this store/);
+      const st = await m1.acceptOrder(o.id, 10);
+      assert.equal(st.orders.find(x => x.id === o.id)!.status, 'preparing');
+      await m1.markReady(o.id);
+      await m1.setProductAvailable('p1-6', false);
+      await assert.rejects(m2.setProductAvailable('p1-6', true), /Only this store/);
+      await m1.setMerchantOpen('m1', false);
+      await assert.rejects(m1.setMerchantOpen('m2', false), /Only this store/);
+      await assert.rejects(m1.addMerchantStaff('m1', { name: 'X', phone: '0655000000' }), /ops/);
+      // The live feed: ?merchant= marks the store's app, only for that store's staff.
+      const attach = (token: string, id: string) => new Promise<void>(r => { const ws = new WsClient(`${base.replace('http', 'ws')}/api/live?merchant=${id}&token=${token}`); ws.once('message', () => { setTimeout(() => { r(); ws.close(); }, 50); }); });
+      let claimed = false;
+      const off = a.store.onChange(st2 => { if (st2.merchants.find(m => m.id === 'm2')?.app) claimed = true; });
+      await attach('dev-merchant-m1', 'm2');
+      assert.equal(claimed, false, 'another store can\'t claim m2');
+      await attach('dev-merchant-m2', 'm2');
+      assert.equal(claimed, true);
+      off();
+    } finally {
+      a.http.closeAllConnections();
+      await new Promise<void>(r => a.http.close(() => r()));
+    }
+  });
+});

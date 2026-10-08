@@ -91,6 +91,11 @@ export type Merchant = {
   initials: string;
   /** Photo placeholder caption. */
   cover: string;
+  /**
+   * True while a merchant app is subscribed for this store (v1). Stores without one are played by the stand-in
+   * merchant, which accepts and prepares orders by itself.
+   */
+  app?: boolean;
 };
 
 /** An option set's key. The seed has these four; ops can add more (any string). */

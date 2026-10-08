@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Stars } from '../components/ui.jsx';
-import { MenuEditor, StoreForm } from '../components/StoreEditor.jsx';
+import { MenuEditor, StaffCard, StoreForm } from '../components/StoreEditor.jsx';
 
 const COLS = { minWidth: 960, gridTemplateColumns: 'minmax(170px,1.5fr) 110px 100px 80px 90px 90px 80px 190px' };
 
@@ -24,6 +24,7 @@ export default function Merchants({ v }) {
         <h2 style={{ margin: 0, fontSize: 22 }}>{store.name}</h2>
         <StoreForm key={store.id} v={v} store={store} />
         <MenuEditor v={v} merchantId={store.id} />
+        <StaffCard v={v} merchantId={store.id} />
       </div>
     );
   }

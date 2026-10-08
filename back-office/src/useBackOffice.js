@@ -301,7 +301,7 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
     oFilters, oq:s.oq, onOq:e => setState({ oq:e.target.value }), orderRows, orderRowsCount:orderRows.length, ordersEmpty:!orderRows.length,
     cTabs, cFleet:s.cTab === 'fleet', cApps:s.cTab === 'apps' && !!appCur, fleetRows, appList, app,
     approveApp:() => act(() => api.approveApplication(appCur.id), appCur.name + ' activated · they can sign in with their phone number'), rejectApp:set({ modal:'reject', reason:null }),
-    merchantRows, rawMerchants:s.rawMerchants, catalog:s.catalog, run, api, notify:toast,
+    merchantRows, rawMerchants:s.rawMerchants, catalog:s.catalog, merchantStaff:s.merchantStaff, run, api, notify:toast,
     tFilters, ticketList, tkt, macros, resolveLabel:T.resolved ? 'Resolved' : 'Resolve',
     resolveTicket:() => act(() => api.resolveTicket(T.id), T.id + ' resolved'),
     escalate:() => act(() => api.escalateTicket(T.id), T.id + ' escalated'), escalateLabel:T.escalated ? 'Escalated' : 'Escalate',

@@ -62,6 +62,7 @@ In development every one-time code is **123456**.
 | Ops: Youssef Tahiri (agent) | +212 661 00 10 02 | back office |
 | Courier: Karim El Amrani (c1) | +212 661 23 45 78 (or 0661234578) | starts on #48213 at Dar Zitoun |
 | Other couriers | numbers in `shared/src/demo.ts` (`COURIERS`) | |
+| Merchant app: one per store | +212 600 00 11 01 (Dar Zitoun, m1) … +212 600 00 11 10 (m10) | `MERCHANT_STAFF`; ops add more from the back office |
 | Customer | any number, e.g. 612345678 | the account is created on first sign-in |
 
 Outside production, the API also accepts fixed tokens instead of signing in: `dev-ops`, `dev-courier-<id>` (e.g.

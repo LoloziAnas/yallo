@@ -24,14 +24,14 @@ export const toBoOrder = (o, t = 0, names = SEED_NAMES) => ({ id:o.id, m:names[o
   pay:o.pay === 'cash' ? 'Cash' : 'Card', placed:o.placedAt, el:o.elapsedSec ?? DEMO_ELAPSED_SEC[o.id] ?? 0, items:o.items.map(i => [i.qty, i.name, i.price]),
   ux:o.dropoff.x, uy:o.dropoff.y, fee:o.fee, serviceFee:o.serviceFee ?? 0, discount:o.discount ?? 0, promoCode:o.promoCode ?? null, refund:o.refund, cancelReason:o.cancelReason,
   statusAt:o.statusAt ?? DEMO_STATUS_AT[o.id] ?? { pending:0 },
-  pin:o.deliveryPin ?? null, rating:o.rating ?? null, chat:o.chat ?? [], address:o.address ?? null, instructions:o.instructions ?? null, scheduledFor:o.scheduledFor ?? null, phone:o.customerPhone ?? null,
+  pin:o.deliveryPin ?? null, rating:o.rating ?? null, chat:o.chat ?? [], address:o.address ?? null, instructions:o.instructions ?? null, kitchenNote:o.kitchenNote ?? null, prepMin:o.prepMin ?? null, scheduledFor:o.scheduledFor ?? null, phone:o.customerPhone ?? null,
   offer:o.offer ? { courier:o.offer.courierId, left:Math.max(0, o.offer.expiresAt - t) } : null, lastOffer:o.lastOffer ?? null });
 
 /** A live snapshot from the API, in the shape the back office's state uses. */
 export const fromLive = live => ({
   t:live.t,
   merchants:live.merchants.map(m => toBoMerchant(m, todayOrders(live.orders, live.t))),
-  rawOrders:live.orders, rawCouriers:live.couriers, rawTickets:live.tickets, rawMerchants:live.merchants, catalog:catalogOf(live),
+  rawOrders:live.orders, rawCouriers:live.couriers, rawTickets:live.tickets, rawMerchants:live.merchants, catalog:catalogOf(live), merchantStaff:live.merchantStaff ?? [],
   couriers:live.couriers.map(c => toBoCourier(c, live.orders, live.t)),
   apps:live.applications,
   payouts:live.payouts,
