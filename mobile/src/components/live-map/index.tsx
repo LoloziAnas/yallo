@@ -61,7 +61,8 @@ function NativeMap({
         touchPitch={false}
         onPress={onPress ? (e) => onPress(e.nativeEvent.lngLat) : undefined}>
         <Camera {...camera} duration={800} easing="ease" />
-        {/* Mounted from the start (empty until there's a route): a source added later didn't draw on Android. */}
+        {/* The courier's way. On Android a line with 'line-dasharray' doesn't draw at all (MapLibre RN 11.5,
+            found by the courier app), so natively it's a solid paprika line on a white casing; web keeps dashes. */}
         <GeoJSONSource
           id="route"
           data={
@@ -74,10 +75,16 @@ function NativeMap({
               : { type: 'FeatureCollection', features: [] }
           }>
           <Layer
+            id="route-casing"
+            type="line"
+            layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+            paint={{ 'line-color': colors.white, 'line-width': 7 }}
+          />
+          <Layer
             id="route-line"
             type="line"
             layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-            paint={{ 'line-color': colors.accent, 'line-width': 3, 'line-dasharray': [1.5, 1.5] }}
+            paint={{ 'line-color': colors.accent, 'line-width': 4 }}
           />
         </GeoJSONSource>
         {pins.map((p) => (

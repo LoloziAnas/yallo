@@ -39,7 +39,7 @@ export function CheckoutScreen() {
       ? `${t.arriveAround} ${s.live ? demoClock(s.live.t + cs.tMax * 60) : clock(openedAt + cs.tMax * 60000)}`
       : `${t.schedule}${addr ? ' · ' + addr.district : ''}`
     : '';
-  const instrOptions = [t.q2, t.q1, 'Leave with the gardien', t.q3];
+  const instrOptions = [t.q2, t.q1, t.qGardien, t.q3];
   // Cash on delivery only for now; card payments come later.
   const pays: { id: PayMethod; label: string; sub: string; icon: IconName }[] = [
     { id: 'cash', label: t.cash, sub: t.cashSub, icon: 'cash' },

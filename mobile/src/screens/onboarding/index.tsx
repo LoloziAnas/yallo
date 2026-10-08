@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { View, useWindowDimensions } from 'react-native';
 import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
 
 import { Button } from '@/components/button';
@@ -22,6 +22,9 @@ export const langOptions: { value: Lang; label: string }[] = [
 
 /** Three-step intro ending with the location prompt. */
 export function Onboarding() {
+  // The illustration gives way on short screens so the text never runs under the buttons.
+  const { height: winH } = useWindowDimensions();
+  const panelH = Math.max(200, Math.min(330, winH - 430));
   const t = useT();
   const rtl = useRtl();
   const lang = useApp((s) => s.lang);
@@ -53,7 +56,7 @@ export function Onboarding() {
       <View
         style={{
           marginTop: 14,
-          height: 330,
+          height: panelH,
           borderRadius: 28,
           overflow: 'hidden',
           backgroundColor: colors.card,
