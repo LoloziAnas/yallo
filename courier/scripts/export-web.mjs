@@ -46,6 +46,7 @@ const env = {
   EXPO_PUBLIC_BUILD_SHA: sha,
   EXPO_BASE_URL: base,
   EXPO_WEB_SPA: '1',
+  YALLO_RELEASE_BUILD: 'web', // a fresh Metro cache (metro.config.js)
   CI: '1',
 };
 const r = spawnSync('npx', ['expo', 'export', '--platform', 'web', '--clear', '--output-dir', out], {

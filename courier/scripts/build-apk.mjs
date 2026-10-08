@@ -69,6 +69,7 @@ const env = {
   EXPO_PUBLIC_BUILD_SHA: sha,
   YALLO_KEYSTORE_PROPERTIES: keyProps,
   NODE_ENV: 'production',
+  YALLO_RELEASE_BUILD: 'apk', // a fresh Metro cache (metro.config.js)
   CI: '1',
   JAVA_HOME: javaHome,
   ANDROID_HOME: process.env.ANDROID_HOME ?? join(homedir(), 'Android', 'Sdk'),
@@ -83,7 +84,8 @@ console.log(`build-apk: Yallo Courier ${version} · ${sha} → ${config ? `API f
 run('npx', ['expo', 'prebuild', '--platform', 'android', '--no-install', ...(args.includes('--clean') ? ['--clean'] : [])]);
 // Modern Android phones are arm64; x86_64 runs on the emulator. `--all-abis` adds 32-bit devices.
 const abis = args.includes('--all-abis') ? 'armeabi-v7a,arm64-v8a,x86,x86_64' : 'arm64-v8a,x86_64';
-run('./gradlew', ['assembleRelease', '--console=plain', `-PreactNativeArchitectures=${abis}`], join(root, 'android'));
+// No daemon: Gradle exits with the build instead of keeping ~3 GB in memory (the laptop also runs the demo).
+run('./gradlew', ['assembleRelease', '--no-daemon', '--console=plain', `-PreactNativeArchitectures=${abis}`], join(root, 'android'));
 
 const apk = join(root, 'android/app/build/outputs/apk/release/app-release.apk');
 const outDir = resolve(root, opt('out') ?? 'dist');
