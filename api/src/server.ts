@@ -267,23 +267,42 @@ export function createApi({ tickMs = 1000, store = new Store(), authMode = 'warn
   });
 
   const wss = new WebSocketServer({ noServer: true });
-  /** Who each live-feed socket belongs to, from its ?token=. */
+  /** Who each live-feed socket belongs to (its session token), once it has said. */
   const viewers = new WeakMap<WebSocket, string | undefined>();
+  /** Sockets that have identified themselves and receive frames. */
+  const ready = new WeakSet<WebSocket>();
   http.on('upgrade', (req, socket, head) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
     if (url.pathname !== '/api/live' || !originAllowed(req.headers.origin, req)) { socket.destroy(); return; }
     wss.handleUpgrade(req, socket, head, ws => {
-      viewers.set(ws, url.searchParams.get('token') ?? undefined);
-      // A courier app subscribes with ?courier=<id>, so the server knows that courier answers its own offers.
-      const courierId = url.searchParams.get('courier');
-      if (courierId) ws.once('close', store.attachApp(courierId));
-      // A merchant app subscribes with ?merchant=<store id>; the stand-in merchant then leaves that store alone.
-      // Enforced: only that store's staff (or ops) can claim it.
-      const merchantId = url.searchParams.get('merchant');
-      const viewer = store.userForToken(url.searchParams.get('token') ?? undefined);
-      if (merchantId && (!enforce || viewer?.role === 'ops' || (viewer?.role === 'merchant' && viewer.merchantId === merchantId))) {
-        ws.once('close', store.attachMerchantApp(merchantId));
-      }
+      const begin = (token: string | undefined) => {
+        if (ws.readyState !== WebSocket.OPEN) return;
+        viewers.set(ws, token);
+        // A courier app subscribes with ?courier=<id>, so the server knows that courier answers its own offers.
+        const courierId = url.searchParams.get('courier');
+        if (courierId) ws.once('close', store.attachApp(courierId));
+        // A merchant app subscribes with ?merchant=<store id>; the stand-in merchant then leaves that store alone.
+        // Enforced: only that store's staff (or ops) can claim it.
+        const merchantId = url.searchParams.get('merchant');
+        const viewer = store.userForToken(token);
+        if (merchantId && (!enforce || viewer?.role === 'ops' || (viewer?.role === 'merchant' && viewer.merchantId === merchantId))) {
+          ws.once('close', store.attachMerchantApp(merchantId));
+        }
+        ready.add(ws);
+        sendTo(ws, new Map(), 'first', viewer);
+      };
+      // Current clients keep the session token out of the URL (logs, proxies): they connect with ?auth=1 and send
+      // { type: 'auth', token } as their first message. Older ones (the shipped APKs) still put it in ?token=.
+      if (url.searchParams.get('auth') === '1') {
+        const timer = setTimeout(() => ws.close(4401, 'Send { type: "auth", token } first'), 10_000);
+        ws.once('message', data => {
+          clearTimeout(timer);
+          let msg: { type?: unknown; token?: unknown } | undefined;
+          try { msg = JSON.parse(String(data)); } catch { /* handled below */ }
+          if (msg?.type !== 'auth' || (msg.token !== undefined && msg.token !== null && typeof msg.token !== 'string')) { ws.close(4400, 'Expected { type: "auth", token }'); return; }
+          begin((msg.token as string | null) ?? undefined);
+        });
+      } else begin(url.searchParams.get('token') ?? undefined);
       wss.emit('connection', ws, req);
     });
   });
@@ -303,7 +322,6 @@ export function createApi({ tickMs = 1000, store = new Store(), authMode = 'warn
     ws.send(frames.get(k)!);
     catalogSent.set(ws, version);
   };
-  wss.on('connection', ws => sendTo(ws, new Map(), 'first', store.userForToken(viewers.get(ws))));
 
   // Coalesce bursts of changes (an action plus a tick) into one frame per viewer per event-loop turn.
   let pending = false;
@@ -314,7 +332,7 @@ export function createApi({ tickMs = 1000, store = new Store(), authMode = 'warn
       pending = false;
       const frames = new Map<string, string>();
       wss.clients.forEach(c => {
-        if (c.readyState !== WebSocket.OPEN) return;
+        if (c.readyState !== WebSocket.OPEN || !ready.has(c)) return;
         const user = store.userForToken(viewers.get(c));
         const key = enforce && user ? user.role + ':' + user.id : enforce ? 'anon' : 'all';
         sendTo(c, frames, key, user);

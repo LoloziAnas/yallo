@@ -4,6 +4,7 @@ import { createApi, DEFAULT_LIMITS, DEMO_LIMITS } from './server';
 import { Store } from './store';
 import { createPush } from './push';
 import { openPgState, type PgState } from './pg';
+import { createSms } from './sms';
 
 const port = Number(process.env.PORT) || API_PORT;
 // Listen on all interfaces so phones on the same network can reach the API.
@@ -30,20 +31,33 @@ const corsOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',
 // DEV_TOKENS=off turns off the fixed test tokens (dev-ops, dev-courier-<id>, dev-customer). Never on a demo server.
 const devTokens = process.env.DEV_TOKENS !== 'off' && !production && !demo;
 
-// STAND_IN_MERCHANT=off: nobody moves new orders through accepted → ready except ops.
-const standInMerchant = process.env.STAND_IN_MERCHANT !== 'off';
+// Stand-ins play the parts nobody plays yet. STAND_IN_MERCHANT: a store without the merchant app accepts and prepares
+// orders by itself. STAND_IN_COURIERS: a courier without the app accepts offers by itself. Both on in development and
+// the demo, off in production (on/off override).
+const flag = (v: string | undefined, dflt: boolean) => v === 'on' ? true : v === 'off' ? false : dflt;
+const standInMerchant = demo || flag(process.env.STAND_IN_MERCHANT, !production);
+const standInOffers = demo || flag(process.env.STAND_IN_COURIERS, !production);
+// The clock: CLOCK=real follows the wall clock in TIME_ZONE (production and the demo); CLOCK=demo is the fixed
+// evening that starts at 18:34 (development, tests, the joint e2e).
+const realClock = demo || (process.env.CLOCK ?? (production ? 'real' : 'demo')) === 'real';
+const timeZone = process.env.TIME_ZONE || process.env.DEMO_TIME_ZONE || 'Africa/Casablanca';
+// SMS_DRIVER: how sign-in codes are sent. Only 'log' exists so far (see src/sms.ts to add a provider).
+const sms = createSms(process.env.SMS_DRIVER || 'log');
 // OTP_MODE=dev makes every one-time code 123456; never in production, where codes are random (logged until SMS
 // exists). The demo profile always uses 123456: there's no SMS provider and testers need a code they can type.
 const otpMode = demo || (!production && process.env.OTP_MODE !== 'random') ? 'dev' : 'random';
 // /api/reset wipes everything (ops only): off in production unless ALLOW_RESET=1; on in the demo profile.
 const allowReset = demo || !production || process.env.ALLOW_RESET === '1';
 const store = new Store({
-  file, devTokens, standInMerchant, otpMode,
+  file, devTokens, standInMerchant, standInOffers, otpMode, sms,
   ...(pg ? { persist: { saved: pg.saved, save: pg.save } } : {}),
-  ...(demo ? { clock: 'real' as const, timeZone: process.env.DEMO_TIME_ZONE || 'Africa/Casablanca', enforceHours: false, standInCourier: true, autoDispatchSec: 30, testerCouriers: true } : {}),
+  ...(realClock ? { clock: 'real' as const, timeZone } : {}),
+  ...(demo ? { enforceHours: false, standInCourier: true, autoDispatchSec: 30, testerCouriers: true } : {}),
 });
-// PUSH=expo sends notifications through the Expo push service; anything else only logs them.
-const pushMode = process.env.PUSH === 'expo' ? 'expo' : 'log';
+// PUSH_DRIVER (or PUSH): 'expo' sends notifications through the Expo push service; 'log' (default) only logs them.
+const pushDriver = process.env.PUSH_DRIVER || process.env.PUSH || 'log';
+if (pushDriver !== 'log' && pushDriver !== 'expo') throw new Error(`PUSH_DRIVER=${pushDriver} is not available (have: log, expo)`);
+const pushMode = pushDriver;
 // Rate limits on public endpoints: on in production (or RATE_LIMITS=on), and 6× higher in the demo profile.
 // Locally every app shares one address, so they're off.
 const rateLimits = demo ? DEMO_LIMITS : production || process.env.RATE_LIMITS === 'on' ? DEFAULT_LIMITS : {};
@@ -60,7 +74,8 @@ http.listen(port, host, () => {
   console.log(`CORS: ${corsOrigins ? corsOrigins.join(', ') : 'any origin'}`);
   console.log(`Rate limits: ${Object.keys(rateLimits).length ? 'on' : 'off'}${trustProxy ? ' (X-Forwarded-For)' : ''}`);
   console.log(`OTP codes: ${otpMode === 'dev' ? 'always 123456' : 'random, logged'}${allowReset ? '' : ' · reset disabled'}`);
-  console.log(`Auth: ${authMode}${devTokens ? ', dev tokens on' : ''} · Push: ${pushMode} · Stand-in merchant: ${standInMerchant ? 'on' : 'off'}${demo ? ' · stand-in couriers and auto-dispatch on' : ''}`);
+  console.log(`Auth: ${authMode}${devTokens ? ', dev tokens on' : ''} · Push: ${pushMode} · SMS: ${process.env.SMS_DRIVER || 'log'}`);
+  console.log(`Stand-ins: merchant ${standInMerchant ? 'on' : 'off'}, courier offers ${standInOffers ? 'on' : 'off'}${demo ? ', couriers and auto-dispatch on' : ''}`);
 });
 
 // Save the latest state before exiting.

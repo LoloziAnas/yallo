@@ -180,8 +180,11 @@ the state in Postgres instead of a file.
   `api/.env.example`: `PORT`, `HOST`, `STATE_FILE`, `AUTH_MODE`, `CORS_ORIGINS` (browser allowlist; apps send no
   Origin and are always allowed), `PUSH=expo`, `EXPO_ACCESS_TOKEN`, `STAND_IN_MERCHANT=off`, `YALLO_VERSION`.
   `GET /api/health` → `{ ok, version, auth, epoch, t }` for deploy checks.
-  Production also: one-time codes are random and written to the server log (no SMS provider yet: `OTP_MODE=dev`, i.e.
-  always 123456, is refused in production); `/api/reset` is off unless `ALLOW_RESET=1`; public endpoints are
+  Production also: the clock is real (`CLOCK=real`, `TIME_ZONE`); the stand-in merchant and stand-in courier offers are
+  off (`STAND_IN_MERCHANT`, `STAND_IN_COURIERS`); one-time codes are random and go through `SMS_DRIVER` (only `log`
+  so far, i.e. the server log; `OTP_MODE=dev`, always 123456, is refused in production); push goes through
+  `PUSH_DRIVER` (`log` or `expo`); the live feed takes the session token in its first message (`?auth=1`, then
+  `{ type: 'auth', token }`), and still accepts `?token=` from older apps; `/api/reset` is off unless `ALLOW_RESET=1`; public endpoints are
   rate-limited per client address (`TRUST_PROXY=1` behind a reverse proxy; `RATE_LIMITS=on` locally); sessions last
   30 days.
 - Back office: build with `VITE_API_URL=https://<api host> npm run build` (see `back-office/.env.example`) and serve

@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApi, notifications, DEFAULT_LIMITS } from '../src/server';
 import { createPush, type PushMessage } from '../src/push';
+import { createSms } from '../src/sms';
 
 const order = (s: Store, id: string) => s.state.orders.find(o => o.id === id)!;
 const courier = (s: Store, id: string) => s.state.couriers.find(c => c.id === id)!;
@@ -1631,6 +1632,53 @@ describe('Merchant app (v1)', () => {
       await attach('dev-merchant-m2', 'm2');
       assert.equal(claimed, true);
       off();
+    } finally {
+      a.http.closeAllConnections();
+      await new Promise<void>(r => a.http.close(() => r()));
+    }
+  });
+});
+
+describe('Production profile (v1)', () => {
+  test('without stand-in offers, an offer to a courier with no app waits for an answer and expires', () => {
+    const s = new Store({ standInOffers: false });
+    s.offerOrder('#48214', 'c2');
+    tick(s, STAND_IN_ACCEPT_SEC + 2);
+    assert.equal(order(s, '#48214').offer?.courierId, 'c2', 'nobody accepted for the courier');
+    tick(s, OFFER_SEC);
+    assert.equal(order(s, '#48214').offer, undefined);
+    assert.equal(order(s, '#48214').lastOffer?.outcome, 'expired');
+  });
+
+  test('sign-in codes go through the SMS driver', async () => {
+    const sent: [string, string][] = [];
+    const s = new Store({ otpMode: 'random', sms: async (to, text) => { sent.push([to, text]); } });
+    s.requestOtp('0612345678', 'customer');
+    await new Promise(r => setImmediate(r));
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0][0], '+212612345678');
+    const code = sent[0][1].match(/\d{6}/)![0];
+    assert.equal(s.verifyOtp('0612345678', code).user.role, 'customer');
+    assert.throws(() => createSms('carrier-pigeon'), /not available/);
+  });
+
+  test('the live feed takes the token in the first message (?auth=1); ?token= still works for older apps', async () => {
+    const a = createApi({ tickMs: 0, authMode: 'enforce' });
+    await new Promise<void>(r => a.http.listen(0, '127.0.0.1', r));
+    const ws = (q: string, first?: string) => new Promise<{ state?: LiveState; closed?: number }>(resolve => {
+      const c = new WsClient(`ws://127.0.0.1:${(a.http.address() as AddressInfo).port}/api/live${q}`);
+      if (first !== undefined) c.on('open', () => c.send(first));
+      c.on('message', d => { resolve({ state: JSON.parse(String(d)).state }); c.close(); });
+      c.on('close', code => resolve({ closed: code }));
+    });
+    try {
+      const viaMessage = await ws('?auth=1', JSON.stringify({ type: 'auth', token: 'dev-courier-c1' }));
+      assert.ok(viaMessage.state!.couriers.length === 1 && viaMessage.state!.couriers[0].id === 'c1', 'the courier view');
+      const anonymous = await ws('?auth=1', JSON.stringify({ type: 'auth', token: null }));
+      assert.equal(anonymous.state!.orders.length, 0);
+      assert.equal((await ws('?auth=1', 'hello')).closed, 4400);
+      const legacy = await ws('?token=dev-ops');
+      assert.equal(legacy.state!.orders.length, 16, 'the ops view through ?token=');
     } finally {
       a.http.closeAllConnections();
       await new Promise<void>(r => a.http.close(() => r()));

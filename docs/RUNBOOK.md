@@ -98,8 +98,11 @@ apps drop anything they remembered about the old data.
 | `RATE_LIMITS` | off (on in production) | per-address limits on sign-in codes, verification and courier sign-ups |
 | `TRUST_PROXY` | off | `1` behind a reverse proxy, so limits use X-Forwarded-For |
 | `ALLOW_RESET` | on (off in production) | `1` allows `POST /api/reset` in production |
-| `PUSH` / `EXPO_ACCESS_TOKEN` | log only | `expo` sends real push notifications through Expo |
-| `STAND_IN_MERCHANT` | on | the stand-in accepts orders after 20 s and has them ready 40 s later; `off` when stores are run by ops |
+| `PUSH_DRIVER` (or `PUSH`) / `EXPO_ACCESS_TOKEN` | log | `expo` sends real push notifications through Expo |
+| `SMS_DRIVER` | log | how sign-in codes are sent; only `log` exists so far (`api/src/sms.ts` explains adding a provider) |
+| `CLOCK` / `TIME_ZONE` | demo (real in production) / Africa/Casablanca | `real` follows the wall clock in `TIME_ZONE` (an IANA name or `+00:00`); `demo` is the fixed evening from 18:34 |
+| `STAND_IN_COURIERS` | on (off in production) | couriers without the app accept offers by themselves |
+| `STAND_IN_MERCHANT` | on (off in production) | stores without the merchant app accept orders after 20 s and have them ready 40 s later (or at the prep time the store chose) |
 | `YALLO_VERSION` | dev (or the Render commit) | shown by `GET /api/health` |
 | `DEPLOY_PROFILE` | (none) | `demo`: the public demo server (see [`DEMO.md`](DEMO.md)) |
 | `DEMO_TIME_ZONE` | Africa/Casablanca | demo profile: the clock's time zone, or a fixed offset like `+00:00` |

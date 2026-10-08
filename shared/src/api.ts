@@ -249,7 +249,7 @@ export async function fetchApiConfig(configUrl: string): Promise<string> {
  * @param opts.onBaseUrl called when a lookup finds a new address (e.g. to remember it for the next cold start).
  */
 export function createYalloClient(baseUrl: string, opts: { token?: string; configUrl?: string; onBaseUrl?: (url: string) => void } = {}) {
-  /** Sent as `Authorization: Bearer …` on every request and as `?token=` on the live feed. */
+  /** Sent as `Authorization: Bearer …` on every request, and in the live feed's first message. */
   let token = opts.token;
   let base = baseUrl;
   let found = !opts.configUrl;
@@ -349,14 +349,20 @@ export function createYalloClient(baseUrl: string, opts: { token?: string; confi
         // After a few failed connections, look the address up again (it may have moved).
         await ready(failures >= 2);
         if (stopped) return;
-        const params = [opts.courierId && 'courier=' + encodeURIComponent(opts.courierId), opts.merchantId && 'merchant=' + encodeURIComponent(opts.merchantId), token && 'token=' + encodeURIComponent(token)].filter(Boolean);
+        // The session token goes in the first message, not the URL (?auth=1 tells the server to wait for it).
+        const params = ['auth=1', opts.courierId && 'courier=' + encodeURIComponent(opts.courierId), opts.merchantId && 'merchant=' + encodeURIComponent(opts.merchantId)].filter(Boolean);
         const query = params.length ? '?' + params.join('&') : '';
         const wsUrl = (base || (typeof location !== 'undefined' ? location.origin : '')).replace(/^http/, 'ws') + '/api/live' + query;
         let opened = false;
         ws = new WebSocket(wsUrl);
         // After unsubscribing, a socket still closing must not report anything: a newer subscription (e.g. after
         // sign-in) may already be connected, and a late "offline" would contradict it.
-        ws.onopen = () => { opened = true; failures = 0; if (!stopped) onStatus?.(true); };
+        const socket = ws;
+        ws.onopen = () => {
+          socket.send(JSON.stringify({ type: 'auth', token: token ?? null }));
+          opened = true; failures = 0;
+          if (!stopped) onStatus?.(true);
+        };
         ws.onmessage = e => {
           const msg = JSON.parse(String(e.data)) as LiveMessage;
           if (msg.type === 'state' && !stopped) {

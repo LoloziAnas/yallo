@@ -10,6 +10,7 @@ import {
 
 import { ActionError } from './errors';
 import { cleanMerchant, cleanOptionGroups, cleanProduct } from './catalog';
+import type { SmsSender } from './sms';
 export { ActionError };
 
 /** Orders placed through the API are moved along by a stand-in merchant: accepted, then ready. */
@@ -199,6 +200,13 @@ export type StoreOptions = {
    * couriers with the app open first, then the nearest. Off by default (ops dispatch from the back office).
    */
   autoDispatchSec?: number;
+  /**
+   * Couriers without an app accept offers by themselves after STAND_IN_ACCEPT_SEC (default). Off in production, where
+   * an offer waits for the courier's answer or expires.
+   */
+  standInOffers?: boolean;
+  /** Sends sign-in codes. Default: write them to the log. */
+  sms?: SmsSender;
   /** Also seed DEMO_TESTER_COURIERS (public demo). */
   testerCouriers?: boolean;
   /**
@@ -251,6 +259,8 @@ export class Store {
   private readonly standIn: boolean;
   private readonly seedOptions: SeedOptions;
   private readonly standInCourier: boolean;
+  private readonly standInOffers: boolean;
+  private readonly sms?: SmsSender;
   private readonly autoDispatchSec?: number;
   private readonly persist?: StoreOptions['persist'];
   /** When a stand-in courier reached their current stop, by order id (memory only). */
@@ -278,6 +288,8 @@ export class Store {
     this.sessionTtlMs = opts.sessionTtlMs ?? 30 * 24 * 3600_000;
     this.standIn = opts.standInMerchant ?? true;
     this.standInCourier = opts.standInCourier ?? false;
+    this.standInOffers = opts.standInOffers ?? true;
+    this.sms = opts.sms;
     this.autoDispatchSec = opts.autoDispatchSec;
     this.persist = opts.persist;
     this.seedOptions = { realTime: opts.clock === 'real', timeZone: opts.timeZone ?? 'Africa/Casablanca', enforceHours: opts.enforceHours ?? true, testerCouriers: opts.testerCouriers ?? false };
@@ -465,7 +477,7 @@ export class Store {
     for (const o of s.orders) {
       if (!o.offer) continue;
       const c = this.courier(o.offer.courierId);
-      if (!c.app && s.t >= o.offer.offeredAt + STAND_IN_ACCEPT_SEC) this.assign(o, c);
+      if (this.standInOffers && !c.app && s.t >= o.offer.offeredAt + STAND_IN_ACCEPT_SEC) this.assign(o, c);
       else if (s.t >= o.offer.expiresAt) this.endOffer(o, 'expired');
     }
     for (const c of s.couriers) {
@@ -1079,8 +1091,9 @@ export class Store {
     if (wait > 0) throw new ActionError(`Wait ${wait} s before asking for a new code`, 429);
     const code = this.otpMode === 'dev' ? DEV_OTP_CODE : String(randomBytes(4).readUInt32BE(0) % 1_000_000).padStart(6, '0');
     this.otps.set(phone, { role, code, sentAt: Date.now(), attempts: 0 });
-    // No SMS provider yet: the code goes to the server log, for whoever runs the demo to pass on.
-    console.log(`[otp] ${role} ${phone}: code ${code}`);
+    // Through the SMS driver when there is one; otherwise the log, for whoever runs the demo to pass on.
+    if (this.sms) void this.sms(phone, `Your Yallo code is ${code}. It expires in ${OTP_TTL_MS / 60_000} minutes.`).catch(e => console.warn('[sms] send failed:', (e as Error).message));
+    else console.log(`[otp] ${role} ${phone}: code ${code}`);
     // Fixed codes (dev and the public demo) are no secret: say which, so the apps can show it on the code screen.
     return { sent: true as const, phone, expiresInSec: OTP_TTL_MS / 1000, ...(this.otpMode === 'dev' ? { fixedCode: DEV_OTP_CODE } : {}) };
   }
