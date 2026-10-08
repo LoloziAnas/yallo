@@ -18,7 +18,7 @@ import { colors, photoPlaceholder, radius, shadow } from '@/theme';
 
 import { arriveAtText, payLabel, statusLabels } from './order-text';
 import { ProgressSegments } from './progress-segments';
-import { TrackingMap } from './tracking-map';
+import { TrackingLiveMap } from './tracking-live-map';
 
 const MAP_H = 320;
 
@@ -56,7 +56,7 @@ export function Tracking() {
   return (
     <Screen edges={[]}>
       <View>
-        <TrackingMap
+        <TrackingLiveMap
           width={width}
           height={mapH}
           topInset={insets.top + 56}

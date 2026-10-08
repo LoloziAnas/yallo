@@ -4,6 +4,8 @@ import { View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Icon } from '@/components/icon';
+import { LiveMap, type LngLat } from '@/components/live-map';
+import { MARRAKECH } from '@/components/live-map/shared';
 import { Segmented } from '@/components/segmented';
 import { Sheet } from '@/components/sheet';
 import { TextField } from '@/components/text-field';
@@ -46,6 +48,8 @@ export function NewAddressSheet() {
     onChangeText: (v: string) => setNa((x) => ({ ...x, [k]: v })),
   });
   const invalid = !na.district.trim() || !na.street.trim();
+  const pin: LngLat | null =
+    draft?.lat !== undefined && draft?.lon !== undefined ? [draft.lon, draft.lat] : null;
 
   const save = () => {
     if (draft) saveLocated(na);
@@ -80,6 +84,14 @@ export function NewAddressSheet() {
       <Txt heading size={27} style={{ marginBottom: 12 }}>
         {t.addNew}
       </Txt>
+      {/* Where the address is: the GPS fix when "Use my location" found one, else the city. */}
+      <View style={{ height: 170, marginBottom: 14, borderRadius: 14, overflow: 'hidden' }}>
+        <LiveMap
+          pins={pin ? [{ id: 'home', kind: 'home', lngLat: pin }] : []}
+          center={pin ?? MARRAKECH}
+          zoom={pin ? 16 : 12}
+        />
+      </View>
       <View style={{ gap: 12 }}>
         <View style={{ gap: 6 }}>
           <Txt size={12} w={600} color={colors.neutral700}>

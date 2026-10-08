@@ -45,3 +45,6 @@ example
 # Local release builds (scripts/build-apk.mjs, scripts/build-web.mjs)
 /apk
 /web-dist
+
+# maplibre-gl worker, copied on install (scripts/copy-maplibre-worker.mjs)
+/public/maplibre
