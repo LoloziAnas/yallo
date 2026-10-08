@@ -210,7 +210,15 @@ export type StoreOptions = {
    * an order `locationDays` after it ends; an offline courier's last GPS fix is cleared (location is only kept while
    * working). Off by default; on in production.
    */
-  retention?: { chatDays?: number; locationDays?: number };
+  retention?: {
+    chatDays?: number; locationDays?: number;
+    /** Orders are deleted this many years after they end (the accounting period). */
+    orderYears?: number;
+    /** Resolved tickets are deleted this many days after they were resolved. */
+    ticketDays?: number;
+    /** Rejected courier applications are deleted this many days after the decision. */
+    rejectedApplicationDays?: number;
+  };
   /** Sends sign-in codes. Default: write them to the log. */
   sms?: SmsSender;
   /** Also seed DEMO_TESTER_COURIERS (public demo). */
@@ -594,11 +602,18 @@ export class Store {
         couriers++;
       }
     }
-    if (chats + fixes + couriers) {
-      console.log(`[retention] removed chat on ${chats} orders, GPS on ${fixes} orders and ${couriers} offline couriers`);
+    const before = { orders: s.orders.length, tickets: s.tickets.length, applications: s.applications.length };
+    if (r.orderYears !== undefined) s.orders = s.orders.filter(o => !endedBefore(r.orderYears! * 365)(o));
+    if (r.ticketDays !== undefined) s.tickets = s.tickets.filter(tk => !(tk.resolved && (tk.resolvedAt ?? tk.openedAt) < s.t - r.ticketDays! * 86400));
+    if (r.rejectedApplicationDays !== undefined) {
+      s.applications = s.applications.filter(a => !(a.status === 'rejected' && (a.decidedAt ?? a.submittedAt) < s.t - r.rejectedApplicationDays! * 86400));
+    }
+    const orders = before.orders - s.orders.length, tickets = before.tickets - s.tickets.length, applications = before.applications - s.applications.length;
+    if (chats + fixes + couriers + orders + tickets + applications) {
+      console.log(`[retention] removed chat on ${chats} orders, GPS on ${fixes} orders and ${couriers} offline couriers; deleted ${orders} orders, ${tickets} tickets, ${applications} rejected applications`);
       this.scheduleSave();
     }
-    return { chats, fixes, couriers };
+    return { chats, fixes, couriers, orders, tickets, applications };
   }
 
   /** Drops finished orders PRUNE_FINISHED_SEC after they ended (real time only). */
@@ -1090,6 +1105,7 @@ export class Store {
     const tk = this.ticket(ticketId);
     if (tk.resolved) throw new ActionError(tk.id + ' is already resolved', 409);
     tk.resolved = true;
+    tk.resolvedAt = this.s.t;
     this.changed();
   }
 
@@ -1306,6 +1322,7 @@ export class Store {
     this.s.couriers.push({ id: 'c' + n, name: a.name, phone: a.phone, vehicle: a.vehicle, zone: 'Guéliz', status: 'off',
       pos: { x: centre.x + (n % 5) - 2, y: centre.y + (n % 3) - 1 }, rating: 5, suspended: false, app: false });
     a.status = 'approved';
+    a.decidedAt = this.s.t;
     a.courierId = 'c' + n;
     this.changed();
   }
@@ -1316,6 +1333,7 @@ export class Store {
     if (!why) throw new ActionError('A rejection reason is required');
     a.status = 'rejected';
     a.rejectReason = why;
+    a.decidedAt = this.s.t;
     this.changed();
   }
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { applyLive, fromLive, toBoOrder } from '../data.js';
+import { applyLive, cancelNote, fromLive, toBoOrder } from '../data.js';
 import { live } from './fixture.js';
 
 describe('data adapters', () => {
@@ -40,5 +40,13 @@ describe('live updates', () => {
   test('the first snapshot marks the state loaded and keeps selections', () => {
     const { next, reseeded } = applyLive({ drawer: { type: 'order', id: '#48214' } }, live());
     expect([reseeded, next.loaded, next.drawer]).toEqual([false, true, undefined]);
+  });
+
+  test('who cancelled an order, for the drawer', () => {
+    const base = { st:'cancelled', m:'Dar Zitoun' };
+    expect(cancelNote({ ...base, cancelledBy:'merchant', rejectReason:'Out of chicken' })).toBe('Rejected by Dar Zitoun · Out of chicken');
+    expect(cancelNote({ ...base, cancelledBy:'customer' })).toBe('Cancelled by the customer');
+    expect(cancelNote({ ...base, cancelledBy:'ops', cancelReason:'Customer unreachable' })).toBe('Cancelled by ops · Customer unreachable');
+    expect(cancelNote({ ...base, st:'delivered' })).toBe(null);
   });
 });

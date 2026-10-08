@@ -1772,16 +1772,35 @@ describe('Data retention (v1)', () => {
     s.cancelOrder(o.id, 'Test', false);
     s.setCourierLocation('c2', 31.64, -8.0);
     s.setCourierAvailability('c2', 'off');
-    assert.deepEqual(s.applyRetention(), { chats: 0, fixes: 0, couriers: 1 }, "nothing old yet; the offline courier's fix goes at once");
+    assert.deepEqual(s.applyRetention(), { chats: 0, fixes: 0, couriers: 1, orders: 0, tickets: 0, applications: 0 }, "nothing old yet; the offline courier's fix goes at once");
     assert.equal(courier(s, 'c2').lastFixAt, undefined);
     s.state.t += 31 * 86400;
-    assert.deepEqual(s.applyRetention(), { chats: 0, fixes: 1, couriers: 0 });
+    assert.deepEqual(s.applyRetention(), { chats: 0, fixes: 1, couriers: 0, orders: 0, tickets: 0, applications: 0 });
     assert.equal(order(s, o.id).location, undefined);
     assert.ok(order(s, o.id).chat?.length, 'chat kept until 90 days');
     s.state.t += 60 * 86400;
-    assert.deepEqual(s.applyRetention(), { chats: 1, fixes: 0, couriers: 0 });
+    assert.deepEqual(s.applyRetention(), { chats: 1, fixes: 0, couriers: 0, orders: 0, tickets: 0, applications: 0 });
     assert.equal(order(s, o.id).chat, undefined);
     assert.equal(order(s, o.id).total > 0, true, 'the order record stays');
+  });
+
+  test('orders after the accounting period, resolved tickets and rejected applications (each off unless set)', () => {
+    const s = new Store({ retention: { orderYears: 10, ticketDays: 730, rejectedApplicationDays: 180 } });
+    const delivered = s.state.orders.filter(o => o.status === 'delivered').length;
+    const ticket = s.state.tickets.find(tk => !tk.resolved)!;
+    s.resolveTicket(ticket.id);
+    const app = s.state.applications.find(a => a.status === 'pending')!;
+    s.rejectApplication(app.id, 'Licence expired');
+    s.state.t += 181 * 86400;
+    assert.equal(s.applyRetention().applications, 1);
+    assert.equal(s.state.applications.some(a => a.id === app.id), false);
+    s.state.t += 731 * 86400;
+    assert.ok(s.applyRetention().tickets >= 1);
+    assert.equal(s.state.tickets.some(tk => tk.id === ticket.id), false);
+    assert.ok(s.state.tickets.every(tk => !tk.resolved || (tk.resolvedAt ?? tk.openedAt) >= s.state.t - 730 * 86400), 'open tickets stay');
+    s.state.t += 10 * 365 * 86400;
+    assert.ok(s.applyRetention().orders >= delivered);
+    assert.ok(s.state.orders.every(o => ACTIVE_STATUSES.includes(o.status)), 'only open orders are left');
   });
 
   test('off by default', () => {

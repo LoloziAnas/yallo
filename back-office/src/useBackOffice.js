@@ -3,7 +3,7 @@ import { DISPATCH_RADIUS_KM, clockAt, dateAt, pickupKm, storeAvailability } from
 import { api } from './api.js';
 import { avgFirstReplyMin, ordersPerHour, overviewKpis, todayOrders, zoneStats } from './metrics.js';
 import { IC } from './icons.jsx';
-import { ZONES, STATUS, ACTIVE, DOCDEF, applyLive, fromLive } from './data.js';
+import { ZONES, STATUS, ACTIVE, DOCDEF, applyLive, cancelNote, fromLive } from './data.js';
 
 
 const fmt = n => Math.round(n).toLocaleString('en-US');
@@ -253,7 +253,7 @@ export function useBackOffice({ startPage, user, onSignOut } = {}) {
     const idx = { pending:0, preparing:1, ready:2, picking:2, delivering:3, delivered:4, cancelled:-1 }[o.st];
     // Minutes to go for the courier: to the store until pickup, then to the drop-off (2.9 min/km, as in the picker).
     const etaMin = c ? Math.max(1, Math.round(pickupKm({ x:c.x, y:c.y }, o.st === 'delivering' ? { x:o.ux, y:o.uy } : { x:m.x, y:m.y }) * 2.9)) : 0;
-    od = { ...o, st:STATUS[o.st], timer:mmss(el(o)), late:!!late, lateMsg:late, maddr:m.addr, caddr:(o.address ? [o.address.street, o.address.building].filter(Boolean).join(' · ') : o.cz + ', Marrakech') + ' · ' + (o.pay === 'Cash' ? 'collect ' + o.total + ' DH' : 'paid online'),
+    od = { ...o, st:STATUS[o.st], cancelNote:cancelNote(o), timer:mmss(el(o)), late:!!late, lateMsg:late, maddr:m.addr, caddr:(o.address ? [o.address.street, o.address.building].filter(Boolean).join(' · ') : o.cz + ', Marrakech') + ' · ' + (o.pay === 'Cash' ? 'collect ' + o.total + ' DH' : 'paid online'),
       clandmark:o.address && o.address.landmark ? '📍 ' + o.address.landmark : null, scheduled:o.scheduledFor ? 'Scheduled ' + o.scheduledFor : null,
       hasCourier:!!c, noCourier:!c && !o.offer && o.st !== 'cancelled', courier:c && c.name, cIni:c && ini(c.name), cVeh:c && c.veh, cPhone:c && c.phone, cEta:!c ? '' : o.st === 'delivering' ? 'Drop-off in ' + etaMin + ' min' : ACTIVE.includes(o.st) ? 'At store in ' + etaMin + ' min' : 'Done', openCourier:c ? openCourier(c.id) : null,
       hasOffer:!!o.offer, offerName:o.offer && CBY[o.offer.courier].name, offerLeft:o.offer && mmss(o.offer.left),

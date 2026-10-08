@@ -22,7 +22,7 @@ const SEED_NAMES = Object.fromEntries(MERCHANTS.map(m => [m.id, m.name]));
 /** Shared or API order → the back office's compact shape. `el` is seconds since placed; `t` is the demo clock. */
 export const toBoOrder = (o, t = 0, names = SEED_NAMES) => ({ id:o.id, m:names[o.merchantId] ?? o.merchantId, c:o.customerName, cz:o.zone, st:o.status, courier:o.courierId, total:o.total,
   pay:o.pay === 'cash' ? 'Cash' : 'Card', placed:o.placedAt, el:o.elapsedSec ?? DEMO_ELAPSED_SEC[o.id] ?? 0, items:o.items.map(i => [i.qty, i.name, i.price]),
-  ux:o.dropoff.x, uy:o.dropoff.y, fee:o.fee, serviceFee:o.serviceFee ?? 0, discount:o.discount ?? 0, promoCode:o.promoCode ?? null, refund:o.refund, cancelReason:o.cancelReason,
+  ux:o.dropoff.x, uy:o.dropoff.y, fee:o.fee, serviceFee:o.serviceFee ?? 0, discount:o.discount ?? 0, promoCode:o.promoCode ?? null, refund:o.refund, cancelReason:o.cancelReason, cancelledBy:o.cancelledBy ?? null, rejectReason:o.rejectReason ?? null,
   statusAt:o.statusAt ?? DEMO_STATUS_AT[o.id] ?? { pending:0 },
   pin:o.deliveryPin ?? null, rating:o.rating ?? null, chat:o.chat ?? [], address:o.address ?? null, instructions:o.instructions ?? null, kitchenNote:o.kitchenNote ?? null, prepMin:o.prepMin ?? null, scheduledFor:o.scheduledFor ?? null, phone:o.customerPhone ?? null,
   offer:o.offer ? { courier:o.offer.courierId, left:Math.max(0, o.offer.expiresAt - t) } : null, lastOffer:o.lastOffer ?? null });
@@ -68,3 +68,11 @@ export const toBoTicket = (tk, t) => ({ id:tk.id, from:T_SOURCE[tk.source][0], i
   order:tk.orderId, prio:T_PRIO[tk.priority], time:age(t - tk.openedAt), meta:tk.requesterMeta, resolved:tk.resolved, escalated:tk.escalated,
   msgs:tk.messages.map(m => [m.from === 'ops' ? 'us' : 'them', m.text, m.at, m.author]) });
 
+
+/** Who cancelled an order and why, for the drawer: "Rejected by Dar Zitoun · Out of chicken", "Cancelled by ops · …". */
+export function cancelNote(o) {
+  if (o.st !== 'cancelled') return null;
+  if (o.cancelledBy === 'merchant') return 'Rejected by ' + o.m + (o.rejectReason ? ' · ' + o.rejectReason : '');
+  if (o.cancelledBy === 'customer') return 'Cancelled by the customer';
+  return 'Cancelled by ops' + (o.cancelReason ? ' · ' + o.cancelReason : '');
+}

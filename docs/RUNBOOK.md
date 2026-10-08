@@ -103,6 +103,7 @@ apps drop anything they remembered about the old data.
 | `CLOCK` / `TIME_ZONE` | demo (real in production) / Africa/Casablanca | `real` follows the wall clock in `TIME_ZONE` (an IANA name or `+00:00`); `demo` is the fixed evening from 18:34 |
 | `STAND_IN_COURIERS` | on (off in production) | couriers without the app accept offers by themselves |
 | `RETENTION_CHAT_DAYS` / `RETENTION_LOCATION_DAYS` | off (90 / 30 in production and the demo) | delete order chat / customers' GPS fixes that many days after the order ends; offline couriers' last fix is cleared; `off` disables |
+| `RETENTION_ORDER_YEARS` / `RETENTION_TICKET_DAYS` / `RETENTION_REJECTED_APPLICATION_DAYS` | off | delete orders after the accounting period, resolved tickets, rejected courier applications; set them once the privacy policy fixes the periods |
 | `STAND_IN_MERCHANT` | on (off in production) | stores without the merchant app accept orders after 20 s and have them ready 40 s later (or at the prep time the store chose) |
 | `YALLO_VERSION` | dev (or the Render commit) | shown by `GET /api/health` |
 | `DEPLOY_PROFILE` | (none) | `demo`: the public demo server (see [`DEMO.md`](DEMO.md)) |
@@ -152,6 +153,19 @@ development:
 - Back office: `VITE_API_URL=https://<api> npm run build`, then serve `back-office/dist/` as static files (any path
   falls back to `index.html`).
 - `GET /api/health` returns `{ ok, version, auth, epoch, t }` for health checks.
+
+## Logs
+
+The API logs to stdout: sign-ins, refused requests, push and SMS (`[sms]`, and `[otp]` lines when no SMS driver is
+set, which contain phone numbers and one-time codes), and retention runs. Treat logs as personal data and keep them
+short (the privacy policy's log period):
+
+- **systemd** (the laptop demo's `yallo-demo-*` units, or a server unit): logs go to the journal. Cap it in
+  `/etc/systemd/journald.conf` (`SystemMaxUse=500M`, `MaxRetentionSec=30day`) or prune with
+  `journalctl --vacuum-time=30d`.
+- **A plain process** writing to a file (`npm run start:prod >> /var/log/yallo/api.log 2>&1`): rotate with logrotate,
+  e.g. `/var/log/yallo/*.log { daily rotate 30 compress missingok copytruncate }`.
+- **A hosting platform**: set its log retention to the same period.
 
 ## Tests
 

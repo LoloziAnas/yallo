@@ -24,6 +24,11 @@ function OrderDetail({ v }) {
         <button className="btn btn-ghost btn-icon close-btn" onClick={v.closeDrawer} aria-label="Close">{ic.x}</button>
       </div>
       <div className="drawer-body">
+        {od.cancelNote && (
+          <div role="note" style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '10px 12px', borderRadius: 12, background: 'var(--color-neutral-200)', color: 'var(--color-neutral-800)', fontSize: 13, fontWeight: 600 }}>
+            <span className="ico" style={{ fontSize: 16 }}>{ic.x}</span>{od.cancelNote}
+          </div>
+        )}
         {od.late && (
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '10px 12px', borderRadius: 12, background: 'var(--color-accent-100)', color: 'var(--color-accent-800)', fontSize: 13, fontWeight: 600 }}>
             <span className="ico" style={{ fontSize: 16 }}>{ic.alert}</span>{od.lateMsg}

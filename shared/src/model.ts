@@ -274,6 +274,8 @@ export type Ticket = {
   /** Demo clock second the ticket was opened. Negative for tickets older than the demo start. */
   openedAt: number;
   resolved: boolean;
+  /** When it was last resolved (t seconds, v1), for retention. */
+  resolvedAt?: number;
   escalated: boolean;
   messages: TicketMessage[];
 };
@@ -298,6 +300,8 @@ export type CourierApplication = {
   plate?: string;
   /** Demo-clock second the application came in (negative = before the demo started). */
   submittedAt: number;
+  /** When ops approved or rejected it (t seconds, v1), for retention. */
+  decidedAt?: number;
   /** Review per required document: null until ops looks at it. */
   docs: Partial<Record<DocKey, 'ok' | 'bad' | null>>;
   /** Why a document was rejected, shown to the applicant. */
