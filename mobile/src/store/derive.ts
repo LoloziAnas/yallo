@@ -5,12 +5,12 @@ import {
   type CategoryId,
   options,
   type Product,
-  productById,
   products,
   type Selection,
   type Store,
   storeById,
   stores,
+  productName,
 } from '@/data/catalog';
 import {
   clockAt,
@@ -280,5 +280,5 @@ export function riderNames(fullName: string) {
 }
 
 export function itemsText(lines: CartLine[]) {
-  return lines.map((l) => `${l.qty}× ${productById[l.pid].name}`).join(', ');
+  return lines.map((l) => `${l.qty}× ${productName(l.pid)}`).join(', ');
 }

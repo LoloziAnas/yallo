@@ -24,7 +24,8 @@ export function MenuItem({ product: p }: { product: Product }) {
   const plainKey = lineKey(p.id, {});
   // Items with options always open the product sheet; plain items get an inline stepper once added.
   const inCart = !hasOpt && q > 0;
-  const showAdd = hasOpt || q === 0;
+  const soldOut = !p.available;
+  const showAdd = !soldOut && (hasOpt || q === 0);
   const open = () => router.push(`/product/${p.id}`);
   const add = () => {
     if (hasOpt) open();
@@ -44,8 +45,17 @@ export function MenuItem({ product: p }: { product: Product }) {
         },
         pressed && { opacity: 0.85 },
       ]}>
-      <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-        {p.popular && (
+      <View style={{ flex: 1, minWidth: 0, gap: 4, opacity: soldOut ? 0.55 : 1 }}>
+        {soldOut && (
+          <Tag
+            label={t.outOfStock}
+            tone="neutral"
+            size={10}
+            caps
+            style={{ paddingVertical: 2, paddingHorizontal: 6 }}
+          />
+        )}
+        {p.popular && !soldOut && (
           <Tag
             label={t.popularTag}
             size={10}
@@ -63,16 +73,22 @@ export function MenuItem({ product: p }: { product: Product }) {
           {(hasOpt ? t.from + ' ' : '') + fmt(p.price)}
         </Txt>
       </View>
-      <View style={{ width: 108, height: 108 }}>
+      <View style={{ width: 108, height: 108, opacity: soldOut ? 0.55 : 1 }}>
         <Photo
           icon={storeIcon(p.storeId)}
+          uri={p.photoUrl}
           style={{ flex: 1, borderRadius: radius.lg, boxShadow: shadow.sm }}>
           <Txt
             mono
             size={9}
             lh={1.3}
             color={colors.accent800}
-            style={{ position: 'absolute', top: 6, start: 6 }}>
+            style={{
+              position: 'absolute',
+              top: 6,
+              start: 6,
+              display: p.photoUrl ? 'none' : 'flex',
+            }}>
             {p.img}
           </Txt>
         </Photo>

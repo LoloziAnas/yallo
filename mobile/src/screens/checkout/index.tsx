@@ -1,3 +1,6 @@
+// Reads the live catalogue, which changes in place: opt out of React Compiler memoisation.
+'use no memo';
+
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
@@ -12,12 +15,14 @@ import { Segmented } from '@/components/segmented';
 import { SumRows } from '@/components/sum-rows';
 import { TextField } from '@/components/text-field';
 import { Txt } from '@/components/txt';
-import { type PayMethod, productById } from '@/data/catalog';
+import { type PayMethod, productName } from '@/data/catalog';
 import { useApp, useT, selectAddress } from '@/store/app-store';
 import { clock, demoClock, fmt, scheduleSlots, sumRows, totals } from '@/store/derive';
 import { colors, radius, shadow } from '@/theme';
+import { useCatalog } from '@/hooks/use-catalog';
 
 export function CheckoutScreen() {
+  useCatalog();
   const t = useT();
   const bottomPad = useBottomPad(16);
   const s = useApp();
@@ -188,7 +193,7 @@ export function CheckoutScreen() {
                 key={l.key}
                 style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
                 <Txt size={14} style={{ flex: 1 }}>
-                  {`${l.qty}× ${productById[l.pid].name}`}
+                  {`${l.qty}× ${productName(l.pid)}`}
                 </Txt>
                 <Txt size={14}>{fmt(l.unit * l.qty)}</Txt>
               </View>

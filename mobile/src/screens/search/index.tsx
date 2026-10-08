@@ -1,3 +1,6 @@
+// Reads the live catalogue, which changes in place: opt out of React Compiler memoisation.
+'use no memo';
+
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
@@ -16,12 +19,14 @@ import { search, sortLabel } from '@/store/derive';
 import { colors, fontFamily, radius } from '@/theme';
 
 import { ProductRow, StoreRow } from './result-rows';
+import { useCatalog } from '@/hooks/use-catalog';
 
 const allLabel = { en: 'All', fr: 'Tout', ar: 'الكل' } as const;
 const priceLabels = ['DH', 'DH DH', 'DH DH DH'];
 
 /** Search with filters: idle (recent + trending), loading, empty and results states. */
 export function Search() {
+  useCatalog();
   const t = useT();
   const rtl = useRtl();
   const lang = useApp((s) => s.lang);

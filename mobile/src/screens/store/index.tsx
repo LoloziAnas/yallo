@@ -1,3 +1,6 @@
+// Reads the live catalogue, which changes in place: opt out of React Compiler memoisation.
+'use no memo';
+
 import { router } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import { type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, View } from 'react-native';
@@ -18,10 +21,12 @@ import { colors, radius, shadow } from '@/theme';
 
 import { MenuItem } from './menu-item';
 import { SectionTabs, TAB_HEIGHT } from './section-tabs';
+import { useCatalog } from '@/hooks/use-catalog';
 
 const HERO = 210;
 
 export function StoreScreen({ id }: { id: string }) {
+  const catalogVersion = useCatalog();
   const t = useT();
   const rtl = useRtl();
   const insets = useSafeAreaInsets();
@@ -37,7 +42,9 @@ export function StoreScreen({ id }: { id: string }) {
       name,
       items: items.filter((p) => p.sec === name),
     }));
-  }, [store.id]);
+    // Rebuilt when the live catalogue changes (new dishes, stock).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.id, catalogVersion]);
 
   const scroller = useRef<ScrollView>(null);
   // Content offsets of the in-flow tab row and of each section, measured on layout.

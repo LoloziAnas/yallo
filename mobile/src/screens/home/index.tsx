@@ -1,3 +1,6 @@
+// Reads the live catalogue, which changes in place: opt out of React Compiler memoisation.
+'use no memo';
+
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
@@ -16,9 +19,11 @@ import { categoryIcon, fastStores, popularStores, recommendedStores, totals } fr
 import { colors, radius, shadow } from '@/theme';
 
 import { FastCard, openStore, PopularCard, RecommendedCard } from './store-cards';
+import { useCatalog } from '@/hooks/use-catalog';
 
 /** Home: delivery address, search, promos, categories and store rails. */
 export function Home() {
+  useCatalog();
   const loading = useApp((s) => s.homeLoading);
   const networkError = useApp((s) => s.networkError);
   return (

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { type StyleProp, View, type ViewStyle } from 'react-native';
+import { Image } from 'expo-image';
+import { type StyleProp, StyleSheet, View, type ViewStyle } from 'react-native';
 
 import { Icon, type IconName } from '@/components/icon';
 import { Txt } from '@/components/txt';
@@ -13,6 +14,8 @@ type Props = {
   captionAt?: 'top-start' | 'bottom-start' | 'bottom-end';
   captionSize?: number;
   style?: StyleProp<ViewStyle>;
+  /** A real photo (https). Without one, the placeholder. */
+  uri?: string;
   /** Overlays (favourite button, time pill…) positioned absolutely by the caller. */
   children?: ReactNode;
 };
@@ -25,6 +28,7 @@ export function Photo({
   captionAt = 'top-start',
   captionSize = 10,
   style,
+  uri,
   children,
 }: Props) {
   const pos =
@@ -46,7 +50,16 @@ export function Photo({
         style,
       ]}>
       <Icon name={icon} size={iconSize} color={colors.accent500} />
-      {!!caption && (
+      {!!uri && (
+        <Image
+          source={{ uri }}
+          contentFit="cover"
+          transition={150}
+          accessibilityIgnoresInvertColors
+          style={StyleSheet.absoluteFill}
+        />
+      )}
+      {!!caption && !uri && (
         <Txt
           mono
           size={captionSize}

@@ -1,3 +1,6 @@
+// Reads the live catalogue, which changes in place: opt out of React Compiler memoisation.
+'use no memo';
+
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
@@ -15,11 +18,13 @@ import { type Product, productById, type Store, storeById } from '@/data/catalog
 import { useApp, useT } from '@/store/app-store';
 import { categoryIcon, fmt, storeIcon } from '@/store/derive';
 import { colors, radius, shadow } from '@/theme';
+import { useCatalog } from '@/hooks/use-catalog';
 
 type Tab = 'stores' | 'products';
 
 /** Favourite stores and products. Hearts remove items; products can be added straight to the cart. */
 export function Favorites() {
+  useCatalog();
   const t = useT();
   const [tab, setTab] = useState<Tab>('stores');
   const favStores = useApp((s) => s.favStores);
@@ -63,7 +68,9 @@ export function Favorites() {
         )}
         {tab === 'stores'
           ? favStores.map((id) => <StoreRow key={id} store={storeById[id]} />)
-          : favProducts.map((id) => <ProductRow key={id} product={productById[id]} />)}
+          : favProducts
+              .filter((id) => productById[id])
+              .map((id) => <ProductRow key={id} product={productById[id]} />)}
       </ScrollView>
       <CartBar />
     </Screen>

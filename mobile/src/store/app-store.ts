@@ -10,6 +10,7 @@ import type {
   PlaceOrderBody,
   ZoneName,
 } from '@yallo/shared';
+import { catalogOf } from '@yallo/shared';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useSyncExternalStore } from 'react';
@@ -32,11 +33,13 @@ import {
   type Order,
   type PayMethod,
   productById,
+  applyLiveCatalog,
   DEMO_DATA,
   seedAddresses,
   seedOrders,
   type Selection,
   storeById,
+  productName,
 } from '@/data/catalog';
 import { type Lang, strings } from '@/data/strings';
 import {
@@ -186,6 +189,8 @@ type State = {
   live: LiveState | null;
   /** Live feed connection; null until the first attempt finishes. */
   connected: boolean | null;
+  /** Goes up when the live catalogue (stores, products, stock) changes; screens listing it re-render on it. */
+  catalogVersion: number;
   /** Where the API is now ('' until a demo build has found it; see api/client.ts). */
   apiUrl: string;
   /** A GPS fix waiting for the customer to add the street (web, or no street from the geocoder). */
@@ -393,6 +398,7 @@ export const useApp = create<State & Actions>()(
       live: null,
       connected: null,
       apiUrl: getApiUrl(),
+      catalogVersion: 0,
       networkError: false,
       locDraft: null,
       notif: true,
@@ -485,8 +491,13 @@ export const useApp = create<State & Actions>()(
 
       addLine: (pid, sel, qty, fromProduct = false) => {
         const p = productById[pid];
-        const store = storeById[p.storeId];
         const s = get();
+        if (!p) return false;
+        if (!p.available) {
+          s.showToast(`${p.name} · ${t().outOfStock}`);
+          return false;
+        }
+        const store = storeById[p.storeId];
         // Outside its hours, or paused by ops in the back office.
         const state = storeState(store.id, s.live);
         if (state !== 'open') {
@@ -521,7 +532,7 @@ export const useApp = create<State & Actions>()(
         // Close the sheet, and the product screen too when the add came from there.
         router.dismiss(pd?.fromProduct ? 2 : 1);
         if (pd && get().addLine(pd.pid, pd.sel, pd.qty)) {
-          get().showToast(`${t().added} · ${productById[pd.pid].name}`);
+          get().showToast(`${t().added} · ${productName(pd.pid)}`);
         }
       },
 
@@ -586,6 +597,10 @@ export const useApp = create<State & Actions>()(
             return;
           }
           // 409s carry a customer-ready reason (paused, outside hours, under the minimum); keep it short.
+          if (e instanceof Error && /out of stock/i.test(e.message)) {
+            get().showToast(e.message);
+            return;
+          }
           const closed = e instanceof Error && /paused|closed/i.test(e.message);
           get().showToast(closed ? `${store.name} · ${t().closed}` : t().orderFailed);
           return;
@@ -725,6 +740,18 @@ export const useApp = create<State & Actions>()(
         return api.subscribe(
           (live) => {
             if (!current()) return;
+            // Stores and products follow the API (ops add them, change prices, mark things out of stock).
+            if (applyLiveCatalog(live.merchants, catalogOf(live))) {
+              // Drop cart lines whose product ops removed (out of stock ones stay, marked).
+              const { cart } = get();
+              const kept = cart.lines.filter((l) => productById[l.pid]);
+              set((s) => ({
+                catalogVersion: s.catalogVersion + 1,
+                ...(kept.length !== cart.lines.length
+                  ? { cart: kept.length ? { ...cart, lines: kept } : { storeId: null, lines: [] } }
+                  : {}),
+              }));
+            }
             // A new epoch means the API reseeded: order and ticket numbers start over, so ones
             // remembered from before may now name someone else's. Forget them.
             if (get().epoch !== live.epoch) {

@@ -1,3 +1,6 @@
+// Reads the live catalogue, which changes in place: opt out of React Compiler memoisation.
+'use no memo';
+
 import { router } from 'expo-router';
 import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
 
@@ -16,8 +19,10 @@ import { colors } from '@/theme';
 
 import { AddressCard } from './address-card';
 import { CartLineRow } from './cart-line-row';
+import { useCatalog } from '@/hooks/use-catalog';
 
 export function CartScreen() {
+  useCatalog();
   const token = useApp((s) => s.token);
   const t = useT();
   const bottomPad = useBottomPad(16);

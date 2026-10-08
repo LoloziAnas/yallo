@@ -1,3 +1,6 @@
+// Reads the live catalogue, which changes in place: opt out of React Compiler memoisation.
+'use no memo';
+
 import { useMemo } from 'react';
 
 import { stores } from '@/data/catalog';

@@ -1,3 +1,6 @@
+// Reads the live catalogue, which changes in place: opt out of React Compiler memoisation.
+'use no memo';
+
 import { router } from 'expo-router';
 import { Pressable, ScrollView, View } from 'react-native';
 
@@ -16,9 +19,11 @@ import { colors, radius, shadow } from '@/theme';
 
 import { arriveAtText, stepLabel } from '../tracking/order-text';
 import { ProgressSegments } from '../tracking/progress-segments';
+import { useCatalog } from '@/hooks/use-catalog';
 
 /** Orders tab: the live order card plus previous orders with reorder and details. */
 export function Orders() {
+  useCatalog();
   const t = useT();
   const live = useLiveOrder();
   const active = live?.active;

@@ -1,3 +1,6 @@
+// Reads the live catalogue, which changes in place: opt out of React Compiler memoisation.
+'use no memo';
+
 import { View } from 'react-native';
 
 import { Photo } from '@/components/photo';
@@ -7,8 +10,10 @@ import { type CartLine, productById } from '@/data/catalog';
 import { useApp } from '@/store/app-store';
 import { fmt, optionText, storeIcon } from '@/store/derive';
 import { colors, radius } from '@/theme';
+import { useCatalog } from '@/hooks/use-catalog';
 
 export function CartLineRow({ line }: { line: CartLine }) {
+  useCatalog();
   const changeQty = useApp((s) => s.changeQty);
   const p = productById[line.pid];
   const opts = optionText(p, line.sel);

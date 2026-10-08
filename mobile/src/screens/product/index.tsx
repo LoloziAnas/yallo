@@ -1,3 +1,6 @@
+// Reads the live catalogue, which changes in place: opt out of React Compiler memoisation.
+'use no memo';
+
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Platform, ScrollView, View } from 'react-native';
@@ -14,10 +17,12 @@ import { type OptionGroup, productById, type Selection, storeById } from '@/data
 import { useApp, useT } from '@/store/app-store';
 import { defaultSelection, fmt, groupsFor, storeIcon, unitPrice } from '@/store/derive';
 import { colors } from '@/theme';
+import { useCatalog } from '@/hooks/use-catalog';
 
 const HERO = 320;
 
 export function ProductScreen({ id }: { id: string }) {
+  useCatalog();
   const t = useT();
   const insets = useSafeAreaInsets();
   const bottomPad = useBottomPad(16);
@@ -54,6 +59,7 @@ export function ProductScreen({ id }: { id: string }) {
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         <Photo
           icon={storeIcon(p.storeId)}
+          uri={p.photoUrl}
           iconSize={72}
           caption={`photo · ${p.img}`}
           captionAt="bottom-start"
@@ -166,7 +172,8 @@ export function ProductScreen({ id }: { id: string }) {
           onDec={() => setQty(Math.max(1, qty - 1))}
         />
         <Button
-          label={`${t.addToCart} · ${fmt(unitPrice(p, sel) * qty)}`}
+          label={p.available ? `${t.addToCart} · ${fmt(unitPrice(p, sel) * qty)}` : t.outOfStock}
+          disabled={!p.available}
           fontSize={17}
           onPress={add}
           style={{ flex: 1, height: 54 }}

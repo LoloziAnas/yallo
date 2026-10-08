@@ -1,3 +1,6 @@
+// Reads the live catalogue, which changes in place: opt out of React Compiler memoisation.
+'use no memo';
+
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
@@ -19,11 +22,13 @@ import { colors, photoPlaceholder, radius, shadow } from '@/theme';
 import { arriveAtText, payLabel, statusLabels } from './order-text';
 import { ProgressSegments } from './progress-segments';
 import { TrackingLiveMap } from './tracking-live-map';
+import { useCatalog } from '@/hooks/use-catalog';
 
 const MAP_H = 320;
 
 /** Live order tracking: map, ETA or rating, status timeline, rider card and order summary. */
 export function Tracking() {
+  useCatalog();
   const t = useT();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();

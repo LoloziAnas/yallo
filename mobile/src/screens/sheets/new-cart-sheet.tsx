@@ -1,3 +1,6 @@
+// Reads the live catalogue, which changes in place: opt out of React Compiler memoisation.
+'use no memo';
+
 import { router } from 'expo-router';
 import { View } from 'react-native';
 
@@ -8,15 +11,17 @@ import { useApp, useT } from '@/store/app-store';
 import { colors } from '@/theme';
 
 import { SheetBody } from './sheet-body';
+import { useCatalog } from '@/hooks/use-catalog';
 
 /** Confirm clearing a cart from one store to add an item from another. */
 export function NewCartSheet() {
+  useCatalog();
   const t = useT();
   const cartStoreId = useApp((s) => s.cart.storeId);
   const pending = useApp((s) => s.pending);
   const confirmNewCart = useApp((s) => s.confirmNewCart);
   const from = cartStoreId ? storeById[cartStoreId].name : '';
-  const to = pending ? storeById[productById[pending.pid].storeId].name : '';
+  const to = pending ? (storeById[productById[pending.pid]?.storeId ?? '']?.name ?? '') : '';
 
   return (
     <SheetBody>

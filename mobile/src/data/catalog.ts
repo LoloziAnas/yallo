@@ -1,12 +1,15 @@
 // The app's view of the canonical catalogue in @yallo/shared (stores m1–m10, products, option sets),
 // plus customer-only demo data: saved addresses and past orders.
 import {
+  type Catalog,
   MERCHANTS,
-  OPTION_GROUPS,
+  type Merchant,
+  type Product as SharedProduct,
+  productAvailable,
+  SEED_CATALOG,
   type OptionGroup as SharedOptionGroup,
   type OptionKey as SharedOptionKey,
   type OrderStatus as SharedOrderStatus,
-  PRODUCTS,
   type StoreKind,
 } from '@yallo/shared';
 
@@ -51,6 +54,10 @@ export type Product = {
   img: string;
   opt: OptionKey | null;
   popular: boolean;
+  /** False when the store has run out (ops sets it); the API refuses it in an order. */
+  available: boolean;
+  /** A real photo (https), when ops has added one; otherwise the placeholder. */
+  photoUrl?: string;
 };
 
 export type OptionGroup = SharedOptionGroup;
@@ -108,7 +115,7 @@ export const categories: CategoryId[] = [
 /** 1200 → "1.2k", 860 → "860". */
 const shortCount = (n: number) => (n >= 1000 ? `${Math.round(n / 100) / 10}k` : String(n));
 
-export const stores: Store[] = MERCHANTS.map((m) => ({
+const toStore = (m: Merchant): Store => ({
   id: m.id,
   name: m.name,
   cuisine: m.cuisine,
@@ -125,9 +132,9 @@ export const stores: Store[] = MERCHANTS.map((m) => ({
   hours: m.hours,
   img: m.cover,
   initials: m.initials,
-}));
+});
 
-export const products: Product[] = PRODUCTS.map((p) => ({
+const toProduct = (p: SharedProduct): Product => ({
   id: p.id,
   storeId: p.merchantId,
   sec: p.section,
@@ -137,14 +144,67 @@ export const products: Product[] = PRODUCTS.map((p) => ({
   img: p.image,
   opt: p.options,
   popular: p.popular,
-}));
+  available: productAvailable(p),
+  ...(p.photoUrl ? { photoUrl: p.photoUrl } : {}),
+});
 
-export const options: Record<OptionKey, OptionGroup[]> = OPTION_GROUPS;
-
+/*
+ * The catalogue: stores, products and option sets. It starts as the shared seed and follows the API's live data
+ * (state.merchants, LiveState.catalog) once it arrives, so stores and products ops add, prices they change and
+ * out-of-stock flags show up without an app update. These objects are updated in place (applyLiveCatalog), so
+ * imports stay valid; screens re-render on `catalogVersion` in the app store.
+ */
+export const stores: Store[] = MERCHANTS.map(toStore);
+export const products: Product[] = SEED_CATALOG.products.map(toProduct);
+export const options: Record<string, OptionGroup[]> = { ...SEED_CATALOG.optionGroups };
 export const storeById: Record<string, Store> = Object.fromEntries(stores.map((s) => [s.id, s]));
 export const productById: Record<string, Product> = Object.fromEntries(
   products.map((p) => [p.id, p]),
 );
+
+/** A product's name, or a neutral word if ops has since removed it (old receipts, a stale cart). */
+export const productName = (pid: string) => productById[pid]?.name ?? 'Item';
+
+let liveKey = '';
+
+/** Takes the live stores and catalogue; returns true when anything the app shows changed. */
+export function applyLiveCatalog(
+  merchants: readonly Merchant[] | undefined,
+  catalog: Catalog,
+): boolean {
+  const ms = merchants?.length ? merchants : MERCHANTS;
+  const key =
+    catalog.version +
+    '|' +
+    ms
+      .map((m) =>
+        [
+          m.id,
+          m.name,
+          m.fee,
+          m.minOrder,
+          m.rating,
+          m.reviewCount,
+          m.deliveryMin.join('-'),
+          m.cover,
+          m.kind,
+        ].join('~'),
+      )
+      .join('|');
+  if (key === liveKey) return false;
+  liveKey = key;
+  const replace = <T>(target: T[], next: T[]) => target.splice(0, target.length, ...next);
+  const reset = <T>(target: Record<string, T>, next: Record<string, T>) => {
+    for (const k of Object.keys(target)) delete target[k];
+    Object.assign(target, next);
+  };
+  replace(stores, ms.map(toStore));
+  replace(products, catalog.products.map(toProduct));
+  reset(options, catalog.optionGroups);
+  reset(storeById, Object.fromEntries(stores.map((s) => [s.id, s])));
+  reset(productById, Object.fromEntries(products.map((p) => [p.id, p])));
+  return true;
+}
 
 /** Store ids before the shared catalogue (s1–s10), for migrating saved state. */
 export const legacyStoreIds: Record<string, string> = {

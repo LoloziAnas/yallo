@@ -1,3 +1,6 @@
+// Reads the live catalogue, which changes in place: opt out of React Compiler memoisation.
+'use no memo';
+
 import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
@@ -12,6 +15,7 @@ import { type Product, type Store, storeById } from '@/data/catalog';
 import { useApp, useT } from '@/store/app-store';
 import { categoryIcon, fmt } from '@/store/derive';
 import { colors, radius, shadow } from '@/theme';
+import { useCatalog } from '@/hooks/use-catalog';
 
 const row = {
   flexDirection: 'row',
@@ -22,6 +26,7 @@ const row = {
 } as const;
 
 export function StoreRow({ store }: { store: Store }) {
+  useCatalog();
   const status = useStoreStatus(store.id);
   const t = useT();
   const feeColor = store.fee === 0 ? colors.mint700 : colors.neutral700;
@@ -72,6 +77,7 @@ export function StoreRow({ store }: { store: Store }) {
 }
 
 export function ProductRow({ product: p }: { product: Product }) {
+  useCatalog();
   const t = useT();
   const addLine = useApp((s) => s.addLine);
   const showToast = useApp((s) => s.showToast);
