@@ -17,9 +17,10 @@ export const toBoCourier = (c, orders, t = 0) => { const e = courierEarnings(ord
   return { id:c.id, name:c.name, st:c.status, veh:c.vehicle, zone:c.zone, x:c.pos.x, y:c.pos.y, dels:e.jobs, earn:e.total, acc:acceptanceRate(c), rating:c.rating,
     cash:e.cashHeld, online:onlineFor(c, t), docs:c.docsNote ?? 'Valid', phone:c.phone }; };
 
-const MNAME = Object.fromEntries(MERCHANTS.map(m => [m.id, m.name]));
+// Store names by id: the seed's, then the live stores' (ops can add and rename stores).
+const SEED_NAMES = Object.fromEntries(MERCHANTS.map(m => [m.id, m.name]));
 /** Shared or API order → the back office's compact shape. `el` is seconds since placed; `t` is the demo clock. */
-export const toBoOrder = (o, t = 0) => ({ id:o.id, m:MNAME[o.merchantId], c:o.customerName, cz:o.zone, st:o.status, courier:o.courierId, total:o.total,
+export const toBoOrder = (o, t = 0, names = SEED_NAMES) => ({ id:o.id, m:names[o.merchantId] ?? o.merchantId, c:o.customerName, cz:o.zone, st:o.status, courier:o.courierId, total:o.total,
   pay:o.pay === 'cash' ? 'Cash' : 'Card', placed:o.placedAt, el:o.elapsedSec ?? DEMO_ELAPSED_SEC[o.id] ?? 0, items:o.items.map(i => [i.qty, i.name, i.price]),
   ux:o.dropoff.x, uy:o.dropoff.y, fee:o.fee, serviceFee:o.serviceFee ?? 0, discount:o.discount ?? 0, promoCode:o.promoCode ?? null, refund:o.refund, cancelReason:o.cancelReason,
   statusAt:o.statusAt ?? DEMO_STATUS_AT[o.id] ?? { pending:0 },
@@ -34,7 +35,7 @@ export const fromLive = live => ({
   couriers:live.couriers.map(c => toBoCourier(c, live.orders, live.t)),
   apps:live.applications,
   payouts:live.payouts,
-  orders:live.orders.map(o => toBoOrder(o, live.t)),
+  orders:live.orders.map(o => toBoOrder(o, live.t, { ...SEED_NAMES, ...Object.fromEntries(live.merchants.map(m => [m.id, m.name])) })),
   tickets:live.tickets.map(tk => toBoTicket(tk, live.t)),
   suspended:Object.fromEntries(live.couriers.filter(c => c.suspended).map(c => [c.id, true]))
 });

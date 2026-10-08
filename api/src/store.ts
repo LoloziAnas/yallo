@@ -3,15 +3,14 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { dirname } from 'node:path';
 // In-memory state for the mock API: the shared demo seed plus the rules every app's actions go through.
 import {
-  ACTIVE_STATUSES, DEMO_START_MIN, DEMO_START_DATE, DEMO_TESTER_COURIERS, applyClock, minuteOfDayAt, zonedNow, type ClockSettings, APPLICATIONS, OPS_STAFF, DEV_TOKENS, GPS_STALE_SEC, geoToMap, PAYOUTS, COURIERS, courierEarnings, normalizePhone as normPhone, requiredDocs, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, MERCHANTS, clockAt, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
+  ACTIVE_STATUSES, PRODUCTS, OPTION_GROUPS, type Catalog, type Merchant, type OptionGroup, type Product, DEMO_START_MIN, DEMO_START_DATE, DEMO_TESTER_COURIERS, applyClock, minuteOfDayAt, zonedNow, type ClockSettings, APPLICATIONS, OPS_STAFF, DEV_TOKENS, GPS_STALE_SEC, geoToMap, PAYOUTS, COURIERS, courierEarnings, normalizePhone as normPhone, requiredDocs, DEMO_ELAPSED_SEC, DEMO_STATUS_AT, MERCHANTS, clockAt, OFFER_SEC, ORDERS, TICKETS, ZONES, canTransition, courierPayFor, tripKm, pickupKm, DISPATCH_RADIUS_KM,
   type ApiCourier, type ApiOrder, type LiveState, type OpenTicketBody, type OrderStatus, type PlaceOrderBody, type Ticket, type TicketPriority,
   type TicketSource, type ZoneName, type OrderMessage, type ApplyBody, type ApplicationStatus, type CourierApplication, type DocKey, type Vehicle, type AuthRole, type AuthSession, type AuthUser, DEV_OTP_CODE, normalizePhone, type OrderItem, type OrderLineInput, type Quote, PricingError, quoteOrder, storeAvailability,
 } from '@yallo/shared';
 
-/** A rejected action. The server turns it into a 4xx with this message. */
-export class ActionError extends Error {
-  constructor(message: string, readonly status = 400) { super(message); }
-}
+import { ActionError } from './errors';
+import { cleanMerchant, cleanOptionGroups, cleanProduct } from './catalog';
+export { ActionError };
 
 /** Orders placed through the API are moved along by a stand-in merchant: accepted, then ready. */
 export const AUTO_ACCEPT_SEC = 20;
@@ -97,6 +96,7 @@ function seed(o: SeedOptions): LiveState {
     epoch: Date.now().toString(36) + '-' + randomBytes(3).toString('hex'),
     t: 0,
     merchants: clone(MERCHANTS),
+    catalog: { version: 1, products: clone(PRODUCTS), optionGroups: clone(OPTION_GROUPS) },
     couriers: couriers.map(c => ({ ...clone(c), suspended: false, app: false })),
     orders: ORDERS.map(o => ({ ...clone(o), elapsedSec: DEMO_ELAPSED_SEC[o.id] ?? 0, statusAt: { ...DEMO_STATUS_AT[o.id] }, deliveryPin: newPin() })),
     tickets: clone(TICKETS),
@@ -120,7 +120,17 @@ function seed(o: SeedOptions): LiveState {
 }
 
 /** Bump when the saved state's shape changes; an older file is set aside and the demo reseeds. */
-export const STATE_VERSION = 6;
+export const STATE_VERSION = 7;
+
+/** Upgrades a saved state from an older format in place, or returns false when it can't. */
+function migrate(saved: SavedState): boolean {
+  // 6 → 7: the catalogue moved into the state; older saves get the seed one.
+  if (saved.version === 6 && saved.state) {
+    saved.state.catalog ??= { version: 1, products: clone(PRODUCTS), optionGroups: clone(OPTION_GROUPS) };
+    saved.version = 7;
+  }
+  return saved.version === STATE_VERSION;
+}
 
 /** Things worth telling someone about, e.g. with a push notification. */
 export type StoreEvent =
@@ -298,7 +308,7 @@ export class Store {
 
   /** Checks a saved state and takes it over. Throws when it's from another format or clock. */
   private adopt(saved: SavedState): LiveState {
-    if (saved?.version !== STATE_VERSION || !saved.state?.epoch || !Array.isArray(saved.state.orders)) throw new Error('version ' + saved?.version);
+    if (!saved || !migrate(saved) || !saved.state?.epoch || !Array.isArray(saved.state.orders)) throw new Error('version ' + saved?.version);
     if (!!saved.state.clock?.realTime !== this.seedOptions.realTime) throw new Error(saved.state.clock?.realTime ? 'saved on real time' : 'saved on the demo clock');
     saved.auto.forEach(id => this.auto.add(id));
     this.auth = saved.auth ?? emptyAuth();
@@ -590,7 +600,7 @@ export class Store {
   /** Prices catalogue lines with the shared rules. Client-sent amounts are ignored. */
   private quote(merchantId: string, lines: OrderLineInput[], promoCode?: string): Quote {
     try {
-      return quoteOrder(merchantId, lines, promoCode);
+      return quoteOrder(merchantId, lines, promoCode, { merchants: this.s.merchants, catalog: this.catalog });
     } catch (e) {
       if (e instanceof PricingError) throw new ActionError(e.message, e.rule ? 409 : 400);
       throw e;
@@ -785,6 +795,79 @@ export class Store {
     o.refund = amount;
     o.refundReason = reason.trim();
     this.changed();
+  }
+
+  /** The live catalogue (always present after load: seeded, or added by the migration). */
+  get catalog(): Catalog { return this.s.catalog!; }
+
+  private catalogChanged() {
+    this.catalog.version += 1;
+    this.changed();
+  }
+
+  private product(id: string) {
+    const p = this.catalog.products.find(p => p.id === id);
+    if (!p) throw new ActionError('No product ' + id, 404);
+    return p;
+  }
+
+  /** Adds a store (open, with no products yet). Ids continue m11, m12… */
+  createMerchant(body: unknown): Merchant {
+    const n = Math.max(0, ...this.s.merchants.map(m => Number(m.id.slice(1)) || 0)) + 1;
+    const m = cleanMerchant(body, undefined, 'm' + n);
+    if (this.s.merchants.some(x => x.name.toLowerCase() === m.name.toLowerCase())) throw new ActionError('A store called ' + m.name + ' already exists', 409);
+    this.s.merchants.push(m);
+    this.changed();
+    return m;
+  }
+
+  /** Edits a store's details (only the fields sent). */
+  updateMerchant(merchantId: string, body: unknown): Merchant {
+    const i = this.s.merchants.findIndex(m => m.id === merchantId);
+    if (i < 0) throw new ActionError('No merchant ' + merchantId, 404);
+    const m = cleanMerchant(body, this.s.merchants[i]);
+    if (this.s.merchants.some(x => x.id !== m.id && x.name.toLowerCase() === m.name.toLowerCase())) throw new ActionError('A store called ' + m.name + ' already exists', 409);
+    this.s.merchants[i] = m;
+    this.changed();
+    return m;
+  }
+
+  /** Adds a product to a store's menu. Ids continue that store's numbering (p11-1, p11-2…). */
+  createProduct(body: unknown): Product {
+    const merchantId = (body as { merchantId?: unknown } | null)?.merchantId;
+    const prefix = 'p' + String(merchantId ?? '').replace(/^m/, '') + '-';
+    const n = Math.max(0, ...this.catalog.products.filter(p => p.id.startsWith(prefix)).map(p => Number(p.id.slice(prefix.length)) || 0)) + 1;
+    const p = cleanProduct(body, this.catalog, this.s.merchants, undefined, prefix + n);
+    this.catalog.products.push(p);
+    this.catalogChanged();
+    return p;
+  }
+
+  /** Edits a product (only the fields sent). */
+  updateProduct(productId: string, body: unknown): Product {
+    const i = this.catalog.products.findIndex(p => p.id === productId);
+    if (i < 0) throw new ActionError('No product ' + productId, 404);
+    const p = cleanProduct(body, this.catalog, this.s.merchants, this.catalog.products[i]);
+    this.catalog.products[i] = p;
+    this.catalogChanged();
+    return p;
+  }
+
+  /** In or out of stock (out of stock: still listed, but orders for it are refused). */
+  setProductAvailable(productId: string, available: boolean) {
+    if (typeof available !== 'boolean') throw new ActionError('available must be true or false');
+    const p = this.product(productId);
+    if (available) delete p.available; else p.available = false;
+    this.catalogChanged();
+  }
+
+  /** Creates or replaces an option set (e.g. "tajine": size and sides). Products refer to it by key. */
+  setOptionSet(key: string, groups: unknown): OptionGroup[] {
+    if (typeof key !== 'string' || !/^[a-z][a-z0-9-]{0,29}$/.test(key)) throw new ActionError('The option set key must be lowercase letters, digits and dashes');
+    const clean = cleanOptionGroups(groups);
+    this.catalog.optionGroups[key] = clean;
+    this.catalogChanged();
+    return clean;
   }
 
   setMerchantOpen(merchantId: string, open: boolean) {
@@ -1109,7 +1192,7 @@ export class Store {
   viewFor(user: AuthUser | undefined): LiveState {
     const s = this.s;
     if (user?.role === 'ops') return s;
-    const base = { epoch: s.epoch, t: s.t, ...(s.clock ? { clock: s.clock } : {}), merchants: s.merchants, applications: [], payouts: { ...s.payouts, lines: [] as LiveState['payouts']['lines'] } };
+    const base = { epoch: s.epoch, t: s.t, ...(s.clock ? { clock: s.clock } : {}), merchants: s.merchants, catalog: s.catalog, applications: [], payouts: { ...s.payouts, lines: [] as LiveState['payouts']['lines'] } };
     if (user?.role === 'courier') {
       const me = user.courierId!;
       return { ...base, couriers: s.couriers.filter(c => c.id === me),

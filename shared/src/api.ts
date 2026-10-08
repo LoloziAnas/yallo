@@ -2,6 +2,8 @@
 import type { OrderLineInput } from './pricing';
 import type { CourierEarnings } from './earnings';
 import { applyClock, type ClockSettings } from './clock';
+import type { Catalog } from './catalog';
+import type { OptionGroup, Product } from './model';
 import type { Courier, CourierApplication, DocKey, PayoutRun, DeliveryAddress, GeoPoint, Merchant, Order, OrderStatus, PayMethod, Ticket, TicketPriority, TicketSource, ZoneName } from './model';
 
 export type ApiOrder = Order & {
@@ -62,6 +64,12 @@ export type LiveState = {
    */
   clock?: ClockSettings;
   merchants: Merchant[];
+  /**
+   * The menu (products and option sets), from v1; absent on older servers (use `catalogOf(state)`, which falls back
+   * to the seed). The live feed sends it in full only when it changes and `{ version }` otherwise; the shared client
+   * fills it back in, so `subscribe` always hands over the full catalog.
+   */
+  catalog?: Catalog;
   couriers: ApiCourier[];
   orders: ApiOrder[];
   /** Support tickets, in display order (newest opened first). */
@@ -182,6 +190,13 @@ export const API_PORT = 5190;
 export const orderPath = (id: string) => encodeURIComponent(id.replace(/^#/, ''));
 
 export type YalloClient = ReturnType<typeof createYalloClient>;
+
+/** The editable fields of a store (rating, reviews, the open switch and the id are the server's). */
+export type MerchantInput = Pick<Merchant, 'name' | 'category' | 'address' | 'phone'> &
+  Partial<Pick<Merchant, 'cuisine' | 'kind' | 'zone' | 'area' | 'pos' | 'hours' | 'prepMin' | 'deliveryMin' | 'fee' | 'minOrder' | 'priceLevel' | 'cover'>>;
+/** The editable fields of a product. */
+export type ProductInput = Pick<Product, 'merchantId' | 'name' | 'section' | 'price'> &
+  Partial<Pick<Product, 'description' | 'image' | 'options' | 'popular' | 'available' | 'photoUrl'>>;
 
 /** Snapshots carry the server's clock settings; actions that return one are applied too. */
 const isLiveState = (d: unknown): d is LiveState => typeof d === 'object' && d !== null && 'epoch' in d && 't' in d && 'orders' in d;
@@ -307,6 +322,8 @@ export function createYalloClient(baseUrl: string, opts: { token?: string; confi
       let stopped = false;
       let retry: ReturnType<typeof setTimeout> | undefined;
       let failures = 0;
+      /** The last full catalog this subscription received, to fill in frames that only carry its version. */
+      let catalog: Catalog | undefined;
       const open = async () => {
         // After a few failed connections, look the address up again (it may have moved).
         await ready(failures >= 2);
@@ -323,6 +340,10 @@ export function createYalloClient(baseUrl: string, opts: { token?: string; confi
           const msg = JSON.parse(String(e.data)) as LiveMessage;
           if (msg.type === 'state' && !stopped) {
             applyClock(msg.state.clock);
+            const c = msg.state.catalog;
+            if (c?.products) catalog = c;
+            else if (c && catalog?.version === c.version) msg.state.catalog = catalog;
+            else if (c) delete msg.state.catalog; // never happens: the server sends it in full when it changes
             onState(msg.state);
           }
         };
@@ -371,6 +392,20 @@ export function createYalloClient(baseUrl: string, opts: { token?: string; confi
     myHistory: () => call<CustomerHistory>('GET', '/me/history'),
     refundOrder: (orderId: string, amount: number, reason: string) => post(`/orders/${orderPath(orderId)}/refund`, { amount, reason }),
     setMerchantOpen: (merchantId: string, open: boolean) => post(`/merchants/${merchantId}/open`, { open }),
+    /** The catalogue (also in LiveState.catalog). */
+    getCatalog: () => call<Catalog>('GET', '/catalog'),
+    /** Ops: add a store (name, category, address, phone required; see api/src/catalog.ts for the fields). */
+    createMerchant: (body: MerchantInput) => post<Merchant>('/merchants', body),
+    /** Ops: edit a store; only the fields sent change. */
+    updateMerchant: (merchantId: string, body: Partial<MerchantInput>) => post(`/merchants/${merchantId}`, body),
+    /** Ops: add a product to a store's menu. */
+    createProduct: (body: ProductInput) => post<Product>('/products', body),
+    /** Ops: edit a product; only the fields sent change. */
+    updateProduct: (productId: string, body: Partial<ProductInput>) => post(`/products/${productId}`, body),
+    /** In or out of stock. Out of stock: listed, but orders for it are refused. */
+    setProductAvailable: (productId: string, available: boolean) => post(`/products/${productId}/available`, { available }),
+    /** Ops: create or replace an option set that products refer to by key. */
+    setOptionSet: (key: string, groups: OptionGroup[]) => post(`/option-sets/${key}`, { groups }),
     setCourierSuspended: (courierId: string, suspended: boolean) => post(`/couriers/${courierId}/suspend`, { suspended }),
     /** The courier app reports where the courier is (real GPS); the API places them on the demo map. */
     setCourierLocation: (courierId: string, lat: number, lon: number) => post(`/couriers/${courierId}/location`, { lat, lon }),

@@ -93,6 +93,14 @@ const ROUTES: [string, RegExp, Rule, Handler][] = [
   ['GET', /^\/api\/me\/history$/, signedIn, (s, _, __, ctx) => s.customerHistory(ctx.user)],
   ['POST', /^\/api\/orders\/(\d+)\/refund$/, ops, (s, [id], b) => (s.refundOrder(id, b?.amount, b?.reason), s.state)],
   ['POST', /^\/api\/merchants\/([\w-]+)\/open$/, ops, (s, [id], b) => (s.setMerchantOpen(id, b?.open), s.state)],
+  // The catalogue (v1): stores, products and option sets, edited by ops. Creates return the new record; edits the state.
+  ['GET', /^\/api\/catalog$/, anyone, s => s.catalog],
+  ['POST', /^\/api\/merchants$/, ops, (s, _, b) => s.createMerchant(b)],
+  ['POST', /^\/api\/merchants\/([\w-]+)$/, ops, (s, [id], b) => (s.updateMerchant(id, b), s.state)],
+  ['POST', /^\/api\/products$/, ops, (s, _, b) => s.createProduct(b)],
+  ['POST', /^\/api\/products\/([\w-]+)$/, ops, (s, [id], b) => (s.updateProduct(id, b), s.state)],
+  ['POST', /^\/api\/products\/([\w-]+)\/available$/, ops, (s, [id], b) => (s.setProductAvailable(id, b?.available), s.state)],
+  ['POST', /^\/api\/option-sets\/([\w-]+)$/, ops, (s, [key], b) => (s.setOptionSet(key, b?.groups), s.state)],
   ['POST', /^\/api\/couriers\/([\w-]+)\/suspend$/, ops, (s, [id], b) => (s.setCourierSuspended(id, b?.suspended), s.state)],
   ['POST', /^\/api\/couriers\/([\w-]+)\/location$/, selfCourier, (s, [id], b) => (s.setCourierLocation(id, b?.lat, b?.lon), s.state)],
   ['POST', /^\/api\/couriers\/([\w-]+)\/availability$/, selfCourier, (s, [id], b) => (s.setCourierAvailability(id, b?.status), s.state)],
@@ -255,8 +263,22 @@ export function createApi({ tickMs = 1000, store = new Store(), authMode = 'warn
     });
   });
 
-  const frame = (user: AuthUser | undefined) => JSON.stringify({ type: 'state', state: viewFor(user) } satisfies LiveMessage);
-  wss.on('connection', ws => ws.send(frame(store.userForToken(viewers.get(ws)))));
+  // The catalogue rarely changes, so each socket gets it in full only when its copy is out of date, and
+  // { version } otherwise (the shared client fills it back in).
+  const catalogSent = new WeakMap<WebSocket, number>();
+  const frame = (user: AuthUser | undefined, full: boolean) => {
+    const state = viewFor(user);
+    const slim = !full && state.catalog ? { ...state, catalog: { version: state.catalog.version } } : state;
+    return JSON.stringify({ type: 'state', state: slim as LiveState } satisfies LiveMessage);
+  };
+  const sendTo = (ws: WebSocket, frames: Map<string, string>, key: string, user: AuthUser | undefined) => {
+    const version = store.catalog.version, full = catalogSent.get(ws) !== version;
+    const k = key + (full ? ':full' : ':slim');
+    if (!frames.has(k)) frames.set(k, frame(user, full));
+    ws.send(frames.get(k)!);
+    catalogSent.set(ws, version);
+  };
+  wss.on('connection', ws => sendTo(ws, new Map(), 'first', store.userForToken(viewers.get(ws))));
 
   // Coalesce bursts of changes (an action plus a tick) into one frame per viewer per event-loop turn.
   let pending = false;
@@ -270,8 +292,7 @@ export function createApi({ tickMs = 1000, store = new Store(), authMode = 'warn
         if (c.readyState !== WebSocket.OPEN) return;
         const user = store.userForToken(viewers.get(c));
         const key = enforce && user ? user.role + ':' + user.id : enforce ? 'anon' : 'all';
-        if (!frames.has(key)) frames.set(key, frame(user));
-        c.send(frames.get(key)!);
+        sendTo(c, frames, key, user);
       });
     });
   });

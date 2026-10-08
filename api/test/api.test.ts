@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import WsClient from 'ws';
 import type { AddressInfo } from 'node:net';
 import { createYalloClient, type LiveState, type YalloClient } from '@yallo/shared';
-import { COURIERS, DEMO_TESTER_COURIERS, clockAt, dateAt, DEV_OTP_CODE, DEV_TOKENS, DISPATCH_RADIUS_KM, GEO_ANCHOR, GPS_STALE_SEC, geoToMap, mapToGeo, OFFER_SEC, courierPayFor, normalizePhone, pickupKm, tripKm } from '@yallo/shared';
-import { AUTO_ACCEPT_SEC, AUTO_READY_SEC, PRUNE_FINISHED_SEC, STAND_IN_ACCEPT_SEC, STATE_VERSION, Store, type SavedState } from '../src/store';
+import { COURIERS, PRODUCTS, OPTION_GROUPS, ZONES, catalogOf, DEMO_TESTER_COURIERS, clockAt, dateAt, DEV_OTP_CODE, DEV_TOKENS, DISPATCH_RADIUS_KM, GEO_ANCHOR, GPS_STALE_SEC, geoToMap, mapToGeo, OFFER_SEC, courierPayFor, normalizePhone, pickupKm, tripKm } from '@yallo/shared';
+import { ActionError, AUTO_ACCEPT_SEC, AUTO_READY_SEC, PRUNE_FINISHED_SEC, STAND_IN_ACCEPT_SEC, STATE_VERSION, Store, type SavedState } from '../src/store';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -1418,6 +1418,110 @@ describe('Live feed subscriptions', () => {
       });
       assert.deepEqual(status, [true], 'no "offline" from the replaced socket');
       assert.equal(states, 1);
+    } finally {
+      a.http.closeAllConnections();
+      await new Promise<void>(r => a.http.close(() => r()));
+    }
+  });
+});
+
+describe('Catalogue in the state (v1)', () => {
+  const salma = { merchantId: 'm1', customerName: 'Salma', zone: 'Guéliz' as const, pay: 'cash' as const };
+
+  test('seeded from the shared constants, and orders are priced from the live catalogue', () => {
+    const s = new Store();
+    assert.equal(s.catalog.products.length, PRODUCTS.length);
+    assert.deepEqual(catalogOf(s.state).optionGroups, OPTION_GROUPS);
+    s.updateProduct('p1-6', { price: 50 });
+    const o = s.placeOrder({ ...salma, items: [{ productId: 'p1-6', qty: 2 }] });
+    assert.equal(o.items[0].price, 50);
+    assert.equal(s.catalog.version, 2);
+  });
+
+  test('out of stock: listed, but orders for it are refused', () => {
+    const s = new Store();
+    s.setProductAvailable('p1-6', false);
+    assert.equal(s.catalog.products.find(p => p.id === 'p1-6')!.available, false);
+    assert.throws(() => s.placeOrder({ ...salma, items: [{ productId: 'p1-6', qty: 2 }] }), (e: ActionError) => e.status === 409 && /out of stock/.test(e.message));
+    s.setProductAvailable('p1-6', true);
+    assert.equal('available' in s.catalog.products.find(p => p.id === 'p1-6')!, false);
+    assert.equal(s.placeOrder({ ...salma, items: [{ productId: 'p1-6', qty: 2 }] }).status, 'pending');
+  });
+
+  test('stores: create with defaults, edit some fields, validation', () => {
+    const s = new Store();
+    const m = s.createMerchant({ name: 'Café Atlas', category: 'Coffee', address: '5 Rue Ibn Toumert', phone: '+212 524 00 00 00', zone: 'Guéliz', hours: { open: '07:00', close: '20:00' }, fee: 8, minOrder: 40 });
+    assert.deepEqual([m.id, m.initials, m.open, m.kind, m.pos], ['m11', 'CA', true, 'restaurants', ZONES['Guéliz']]);
+    s.updateMerchant('m11', { prepMin: 12, pos: { x: 31, y: 27 } });
+    assert.deepEqual([s.state.merchants.find(m => m.id === 'm11')!.prepMin, s.state.merchants.find(m => m.id === 'm11')!.pos, s.state.merchants.find(m => m.id === 'm11')!.name], [12, { x: 31, y: 27 }, 'Café Atlas']);
+    for (const [body, msg] of [
+      [{ name: 'X', category: 'Y', address: 'Z', phone: 'call me' }, /phone/],
+      [{ name: 'X', category: 'Y', address: 'Z', phone: '0600000000', hours: { open: '7:00', close: '20:00' } }, /hours/],
+      [{ name: 'X', category: 'Y', address: 'Z', phone: '0600000000', zone: 'Paris' }, /zone/],
+      [{ name: 'X', category: 'Y', address: 'Z', phone: '0600000000', fee: -1 }, /fee/],
+      [{ name: 'Dar Zitoun', category: 'Y', address: 'Z', phone: '0600000000' }, /already exists/],
+      [{ category: 'Y', address: 'Z', phone: '0600000000' }, /name is required/],
+    ] as const) assert.throws(() => s.createMerchant(body), msg as RegExp);
+    assert.throws(() => s.updateMerchant('m99', { name: 'A' }), /No merchant/);
+  });
+
+  test('products: create in a store, edit, option sets, validation', () => {
+    const s = new Store();
+    const p = s.createProduct({ merchantId: 'm1', name: 'Mint tea pot', section: 'Drinks', price: 18, options: null });
+    assert.equal(p.id, 'p1-' + (PRODUCTS.filter(x => x.merchantId === 'm1').length + 1));
+    s.setOptionSet('tea', [{ id: 'sugar', name: 'Sugar', required: true, multi: false, choices: [['No sugar', 0], ['Sweet', 0]] }]);
+    s.updateProduct(p.id, { options: 'tea', photoUrl: 'https://example.com/tea.jpg' });
+    const o = s.placeOrder({ ...salma, items: [{ productId: p.id, qty: 4, options: { sugar: [1] } }] });
+    assert.deepEqual([o.items[0].name, o.items[0].price], ['Mint tea pot (Sweet)', 18]);
+    assert.throws(() => s.createProduct({ merchantId: 'm99', name: 'A', section: 'B', price: 1 }), /existing store/);
+    assert.throws(() => s.updateProduct(p.id, { options: 'nope' }), /option sets/);
+    assert.throws(() => s.updateProduct(p.id, { photoUrl: 'http://x' }), /https/);
+    assert.throws(() => s.updateProduct(p.id, { merchantId: 'm2' }), /another store/);
+    assert.throws(() => s.setOptionSet('Bad Key', []), /key/);
+    assert.throws(() => s.setOptionSet('x', [{ id: 'a', name: 'A', choices: [] }]), /choices/);
+  });
+
+  test('a saved state from format 6 gains the seed catalogue and keeps its data', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'yallo-')), file = join(dir, 'state.json');
+    const old = new Store({ file });
+    const epoch = old.state.epoch;
+    const saved = JSON.parse(readFileSync(file, 'utf8'));
+    delete saved.state.catalog;
+    writeFileSync(file, JSON.stringify({ ...saved, version: 6 }));
+    const s = new Store({ file });
+    assert.equal(s.state.epoch, epoch);
+    assert.equal(s.catalog.products.length, PRODUCTS.length);
+  });
+
+  test('over HTTP: ops only, and the live feed sends the catalogue in full only when it changes', async () => {
+    const a = createApi({ tickMs: 0, authMode: 'enforce' });
+    await new Promise<void>(r => a.http.listen(0, '127.0.0.1', r));
+    const base = `http://127.0.0.1:${(a.http.address() as AddressInfo).port}`;
+    try {
+      const opsC = createYalloClient(base, { token: 'dev-ops' }), cust = createYalloClient(base, { token: 'dev-customer' });
+      await assert.rejects(cust.setProductAvailable('p1-6', false), /ops/);
+      assert.equal((await (await fetch(base + '/api/catalog')).json()).products.length, PRODUCTS.length);
+      const frames: string[] = [];
+      const ws = new WsClient(base.replace('http', 'ws') + '/api/live?token=dev-ops');
+      ws.on('message', d => frames.push(String(d)));
+      await new Promise(r => ws.once('open', r));
+      await new Promise(r => setTimeout(r, 100));
+      a.store.tick();
+      await new Promise(r => setTimeout(r, 100));
+      await opsC.setProductAvailable('p1-6', false);
+      await new Promise(r => setTimeout(r, 100));
+      ws.close();
+      const kinds = frames.map(f => { const c = JSON.parse(f).state.catalog; return c.products ? 'full v' + c.version : 'slim v' + c.version; });
+      assert.deepEqual(kinds, ['full v1', 'slim v1', 'full v2']);
+      // The shared client fills the slim frames back in.
+      const seen = await new Promise<LiveState[]>(resolve => {
+        const got: LiveState[] = [];
+        const stop = opsC.subscribe(st => { got.push(st); if (got.length === 2) { stop(); resolve(got); } });
+        setTimeout(() => a.store.tick(), 100);
+      });
+      assert.ok(seen.every(st => st.catalog?.products.length === PRODUCTS.length && st.catalog.version === 2));
+      const m = await opsC.createMerchant({ name: 'Café Atlas', category: 'Coffee', address: '5 Rue Ibn Toumert', phone: '0524000000' });
+      assert.equal(m.id, 'm11');
     } finally {
       a.http.closeAllConnections();
       await new Promise<void>(r => a.http.close(() => r()));

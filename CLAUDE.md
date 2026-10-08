@@ -34,8 +34,15 @@ How to run it all, the demo accounts and every setting: [`docs/RUNBOOK.md`](docs
 - `MERCHANTS` (10 stores, m1–m10, with hours, fees, minimum order, phone), `PRODUCTS`, `OPTION_GROUPS`, `merchantById`,
   `productById`: the canonical catalogue (from the customer app design). `storeAvailability(merchant, t)` says whether a
   store takes orders now (paused by ops, or outside its hours on the demo clock).
-- `quoteOrder(merchantId, lines, promoCode)`, `priceLine`, `PROMOS` (MARHABA, LIVRAISON), `SERVICE_FEE`: order pricing.
-  The API prices orders with it; the customer app shows the same numbers.
+- The catalogue lives in the API's state since v1: `LiveState.catalog` = `{ version, products, optionGroups }`
+  (`Catalog`). Read it with `catalogOf(state)`, which falls back to the seed (`SEED_CATALOG`, the constants above) on
+  older servers. Products may be out of stock (`available: false`, see `productAvailable`) and may have a `photoUrl`.
+  Ops edit stores, products and option sets through the API (`createMerchant`, `updateMerchant`, `createProduct`,
+  `updateProduct`, `setProductAvailable`, `setOptionSet` in the client). The live feed sends the catalogue in full
+  only when it changes; `subscribe` fills it back in, so apps always see it whole.
+- `quoteOrder(merchantId, lines, promoCode, live?)`, `priceLine`, `PROMOS` (MARHABA, LIVRAISON), `SERVICE_FEE`: order
+  pricing. Pass `live = { merchants: state.merchants, catalog: catalogOf(state) }` to price from the live catalogue;
+  the API does, and refuses out-of-stock products with 409.
 - `ZONES`, `COURIERS`, `ORDERS`, `TICKETS`: the Marrakech demo seed (Tue 6 Oct 2026, ~18:34). `DEMO_TESTER_COURIERS`
   (c21–c26) are seeded only on the public demo.
 - The clock: `clockAt(t)`, `dateAt(t)`, `dayAt(t)`, `minuteOfDayAt(t)`. By default t = 0 is 18:34 on the demo day; the

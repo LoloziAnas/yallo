@@ -1,5 +1,5 @@
 // Order pricing: the one set of rules the API applies and the customer app shows.
-import { merchantById, OPTION_GROUPS, productById } from './catalog';
+import { merchantById, SEED_CATALOG, type Catalog } from './catalog';
 import type { Merchant, OptionSelection, OrderItem } from './model';
 
 /** A cart line as the customer app sends it. */
@@ -35,13 +35,17 @@ export type Quote = {
   promoCode?: PromoCode;
 };
 
-/** Prices one line: checks the product and its options, and names it the way receipts show it. */
-export function priceLine(merchant: Merchant, line: OrderLineInput): OrderItem {
-  const p = productById[line?.productId];
+/**
+ * Prices one line: checks the product and its options, and names it the way receipts show it. `catalog` is the live
+ * one (the API's); the seed by default.
+ */
+export function priceLine(merchant: Merchant, line: OrderLineInput, catalog: Catalog = SEED_CATALOG): OrderItem {
+  const p = catalog.products.find(x => x.id === line?.productId);
   if (!p) throw new PricingError('Unknown product ' + line?.productId);
   if (p.merchantId !== merchant.id) throw new PricingError(`${p.name} isn't sold by ${merchant.name}`);
+  if (p.available === false) throw new PricingError(`${p.name} is out of stock`, true);
   if (!Number.isInteger(line.qty) || line.qty < 1 || line.qty > 99) throw new PricingError(`Quantity for ${p.name} must be 1–99`);
-  const groups = p.options ? OPTION_GROUPS[p.options] : [];
+  const groups = p.options ? catalog.optionGroups[p.options] ?? [] : [];
   const sel = line.options ?? {};
   for (const key of Object.keys(sel)) {
     if (!groups.some(g => g.id === key)) throw new PricingError(`${p.name} has no option "${key}"`);
@@ -71,12 +75,15 @@ export function priceLine(merchant: Merchant, line: OrderLineInput): OrderItem {
   };
 }
 
-/** Prices a whole order for a store: items, delivery, service fee and promo. */
-export function quoteOrder(merchantId: string, lines: OrderLineInput[], promoCode?: string | null): Quote {
-  const merchant = merchantById[merchantId];
+/**
+ * Prices a whole order for a store: items, delivery, service fee and promo. `live` is the server's stores and catalog
+ * (LiveState.merchants and catalogOf(state)); without it, the seed.
+ */
+export function quoteOrder(merchantId: string, lines: OrderLineInput[], promoCode?: string | null, live?: { merchants: Merchant[]; catalog: Catalog }): Quote {
+  const merchant = live ? live.merchants.find(m => m.id === merchantId) : merchantById[merchantId];
   if (!merchant) throw new PricingError('Unknown store ' + merchantId);
   if (!Array.isArray(lines) || !lines.length) throw new PricingError('The cart is empty');
-  const items = lines.map(l => priceLine(merchant, l));
+  const items = lines.map(l => priceLine(merchant, l, live?.catalog));
   const subtotal = items.reduce((sum, i) => sum + i.qty * i.price, 0);
   if (subtotal < merchant.minOrder) throw new PricingError(`${merchant.name} has a ${merchant.minOrder} DH minimum order`, true);
   const code = promoCode?.trim().toUpperCase() || undefined;

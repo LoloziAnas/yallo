@@ -93,7 +93,8 @@ export type Merchant = {
   cover: string;
 };
 
-export type OptionKey = 'tajine' | 'burger' | 'pizza' | 'drink';
+/** An option set's key. The seed has these four; ops can add more (any string). */
+export type OptionKey = 'tajine' | 'burger' | 'pizza' | 'drink' | (string & {});
 
 export type OptionGroup = {
   id: string;
@@ -118,6 +119,10 @@ export type Product = {
   image: string;
   options: OptionKey | null;
   popular: boolean;
+  /** False when the store has it out of stock: shown but not orderable. Absent = available. */
+  available?: boolean;
+  /** A photo, when ops has set one (otherwise apps draw `image`). */
+  photoUrl?: string;
 };
 
 /** Chosen option indexes per option group id, e.g. { size: [1], side: [0, 2] }. */

@@ -107,6 +107,23 @@ export const OPTION_GROUPS: Record<OptionKey, OptionGroup[]> = {
   ],
 };
 
+/**
+ * The menu: products and option sets. Since v1 it lives in the API's state (LiveState.catalog) and ops edit it; the
+ * constants above are its seed, and what apps fall back to on an older server. `version` goes up on every change.
+ */
+export type Catalog = { version: number; products: Product[]; optionGroups: Record<string, OptionGroup[]> };
+
+/** The seed catalog (the constants above). */
+export const SEED_CATALOG: Catalog = { version: 1, products: PRODUCTS, optionGroups: OPTION_GROUPS };
+
+/** The catalog in a snapshot, or the seed when the server doesn't send one (servers before v1). */
+export function catalogOf(state?: { catalog?: Catalog } | null): Catalog {
+  return state?.catalog?.products ? state.catalog : SEED_CATALOG;
+}
+
+/** Whether a product can be ordered now (in stock). */
+export const productAvailable = (p: Product) => p.available !== false;
+
 export const merchantById: Record<string, Merchant> = Object.fromEntries(MERCHANTS.map(m => [m.id, m]));
 export const productById: Record<string, Product> = Object.fromEntries(PRODUCTS.map(p => [p.id, p]));
 
