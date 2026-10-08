@@ -159,6 +159,8 @@ run(
   [
     'assembleRelease',
     '--no-daemon',
+    // No Kotlin compile daemon left behind either (memory is shared with the demo server).
+    '-Pkotlin.compiler.execution.strategy=in-process',
     '--build-cache',
     '-PreactNativeArchitectures=arm64-v8a,armeabi-v7a,x86_64',
   ],
